@@ -16,3 +16,6 @@ temp/
 # AI agent artifacts (keep README only)
 .ai/*
 !.ai/README.md
+
+# Local Cursor workspace data
+.cursor/
