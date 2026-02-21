@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="520" viewBox="0 0 980 520" role="img" aria-labelledby="t d">
+  <title id="t">AI Cost Optimizer - Real Benchmark Dashboard</title>
+  <desc id="d">Latest real benchmark summary comparing baseline vs joint scoring for cost, latency, and quality.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1220"/>
+      <stop offset="1" stop-color="#1f2937"/>
+    </linearGradient>
+    <style>
+      .h { font: 700 26px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; fill: #f9fafb; }
+      .s { font: 500 14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; fill: #d1d5db; }
+      .m { font: 700 16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; fill: #f3f4f6; }
+      .v { font: 700 20px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; fill: #f9fafb; }
+      .n { font: 600 13px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; fill: #9ca3af; }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="980" height="520" rx="24" fill="url(#bg)"/>
+  <rect x="18" y="18" width="944" height="484" rx="18" fill="none" stroke="#374151"/>
+
+  <text x="40" y="64" class="h">AI Cost Optimizer - Real Benchmark Snapshot</text>
+  <text x="40" y="90" class="s">Latest run: Feb 21, 2026 • 24 paired chaos scenarios • real cursor-agent executions</text>
+
+  <rect x="40" y="122" width="900" height="96" rx="14" fill="#111827" stroke="#374151"/>
+  <text x="64" y="157" class="m">Estimated Cost</text>
+  <text x="64" y="186" class="v">$0.194389 → $0.041031</text>
+  <text x="370" y="186" class="v" fill="#10b981">-78.89%</text>
+  <text x="64" y="206" class="n">Baseline vs Joint scorer</text>
+
+  <rect x="620" y="150" width="280" height="16" rx="8" fill="#1f2937"/>
+  <rect x="620" y="150" width="280" height="16" rx="8" fill="#ef4444"/>
+  <rect x="620" y="176" width="280" height="16" rx="8" fill="#1f2937"/>
+  <rect x="620" y="176" width="59" height="16" rx="8" fill="#10b981"/>
+  <text x="620" y="145" class="n">Baseline</text>
+  <text x="620" y="212" class="n">Joint</text>
+
+  <rect x="40" y="236" width="440" height="118" rx="14" fill="#111827" stroke="#374151"/>
+  <text x="64" y="270" class="m">Latency</text>
+  <text x="64" y="300" class="v">14379.7ms → 5466.8ms</text>
+  <text x="64" y="328" class="n">Avg duration_api_ms</text>
+  <text x="320" y="300" class="v" fill="#10b981">-61.98%</text>
+
+  <rect x="500" y="236" width="440" height="118" rx="14" fill="#111827" stroke="#374151"/>
+  <text x="524" y="270" class="m">Quality</text>
+  <text x="524" y="300" class="v">75.00% → 75.00%</text>
+  <text x="524" y="328" class="n">Pass rate preserved</text>
+  <text x="760" y="300" class="v" fill="#10b981">95.83%</text>
+  <text x="760" y="328" class="n">quality-not-worse</text>
+
+  <rect x="40" y="372" width="900" height="108" rx="14" fill="#111827" stroke="#374151"/>
+  <text x="64" y="406" class="m">How to reproduce</text>
+  <text x="64" y="434" class="s">node plugins/cursor-ai-cost-optimizer/scripts/cco-joint-chaos-real.mjs --workspace . --repeats 2</text>
+  <text x="64" y="458" class="n">Report: .ai/cco/joint-chaos-real-report.md + .ai/cco/joint-chaos-real-report.json</text>
+</svg>

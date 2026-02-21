@@ -1,6 +1,11 @@
 {
   "version": 1,
   "hooks": {
+    "sessionStart": [
+      {
+        "command": "node ./scripts/cco-session-start.mjs"
+      }
+    ],
     "beforeShellExecution": [
       {
         "command": "node ./scripts/cco-shell-guard.mjs",

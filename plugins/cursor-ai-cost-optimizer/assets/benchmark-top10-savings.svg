@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="660" viewBox="0 0 980 660" role="img" aria-labelledby="title desc">
+  <title id="title">AI Cost Optimizer - Top 10 Scenario Savings</title>
+  <desc id="desc">Top 10 paired scenarios by estimated cost reduction from the latest real benchmark run.</desc>
+  <defs>
+    <linearGradient id="bg3" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0a1020"/>
+      <stop offset="1" stop-color="#172033"/>
+    </linearGradient>
+    <style>
+      .h { font: 700 24px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; fill: #f8fafc; }
+      .s { font: 500 13px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; fill: #cbd5e1; }
+      .l { font: 600 13px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; fill: #e2e8f0; }
+      .v { font: 700 12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; fill: #f8fafc; }
+      .n { font: 600 11px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; fill: #94a3b8; }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="980" height="660" rx="24" fill="url(#bg3)"/>
+  <rect x="18" y="18" width="944" height="624" rx="18" fill="none" stroke="#334155"/>
+
+  <text x="40" y="62" class="h">Top 10 Scenario-Level Savings (Latest Real Run)</text>
+  <text x="40" y="86" class="s">Sorted by estimated cost reduction percentage. Source: .ai/cco/joint-chaos-real-report.json</text>
+
+  <rect x="40" y="108" width="900" height="504" rx="14" fill="#0b1220" stroke="#334155"/>
+
+  <line x1="420" y1="138" x2="420" y2="590" stroke="#64748b"/>
+  <line x1="535" y1="138" x2="535" y2="590" stroke="#334155"/>
+  <line x1="650" y1="138" x2="650" y2="590" stroke="#334155"/>
+  <line x1="765" y1="138" x2="765" y2="590" stroke="#334155"/>
+  <line x1="880" y1="138" x2="880" y2="590" stroke="#334155"/>
+  <text x="412" y="130" class="n">0%</text>
+  <text x="527" y="130" class="n">25%</text>
+  <text x="642" y="130" class="n">50%</text>
+  <text x="757" y="130" class="n">75%</text>
+  <text x="868" y="130" class="n">100%</text>
+
+  <text x="56" y="164" class="l">1. deep_compliance_soc2 (r2)</text>
+  <rect x="420" y="151" width="426" height="18" rx="9" fill="#10b981"/>
+  <text x="854" y="164" class="v">92.52%</text>
+  <text x="56" y="178" class="n">$0.0262 -> $0.0020</text>
+
+  <text x="56" y="208" class="l">2. deep_security_token_leak (r2)</text>
+  <rect x="420" y="195" width="410" height="18" rx="9" fill="#14b8a6"/>
+  <text x="838" y="208" class="v">89.18%</text>
+  <text x="56" y="222" class="n">$0.0244 -> $0.0026</text>
+
+  <text x="56" y="252" class="l">3. deep_data_delete_request (r1)</text>
+  <rect x="420" y="239" width="401" height="18" rx="9" fill="#22c55e"/>
+  <text x="829" y="252" class="v">87.08%</text>
+  <text x="56" y="266" class="n">$0.0225 -> $0.0029</text>
+
+  <text x="56" y="296" class="l">4. deep_payments_incident (r2)</text>
+  <rect x="420" y="283" width="399" height="18" rx="9" fill="#34d399"/>
+  <text x="827" y="296" class="v">86.70%</text>
+  <text x="56" y="310" class="n">$0.0270 -> $0.0036</text>
+
+  <text x="56" y="340" class="l">5. deep_compliance_soc2 (r1)</text>
+  <rect x="420" y="327" width="380" height="18" rx="9" fill="#10b981"/>
+  <text x="808" y="340" class="v">82.61%</text>
+  <text x="56" y="354" class="n">$0.0256 -> $0.0045</text>
+
+  <text x="56" y="384" class="l">6. deep_data_delete_request (r2)</text>
+  <rect x="420" y="371" width="378" height="18" rx="9" fill="#22c55e"/>
+  <text x="806" y="384" class="v">82.28%</text>
+  <text x="56" y="398" class="n">$0.0185 -> $0.0033</text>
+
+  <text x="56" y="428" class="l">7. deep_payments_incident (r1)</text>
+  <rect x="420" y="415" width="348" height="18" rx="9" fill="#34d399"/>
+  <text x="776" y="428" class="v">75.69%</text>
+  <text x="56" y="442" class="n">$0.0229 -> $0.0056</text>
+
+  <text x="56" y="472" class="l">8. balanced_migration_plan (r2)</text>
+  <rect x="420" y="459" width="297" height="18" rx="9" fill="#60a5fa"/>
+  <text x="725" y="472" class="v">64.51%</text>
+  <text x="56" y="486" class="n">$0.0027 -> $0.0010</text>
+
+  <text x="56" y="516" class="l">9. balanced_bug_triage_api_500 (r2)</text>
+  <rect x="420" y="503" width="278" height="18" rx="9" fill="#60a5fa"/>
+  <text x="706" y="516" class="v">60.46%</text>
+  <text x="56" y="530" class="n">$0.0015 -> $0.0006</text>
+
+  <text x="56" y="560" class="l">10. deep_security_token_leak (r1)</text>
+  <rect x="420" y="547" width="267" height="18" rx="9" fill="#10b981"/>
+  <text x="695" y="560" class="v">58.04%</text>
+  <text x="56" y="574" class="n">$0.0095 -> $0.0040</text>
+</svg>

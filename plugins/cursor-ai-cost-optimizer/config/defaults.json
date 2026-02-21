@@ -17,6 +17,102 @@
     "deep": ""
   },
   "modelOverridePolicy": "best_effort",
+  "pricing": {
+    "enabled": true,
+    "refreshHours": 24,
+    "sourceUrl": "https://cursor.com/docs/account/pricing"
+  },
+  "costHeuristics": {
+    "fieldWeights": {
+      "system": 7,
+      "user": 3,
+      "thinkingDelta": 5,
+      "thinkingCompleted": 4,
+      "assistant": 3,
+      "result": 8
+    },
+    "tierMultipliers": {
+      "fast": 0.7,
+      "balanced": 1.0,
+      "deep": 1.45
+    },
+    "tieBreakMargin": 0.35
+  },
+  "jointScoring": {
+    "enabled": true,
+    "costBlend": {
+      "pricePrior": 0.6,
+      "fieldProxy": 0.4
+    },
+    "fieldProxyWeights": {
+      "durationApiMs": 0.35,
+      "thinkingChars": 0.25,
+      "assistantChars": 0.20,
+      "errorPenalty": 0.20
+    },
+    "adaptiveWeights": {
+      "riskHighThreshold": 7,
+      "lowRisk": {
+        "cost": 0.5,
+        "risk": 0.3,
+        "latency": 0.2
+      },
+      "highRisk": {
+        "cost": 0.2,
+        "risk": 0.6,
+        "latency": 0.2
+      }
+    },
+    "safetyGuard": {
+      "highRiskThreshold": 7,
+      "maxRiskHatHighRisk": 0.55,
+      "criticalRiskForceDeepThreshold": 9
+    },
+    "ema": {
+      "alpha": 0.25
+    },
+    "tierRiskAdjustment": {
+      "fast": 0.12,
+      "balanced": 0.03,
+      "deep": 0.0
+    },
+    "modelRiskAdjustment": {
+      "highCapabilityKeywords": ["thinking", "xhigh", "high", "opus"],
+      "lowCapabilityKeywords": ["low", "mini", "flash", "fast"],
+      "highDelta": -0.02,
+      "lowDelta": 0.02
+    },
+    "priorsByTier": {
+      "fast": {
+        "durationApiMs": 2600,
+        "thinkingChars": 240,
+        "assistantChars": 320,
+        "errorRate": 0.06,
+        "reworkRate": 0.09,
+        "modeCostMultiplier": 0.85,
+        "inputOverheadChars": 160
+      },
+      "balanced": {
+        "durationApiMs": 4200,
+        "thinkingChars": 650,
+        "assistantChars": 700,
+        "errorRate": 0.045,
+        "reworkRate": 0.07,
+        "modeCostMultiplier": 1.0,
+        "inputOverheadChars": 220
+      },
+      "deep": {
+        "durationApiMs": 6000,
+        "thinkingChars": 1300,
+        "assistantChars": 1200,
+        "errorRate": 0.03,
+        "reworkRate": 0.05,
+        "modeCostMultiplier": 1.2,
+        "inputOverheadChars": 340
+      }
+    },
+    "modelPriceMultipliers": {}
+  },
   "overrideTokens": {
     "fast": "[cco:fast]",
     "balanced": "[cco:balanced]",

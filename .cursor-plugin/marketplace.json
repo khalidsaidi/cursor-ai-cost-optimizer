@@ -3,7 +3,7 @@
   "owner": { "name": "Khalid Saidi" },
   "metadata": {
     "description": "Cursor Marketplace repo containing the AI Cost Optimizer plugin.",
-    "version": "0.1.1",
+    "version": "0.1.3",
     "pluginRoot": "plugins"
   },
   "plugins": [

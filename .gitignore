@@ -12,6 +12,28 @@
 *.log
 tmp/
 temp/
+*.tmp
+*.bak
+
+# Dependencies and build outputs
+node_modules/
+dist/
+build/
+coverage/
+.nyc_output/
+*.tsbuildinfo
+
+# Tooling caches
+.cache/
+.eslintcache
+
+# IDE settings
+.vscode/
+.idea/
+
+# Python cache
+__pycache__/
+*.py[cod]
 
 # AI agent artifacts (keep README only)
 .ai/*
@@ -19,3 +41,6 @@ temp/
 
 # Local Cursor workspace data
 .cursor/
+
+# Local source image (logo is embedded in logo.svg)
+plugins/cursor-ai-cost-optimizer/assets/logo.png

@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="560" viewBox="0 0 980 560" role="img" aria-labelledby="title desc">
+  <title id="title">AI Cost Optimizer - Savings by Scenario Group</title>
+  <desc id="desc">Latest real benchmark average cost reduction by scenario group.</desc>
+  <defs>
+    <linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset="1" stop-color="#1e293b"/>
+    </linearGradient>
+    <style>
+      .h { font: 700 25px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; fill: #f8fafc; }
+      .s { font: 500 14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; fill: #cbd5e1; }
+      .l { font: 600 13px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; fill: #e2e8f0; }
+      .v { font: 700 13px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; fill: #f8fafc; }
+      .n { font: 600 12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; fill: #94a3b8; }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="980" height="560" rx="24" fill="url(#bg2)"/>
+  <rect x="18" y="18" width="944" height="524" rx="18" fill="none" stroke="#334155"/>
+
+  <text x="40" y="62" class="h">Savings by Scenario Group (Latest Real Benchmark)</text>
+  <text x="40" y="86" class="s">Run date: Feb 21, 2026 • 24 paired runs • baseline vs joint scorer</text>
+
+  <rect x="40" y="108" width="900" height="398" rx="14" fill="#0b1220" stroke="#334155"/>
+
+  <line x1="490" y1="140" x2="490" y2="474" stroke="#64748b" stroke-dasharray="4 4"/>
+  <text x="472" y="132" class="n">0%</text>
+  <text x="352" y="132" class="n">-100%</text>
+  <text x="612" y="132" class="n">+100%</text>
+
+  <!-- row 1 -->
+  <text x="64" y="175" class="l">Quick tasks (2 scenarios)</text>
+  <rect x="490" y="160" width="37" height="20" rx="10" fill="#22c55e"/>
+  <text x="535" y="175" class="v">+8.6%</text>
+
+  <!-- row 2 -->
+  <text x="64" y="225" class="l">Balanced tasks (3 scenarios)</text>
+  <rect x="490" y="210" width="215" height="20" rx="10" fill="#16a34a"/>
+  <text x="713" y="225" class="v">+50.1%</text>
+
+  <!-- row 3 -->
+  <text x="64" y="275" class="l">Deep high-risk (4 scenarios)</text>
+  <rect x="490" y="260" width="352" height="20" rx="10" fill="#10b981"/>
+  <text x="850" y="275" class="v">+81.8%</text>
+
+  <!-- row 4 -->
+  <text x="64" y="325" class="l">Forced [cco:fast] override</text>
+  <rect x="181" y="310" width="309" height="20" rx="10" fill="#ef4444"/>
+  <text x="64" y="325" class="v">-71.7%</text>
+
+  <!-- row 5 -->
+  <text x="64" y="375" class="l">Forced [cco:deep] override</text>
+  <rect x="412" y="360" width="78" height="20" rx="10" fill="#f97316"/>
+  <text x="334" y="375" class="v">-18.0%</text>
+
+  <!-- row 6 -->
+  <text x="64" y="425" class="l">First-time chaos prompt</text>
+  <rect x="378" y="410" width="112" height="20" rx="10" fill="#f97316"/>
+  <text x="258" y="425" class="v">-25.9%</text>
+
+  <text x="64" y="462" class="n">Interpretation: strongest wins are in normal and high-risk engineering tasks. Manual override tokens intentionally prioritize control over cost.</text>
+</svg>

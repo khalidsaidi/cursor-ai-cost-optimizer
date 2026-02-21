@@ -52,6 +52,30 @@ cco-routing:
       - 3.5 <= effort <= 6.4 => BALANCED
       - effort >= 6.5 => DEEP
 
+  - Joint scorer (model + tier together):
+      - If `.cursor/cco-runtime.json` exists, build candidates from runnable models and tiers (fast/balanced/deep).
+      - If `.cursor/cco-pricing.json` exists, read pricing rates:
+          - `autoApiRatesUsdPer1MTokens.inputCacheWrite`
+          - `autoApiRatesUsdPer1MTokens.output`
+      - If `.cursor/cco-joint-state.json` exists, read per-candidate EMAs:
+          - `ema_cost`, `ema_duration`, `ema_error_rate`, `ema_rework_rate`
+      - Compute:
+          - `TotalLoss(m,t) = w_c*C_hat(m,t) + w_q*R_hat(m,t) + w_l*L_hat(m,t)`
+      - Cost term (price + fields together):
+          - `C_hat = 0.6*C_price_prior + 0.4*C_field_proxy`
+          - `C_field_proxy = 0.35*z(duration_api_ms) + 0.25*z(thinking_chars) + 0.20*z(assistant_chars) + 0.20*errorPenalty`
+      - Risk/quality term:
+          - `R_hat` combines fuzzy task risk signals + historical failure/rework EMAs.
+      - Adaptive weights:
+          - low risk: `w_c=0.5, w_q=0.3, w_l=0.2`
+          - high risk: `w_c=0.2, w_q=0.6, w_l=0.2`
+      - Hard safety guard:
+          - if task risk is high, require `R_hat <= maxRiskHatHighRisk`; otherwise candidate is infeasible.
+          - if task risk >= 9, allow only DEEP tier unless user override token explicitly forces another tier.
+          - if task risk >= 7, disallow FAST tier unless user override token explicitly forces FAST.
+      - Pick feasible candidate with minimum `TotalLoss`.
+      - If all candidates are infeasible, pick lowest `R_hat` and document fallback reason.
+
   - Runtime model mapping (real Cursor behavior):
       - If `.cursor/cco-runtime.json` exists, read:
           - `profiles.fast.model`

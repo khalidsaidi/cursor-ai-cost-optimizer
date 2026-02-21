@@ -14,8 +14,21 @@ This repo uses Cursor’s multi-plugin marketplace layout (even though it contai
 - Rules: `plugins/cursor-ai-cost-optimizer/rules/cco-routing.mdc`
 - Skills: `plugins/cursor-ai-cost-optimizer/skills/cco-init/SKILL.md`, `plugins/cursor-ai-cost-optimizer/skills/cco-model-config/SKILL.md`, `plugins/cursor-ai-cost-optimizer/skills/cco-report/SKILL.md`
 - Agents: `plugins/cursor-ai-cost-optimizer/agents/cco-router.md`, `plugins/cursor-ai-cost-optimizer/agents/cco-fast.md`, `plugins/cursor-ai-cost-optimizer/agents/cco-balanced.md`, `plugins/cursor-ai-cost-optimizer/agents/cco-deep.md`, `plugins/cursor-ai-cost-optimizer/agents/cco-verifier.md`
-- Commands: `plugins/cursor-ai-cost-optimizer/commands/cco.md`, `plugins/cursor-ai-cost-optimizer/commands/cco-models.md`
+- Commands: `plugins/cursor-ai-cost-optimizer/commands/cco.md`, `plugins/cursor-ai-cost-optimizer/commands/cco-models.md`, `plugins/cursor-ai-cost-optimizer/commands/cco-benchmark.md`
 - Hooks: `plugins/cursor-ai-cost-optimizer/hooks/hooks.json`
+- Pricing refresh: `plugins/cursor-ai-cost-optimizer/scripts/cco-session-start.mjs` (runs on `sessionStart`, caches `.cursor/cco-pricing.json`)
+- Joint scorer + benchmark: `plugins/cursor-ai-cost-optimizer/scripts/cco-joint-engine.mjs`, `plugins/cursor-ai-cost-optimizer/scripts/cco-joint-chaos-real.mjs`
+
+## Real benchmark highlight
+Latest real chaos benchmark (February 21, 2026, 24 paired runs):
+- Estimated cost: `$0.194389` -> `$0.041031` (`78.89%` reduction)
+- Quality pass rate preserved: `75.00%` baseline vs `75.00%` joint
+- Avg `duration_api_ms`: `14379.7` -> `5466.8`
+
+Visual summary:
+- `plugins/cursor-ai-cost-optimizer/assets/benchmark-dashboard.svg`
+- `plugins/cursor-ai-cost-optimizer/assets/benchmark-scenario-map.svg`
+- `plugins/cursor-ai-cost-optimizer/assets/benchmark-top10-savings.svg`
 
 ## Validate locally
 ```bash
@@ -34,6 +47,12 @@ To run real Cursor end-to-end checks (discovery + router behavior):
 node plugins/cursor-ai-cost-optimizer/scripts/cco-e2e-real.mjs --workspace .
 ```
 This writes `.ai/cco/e2e-real-report.md` and `.ai/cco/e2e-real-report.json`.
+
+To run the joint-scoring chaos benchmark (real Cursor calls in isolated tmp workspace):
+```bash
+node plugins/cursor-ai-cost-optimizer/scripts/cco-joint-chaos-real.mjs --workspace . --repeats 2
+```
+This writes `.ai/cco/joint-chaos-real-report.md` and `.ai/cco/joint-chaos-real-report.json`.
 
 User-friendly model setup is available via `/cco-models`:
 - Adaptive (recommended for most users)
