@@ -26,15 +26,15 @@ Run the skill **cco-init** in a workspace to create:
 
 ## Friendly model setup
 Use `/cco-models` in Cursor:
-1) Automatic (recommended for most users)
-2) Locked (fixed until changed)
+1) Adaptive (recommended for most users)
+2) Fixed models
 3) Manual (advanced)
 
 It updates `.cursor/cco.json`, reruns discovery, and shows final mapping.
 
 What these mean:
-- Automatic: best default for marketplace users; no manual model picking.
-- Locked: keep the current working model choices fixed until changed.
+- Adaptive: best default for marketplace users; no manual model picking.
+- Fixed models: keep the current working model choices fixed until changed.
 - Manual: pick exact model IDs per mode (`fast`, `balanced`, `deep`).
 
 Advanced users can edit `.cursor/cco.json` directly:

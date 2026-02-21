@@ -8,11 +8,11 @@ description: Guided setup for mapping CCO modes (fast/balanced/deep) to real Cur
 Use this command to set model behavior in one step.
 
 ## Choose one option
-1) **Automatic (recommended for most users)**  
+1) **Adaptive (recommended for most users)**  
 CCO keeps model choice automatic and adapts to each user/account.
 
-2) **Locked (fixed until changed)**  
-CCO saves the current working model for each mode and keeps it fixed.
+2) **Fixed models**  
+CCO saves the current working model for each mode and does not auto-change it.
 Example: if discovery currently says `fast=A`, `balanced=B`, `deep=C`, CCO saves `A/B/C` and reuses them until changed.
 
 3) **Manual (advanced)**  
