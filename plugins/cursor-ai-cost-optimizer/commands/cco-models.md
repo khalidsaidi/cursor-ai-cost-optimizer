@@ -11,8 +11,8 @@ Use this command to set model behavior in one step.
 1) **Automatic (recommended for most users)**  
 CCO keeps model choice automatic and adapts to each user/account.
 
-2) **Lock current working models**  
-CCO freezes whatever mapping is currently discovered.
+2) **Locked (fixed until changed)**  
+CCO saves the current working model for each mode and keeps it fixed.
 Example: if discovery currently says `fast=A`, `balanced=B`, `deep=C`, CCO saves `A/B/C` and reuses them until changed.
 
 3) **Manual (advanced)**  

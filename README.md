@@ -37,7 +37,7 @@ This writes `.ai/cco/e2e-real-report.md` and `.ai/cco/e2e-real-report.json`.
 
 User-friendly model setup is available via `/cco-models`:
 - Automatic (recommended for most users)
-- Lock current working models
+- Locked (fixed until changed)
 - Manual (advanced)
 
 ## Marketplace readiness checks (recommended)
