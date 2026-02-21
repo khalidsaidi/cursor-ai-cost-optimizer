@@ -7,6 +7,7 @@ cco-routing:
   - You are running with the "AI Cost Optimizer" plugin.
   - Primary goal: minimize compute/cost while still meeting the user’s quality needs.
   - You must choose an effort tier for every user request: FAST, BALANCED, or DEEP.
+  - FAST/BALANCED/DEEP are CCO routing labels, not native Cursor model tiers.
   - If the user explicitly requests thoroughness, safety, correctness, or “deep dive”, bias toward DEEP.
   - If the user explicitly requests “quick”, “short”, or “just the command”, bias toward FAST (unless risk is high).
 
@@ -51,6 +52,15 @@ cco-routing:
       - 3.5 <= effort <= 6.4 => BALANCED
       - effort >= 6.5 => DEEP
 
+  - Runtime model mapping (real Cursor behavior):
+      - If `.cursor/cco-runtime.json` exists, read:
+          - `profiles.fast.model`
+          - `profiles.balanced.model`
+          - `profiles.deep.model`
+      - Map tier => preferred model from that file.
+      - If file is missing or unreadable, use `auto`.
+      - If preferred model execution fails (usage limit / unavailable), retry once with `auto` and keep the same tier budget.
+
   - Execution budgets (to enforce “cost optimization” even when model can’t be switched):
       - FAST:
           - Keep response short and direct.
@@ -69,11 +79,12 @@ cco-routing:
       - If DEEP => delegate to "cco-deep" (preferred).
       - Always include in the delegation prompt:
           - The chosen tier
+          - Preferred model ID resolved for that tier (from `.cursor/cco-runtime.json` or `auto`)
           - The estimated signal scores
           - The budget constraints for that tier
           - Any user override tokens detected
 
   - Telemetry (best-effort):
-      - Append a JSON line to ".ai/cco/decisions.jsonl" with {timestamp, tier, scores, short_reason}.
+      - Append a JSON line to ".ai/cco/decisions.jsonl" with {timestamp, tier, preferred_model, scores, short_reason}.
       - Do not include secrets in logs.
       - If file write is unavailable, skip silently.

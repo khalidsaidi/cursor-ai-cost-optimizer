@@ -1,7 +1,7 @@
 {
   "name": "cursor-ai-cost-optimizer",
   "displayName": "AI Cost Optimizer",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Fuzzy-logic router that picks the cheapest sufficient effort level (fast/balanced/deep) and routes work to the right subagent.",
   "author": { "name": "Khalid Saidi" },
   "license": "MIT",
@@ -9,5 +9,19 @@
   "logo": "assets/logo.svg",
   "category": "developer-tools",
   "tags": ["routing", "agents", "cost", "fuzzy-logic"],
+  "rules": ["rules/cco-routing.mdc"],
+  "skills": [
+    "skills/cco-init/SKILL.md",
+    "skills/cco-model-config/SKILL.md",
+    "skills/cco-report/SKILL.md"
+  ],
+  "agents": [
+    "agents/cco-router.md",
+    "agents/cco-fast.md",
+    "agents/cco-balanced.md",
+    "agents/cco-deep.md",
+    "agents/cco-verifier.md"
+  ],
+  "commands": ["commands/cco.md", "commands/cco-models.md"],
   "hooks": "hooks/hooks.json"
 }

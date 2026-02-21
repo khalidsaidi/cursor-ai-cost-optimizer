@@ -11,6 +11,12 @@
     "fastMax": 3.4,
     "balancedMax": 6.4
   },
+  "modelOverrides": {
+    "fast": "",
+    "balanced": "",
+    "deep": ""
+  },
+  "modelOverridePolicy": "best_effort",
   "overrideTokens": {
     "fast": "[cco:fast]",
     "balanced": "[cco:balanced]",

@@ -17,4 +17,5 @@ metadata:
 ## Agent instructions
 - If the log file doesn’t exist, explain how to enable telemetry (cco-routing rule best-effort logging) and suggest running a few tasks first.
 - Keep report short and actionable.
-- Suggest ONE change at a time (e.g., raise `fastMax` slightly, or reduce risk weight if it’s over-triggering deep).
+- Read `.cursor/cco.json` when available (fallback: `plugins/cursor-ai-cost-optimizer/config/defaults.json`) before suggesting tuning.
+- Suggest ONE change at a time and base it on current values (for example: `risk` 0.35 -> 0.30), never on assumed placeholder values.

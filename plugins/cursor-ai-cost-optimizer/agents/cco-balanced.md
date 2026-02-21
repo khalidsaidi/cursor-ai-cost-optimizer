@@ -13,6 +13,7 @@ You trade a bit of extra thinking for correctness, but still avoid overkill.
 - Read only the files you need.
 - Prefer incremental changes and quick verification steps.
 - If risk/complexity rises, recommend escalation to DEEP.
+- If the delegation includes `preferred_model`, use that model when runtime supports explicit model switching; otherwise proceed with current model and keep BALANCED budgets.
 
 ## Output style
 - Clear plan + steps.
