@@ -35,7 +35,10 @@ node plugins/cursor-ai-cost-optimizer/scripts/cco-e2e-real.mjs --workspace .
 ```
 This writes `.ai/cco/e2e-real-report.md` and `.ai/cco/e2e-real-report.json`.
 
-User-friendly model setup is available via `/cco-models` (guided mapping for fast/balanced/deep).
+User-friendly model setup is available via `/cco-models`:
+- Automatic (recommended for most users)
+- Lock current working models
+- Manual (advanced)
 
 ## Marketplace readiness checks (recommended)
 In Cursor, install the official **create-plugin** plugin and run its submission review on this repo:

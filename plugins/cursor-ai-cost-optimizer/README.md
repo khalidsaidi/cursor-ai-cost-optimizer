@@ -26,11 +26,16 @@ Run the skill **cco-init** in a workspace to create:
 
 ## Friendly model setup
 Use `/cco-models` in Cursor:
-1) Auto (recommended)
-2) Pin current mapping
-3) Custom
+1) Automatic (recommended for most users)
+2) Lock current working models
+3) Manual (advanced)
 
 It updates `.cursor/cco.json`, reruns discovery, and shows final mapping.
+
+What these mean:
+- Automatic: best default for marketplace users; no manual model picking.
+- Lock current working models: keep today’s discovered mapping fixed until changed.
+- Manual: pick exact model IDs per mode (`fast`, `balanced`, `deep`).
 
 Advanced users can edit `.cursor/cco.json` directly:
 ```json

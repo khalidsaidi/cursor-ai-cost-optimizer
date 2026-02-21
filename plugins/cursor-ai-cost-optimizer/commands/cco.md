@@ -9,11 +9,13 @@ description: Help + quickstart for AI Cost Optimizer (routing tiers, override to
 1) Run `cco-init` once.
 2) Run `/cco-models`.
 3) Pick one option:
-- **Auto (recommended)**: CCO chooses models automatically.
-- **Pin current mapping**: lock today’s working models.
-- **Custom**: choose model IDs manually.
+- **Automatic (recommended for most users)**: CCO chooses models automatically.
+- **Lock current working models**: freeze today’s discovered mapping for stable/repeatable behavior.
+- **Manual (advanced)**: choose exact model IDs yourself.
 
 Done. Use CCO normally after that.
+
+Most users should keep **Automatic**.
 
 ## Optional prompt overrides
 - `[cco:fast]`

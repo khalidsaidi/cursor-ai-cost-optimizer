@@ -11,9 +11,9 @@ metadata:
 ## What this does
 1) Refreshes runtime model discovery (`.cursor/cco-runtime.json`).
 2) Presents a user-friendly setup choice:
-   - Auto (recommended)
-   - Pin current discovered mapping
-   - Custom mapping
+   - Automatic (recommended for most users)
+   - Lock current working models
+   - Manual (advanced)
 3) Writes `.cursor/cco.json` model overrides.
 4) Re-runs discovery and reports final mapping + warnings.
 
@@ -24,9 +24,10 @@ metadata:
   - `node plugins/cursor-ai-cost-optimizer/scripts/cco-discover-models.mjs --workspace <workspace-root>`
 - Read `.cursor/cco-runtime.json`.
 - Ask one short question with numbered options:
-  - 1) Auto (recommended): set `modelOverrides.fast/balanced/deep` to empty strings.
-  - 2) Pin current: copy `.cursor/cco-runtime.json` profile models into `modelOverrides`.
-  - 3) Custom: let user choose model IDs for each mode from `discovery.availableModels`.
+  - 1) Automatic (recommended): set `modelOverrides.fast/balanced/deep` to empty strings.
+  - 2) Lock current working models: copy `.cursor/cco-runtime.json` profile models into `modelOverrides`.
+  - 3) Manual (advanced): let user choose model IDs for each mode from `discovery.availableModels`.
+- For non-technical users, explicitly recommend option 1 unless they ask for stability/manual control.
 - For custom:
   - Validate each selected model ID exists in `discovery.availableModels`.
   - If invalid, ask once for correction. If still invalid, leave that mode empty.
