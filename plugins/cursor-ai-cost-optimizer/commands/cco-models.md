@@ -3,25 +3,21 @@ name: cco-models
 description: Guided setup for mapping CCO modes (fast/balanced/deep) to real Cursor models.
 ---
 
-# /cco-models - Configure Mode -> Model Mapping
+# /cco-models - Pick How Models Are Chosen
 
-Use this command when you want a user-friendly setup for which model each CCO mode should use.
+Use this command to set model behavior in one step.
 
-## What this command should do
-1) Run `cco-model-config`.
-2) Show the user simple choices:
-   - Auto (recommended): no pinning, let discovery choose.
-   - Pin current mapping: lock current discovered fast/balanced/deep models.
-   - Custom mapping: user selects exact model IDs for each mode.
-3) Apply selection to `.cursor/cco.json`.
-4) Re-run discovery and show final mapping + any health warnings.
+## Choose one option
+1) **Auto (recommended)**  
+CCO keeps model choice automatic.
 
-## Files involved
-- `.cursor/cco.json` (user config)
-- `.cursor/cco-runtime.json` (discovered runtime mapping)
-- `plugins/cursor-ai-cost-optimizer/scripts/cco-discover-models.mjs`
+2) **Pin current mapping**  
+CCO locks the currently discovered models.
 
-## Quick verify
-```bash
-node plugins/cursor-ai-cost-optimizer/scripts/cco-e2e-real.mjs --workspace .
-```
+3) **Custom mapping**  
+You pick the model for each mode:
+- fast
+- balanced
+- deep
+
+That is it. CCO saves config and refreshes the runtime mapping automatically.

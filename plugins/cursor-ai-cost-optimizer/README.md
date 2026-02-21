@@ -25,10 +25,10 @@ Run the skill **cco-init** in a workspace to create:
 - `.ai/cco/` (telemetry)
 
 ## Friendly model setup
-Use `/cco-models` in Cursor for a guided flow:
+Use `/cco-models` in Cursor:
 1) Auto (recommended)
-2) Pin current discovered mapping
-3) Custom per-mode model IDs
+2) Pin current mapping
+3) Custom
 
 It updates `.cursor/cco.json`, reruns discovery, and shows final mapping.
 
