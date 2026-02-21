@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeShellExecution": [
+      {
+        "command": "node ./scripts/cco-shell-guard.mjs",
+        "matcher": ".*"
+      }
+    ],
+    "sessionEnd": [
+      {
+        "command": "node ./scripts/cco-session-end.mjs"
+      }
+    ]
+  }
+}

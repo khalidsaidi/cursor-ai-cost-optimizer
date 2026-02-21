@@ -1,0 +1,13 @@
+{
+  "name": "cursor-ai-cost-optimizer",
+  "displayName": "AI Cost Optimizer",
+  "version": "0.1.0",
+  "description": "Fuzzy-logic router that picks the cheapest sufficient effort level (fast/balanced/deep) and routes work to the right subagent.",
+  "author": { "name": "Khalid Saidi" },
+  "license": "MIT",
+  "keywords": ["cursor", "plugin", "routing", "agents", "fuzzy-logic", "cost-optimizer"],
+  "logo": "assets/logo.svg",
+  "category": "developer-tools",
+  "tags": ["routing", "agents", "cost", "fuzzy-logic"],
+  "hooks": "hooks/hooks.json"
+}

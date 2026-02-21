@@ -1,0 +1,16 @@
+{
+  "name": "cursor-ai-cost-optimizer",
+  "owner": { "name": "Khalid Saidi" },
+  "metadata": {
+    "description": "Cursor Marketplace repo containing the AI Cost Optimizer plugin.",
+    "version": "0.1.0",
+    "pluginRoot": "plugins"
+  },
+  "plugins": [
+    {
+      "name": "cursor-ai-cost-optimizer",
+      "source": "cursor-ai-cost-optimizer",
+      "description": "Fuzzy-logic router that picks the cheapest sufficient effort level and routes work to the right subagent."
+    }
+  ]
+}

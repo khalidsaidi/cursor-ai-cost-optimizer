@@ -1,0 +1,79 @@
+---
+description: Auto-route each request to the cheapest sufficient effort level (FAST/BALANCED/DEEP) using fuzzy logic, with safe escalation + manual overrides.
+alwaysApply: true
+---
+
+cco-routing:
+  - You are running with the "AI Cost Optimizer" plugin.
+  - Primary goal: minimize compute/cost while still meeting the user’s quality needs.
+  - You must choose an effort tier for every user request: FAST, BALANCED, or DEEP.
+  - If the user explicitly requests thoroughness, safety, correctness, or “deep dive”, bias toward DEEP.
+  - If the user explicitly requests “quick”, “short”, or “just the command”, bias toward FAST (unless risk is high).
+
+  - Manual override tokens (obey if present anywhere in the user’s message):
+      - "[cco:fast]" => force FAST
+      - "[cco:balanced]" => force BALANCED
+      - "[cco:deep]" => force DEEP
+      - "[cco:auto]" => use fuzzy logic (default)
+
+  - IMPORTANT: Do NOT re-route if you are already inside a CCO subagent (cco-fast, cco-balanced, cco-deep, cco-verifier).
+
+  - Fuzzy signals (score each 0–10; estimate quickly using heuristics):
+      - complexity: how hard/novel is the task?
+          - +2 if multi-step (plan + implement)
+          - +3 if architecture/refactor/migration/perf
+          - +3 if debugging with unclear reproduction
+          - +2 if requires learning unknown API/spec
+      - risk: consequences of mistakes
+          - +4 if prod, auth, payments, security, privacy, data loss
+          - +3 if irreversible ops (migrations, deletes)
+          - +2 if user asks for “best practice” / compliance
+      - breadth: scope & context needed
+          - +2 if multiple files/modules
+          - +3 if cross-service / multi-language
+          - +3 if repo-wide reasoning needed
+      - uncertainty: ambiguous request / missing info
+          - +3 if requirements unclear
+          - +2 if user says “not sure”, “investigate”, “research”
+      - latency: user wants speed over depth
+          - +4 if “ASAP”, “urgent”, “quick”
+          - +3 if “one-liner”, “just tell me”
+
+  - Defuzzification (compute one score, clamp to 0–10):
+      - effort = 0.45*complexity + 0.35*risk + 0.15*breadth + 0.10*uncertainty - 0.20*latency
+      - clamp effort to [0, 10]
+      - Guardrails:
+          - if risk >= 7 => DEEP
+          - if latency >= 7 AND risk <= 3 AND complexity <= 3 => FAST
+
+  - Tier selection:
+      - effort <= 3.4 => FAST
+      - 3.5 <= effort <= 6.4 => BALANCED
+      - effort >= 6.5 => DEEP
+
+  - Execution budgets (to enforce “cost optimization” even when model can’t be switched):
+      - FAST:
+          - Keep response short and direct.
+          - Avoid tool use unless truly needed.
+          - Prefer single-pass solution; ask at most 1 clarifying question.
+      - BALANCED:
+          - Normal workflow: quick plan, minimal necessary context reads, implement.
+      - DEEP:
+          - Start with a plan and checkpoints.
+          - Gather enough context to be correct.
+          - Verify with tests / reproduction steps when possible.
+
+  - Delegation:
+      - If FAST => delegate to subagent "cco-fast" when it will reduce cost (e.g., quick answers, small edits).
+      - If BALANCED => delegate to "cco-balanced" when useful.
+      - If DEEP => delegate to "cco-deep" (preferred).
+      - Always include in the delegation prompt:
+          - The chosen tier
+          - The estimated signal scores
+          - The budget constraints for that tier
+          - Any user override tokens detected
+
+  - Telemetry (best-effort):
+      - Append a JSON line to ".ai/cco/decisions.jsonl" with {timestamp, tier, scores, short_reason}.
+      - Do not include secrets in logs.
+      - If file write is unavailable, skip silently.

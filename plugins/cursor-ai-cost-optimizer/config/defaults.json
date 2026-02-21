@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "weights": {
+    "complexity": 0.45,
+    "risk": 0.35,
+    "breadth": 0.15,
+    "uncertainty": 0.10,
+    "latency": -0.20
+  },
+  "thresholds": {
+    "fastMax": 3.4,
+    "balancedMax": 6.4
+  },
+  "overrideTokens": {
+    "fast": "[cco:fast]",
+    "balanced": "[cco:balanced]",
+    "deep": "[cco:deep]",
+    "auto": "[cco:auto]"
+  },
+  "toolBudgets": {
+    "fast": { "maxFileReads": 2, "maxTerminalCommands": 1, "maxWebSearches": 0 },
+    "balanced": { "maxFileReads": 8, "maxTerminalCommands": 4, "maxWebSearches": 1 },
+    "deep": { "maxFileReads": 25, "maxTerminalCommands": 10, "maxWebSearches": 3 }
+  }
+}
