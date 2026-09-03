@@ -7,7 +7,7 @@
  *   node scripts/cco-refresh-pricing.mjs --from <file.md>     # parse a local markdown copy
  */
 import path from "node:path";
-import { readTextSafe, writeJson, nowIso, parseArgs, workspacePaths, PLUGIN_ROOT } from "./lib/common.mjs";
+import { readTextSafe, writeJson, nowIso, parseArgs, workspacePaths, PLUGIN_ROOT, isMain } from "./lib/common.mjs";
 import { parsePricingMarkdown, PRICING_SOURCE_URL, BUNDLED_PRICING_PATH } from "./lib/pricing.mjs";
 
 export async function fetchText(url, timeoutMs = 20_000) {
@@ -69,7 +69,7 @@ async function main() {
   console.log(JSON.stringify({ ok: true, rows: payload.models.length, fetchedAt: payload.fetchedAt, wrote: targets, pluginRoot: PLUGIN_ROOT }, null, 2));
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMain(import.meta.url)) {
   main().catch((error) => {
     console.error(JSON.stringify({ ok: false, error: String(error?.message || error) }));
     process.exit(1);

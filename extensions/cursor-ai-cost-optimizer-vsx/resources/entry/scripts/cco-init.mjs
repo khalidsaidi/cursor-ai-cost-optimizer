@@ -9,7 +9,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { parseArgs, workspacePaths, writeJson, readJsonSafe, TIERS, CCO_AGENT_NAMES } from "./lib/common.mjs";
+import { parseArgs, workspacePaths, writeJson, readJsonSafe, TIERS, CCO_AGENT_NAMES, isMain } from "./lib/common.mjs";
 import { loadConfig } from "./lib/config.mjs";
 import { refreshPricing } from "./cco-refresh-pricing.mjs";
 import { discover } from "./cco-discover-models.mjs";

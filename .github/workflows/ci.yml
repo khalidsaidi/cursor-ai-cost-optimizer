@@ -44,7 +44,7 @@ jobs:
           cd "$ws"
           out="$(printf '{"hook_event_name":"preToolUse","tool_name":"Read","conversation_id":"x","workspace_roots":["%s"]}' "$PWD" | node .cursor/cco-hook.mjs preToolUse)"
           echo "--- Read: $out"; echo "$out" | grep -q '"permission":"allow"' || { echo "expected allow"; exit 1; }
-          out="$(printf '{"hook_event_name":"preToolUse","tool_name":"Task","conversation_id":"x","tool_input":{"description":"d","prompt":"CCO-SCORES: complexity=2 risk=9 breadth=1 uncertainty=0 latency=0\nrefund flow","subagent_type":"cco-fast"},"workspace_roots":["%s"]}' "$PWD" | node .cursor/cco-hook.mjs preToolUse)"
+          out="$(printf '{"hook_event_name":"preToolUse","tool_name":"Task","conversation_id":"x","tool_input":{"description":"d","prompt":"CCO-SCORES: complexity=2 risk=9 breadth=1 uncertainty=0 latency=0\\nrefund flow","subagent_type":"cco-fast"},"workspace_roots":["%s"]}' "$PWD" | node .cursor/cco-hook.mjs preToolUse)"
           echo "--- Task: $out"; echo "$out" | grep -q 'cco-deep' || { echo "expected reroute to cco-deep"; exit 1; }
           node "$GITHUB_WORKSPACE/plugins/cursor-ai-cost-optimizer/scripts/cco-init.mjs" --workspace "$PWD" --uninstall > /dev/null
           test ! -e .cursor/hooks.json && test ! -e .cursor/cco-hook.mjs && test ! -e .cursor/cco || { echo "uninstall left files"; ls -la .cursor; exit 1; }

@@ -19,8 +19,7 @@ import {
   hookLog,
   emit,
   nowIso,
-  asNumber
-} from "./lib/common.mjs";
+  asNumber, isMain } from "./lib/common.mjs";
 import { loadConfig } from "./lib/config.mjs";
 import { refreshPricing } from "./cco-refresh-pricing.mjs";
 import { discover } from "./cco-discover-models.mjs";
@@ -151,7 +150,7 @@ async function main() {
   emit(output);
 }
 
-if (import.meta.url === `file://${process.argv[1]}` || process.env.CCO_HOOK_MAIN === "cco-session-start.mjs") {
+if (isMain(import.meta.url) || process.env.CCO_HOOK_MAIN === "cco-session-start.mjs") {
   main().catch((error) => {
     emit({ continue: true, cco: { error: String(error?.message || error) } });
   });

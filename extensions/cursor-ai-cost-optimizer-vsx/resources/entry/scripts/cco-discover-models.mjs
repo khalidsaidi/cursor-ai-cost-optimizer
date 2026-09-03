@@ -15,8 +15,7 @@ import {
   readJsonSafe,
   writeJson,
   workspacePaths,
-  asNumber
-} from "./lib/common.mjs";
+  asNumber, isMain } from "./lib/common.mjs";
 import { loadConfig } from "./lib/config.mjs";
 import { loadPricing, resolveModelPrice } from "./lib/pricing.mjs";
 import {

@@ -5,6 +5,7 @@
  * per-platform binaries shipped with the VS Code extension (`cco-hook-<platform> sessionStart`).
  * Unknown events are fail-open.
  */
+import { isMain } from "./lib/common.mjs";
 import { pathToFileURL } from "node:url";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -165,7 +166,7 @@ async function main() {
   process.stdout.write(await dispatchWith(event, raw));
 }
 
-if (import.meta.url === `file://${process.argv[1]}` || process.env.CCO_HOOK_MAIN === "cco-hook.mjs") {
+if (isMain(import.meta.url) || process.env.CCO_HOOK_MAIN === "cco-hook.mjs") {
   main().catch(() => {
     process.stdout.write(`${JSON.stringify({ continue: true, permission: "allow" })}\n`);
   });

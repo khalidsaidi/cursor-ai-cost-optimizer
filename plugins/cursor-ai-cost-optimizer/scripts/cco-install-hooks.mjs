@@ -10,7 +10,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { PLUGIN_ROOT, parseArgs, readJsonSafe, writeJson, workspacePaths, ensureDir } from "./lib/common.mjs";
+import { PLUGIN_ROOT, parseArgs, readJsonSafe, writeJson, workspacePaths, ensureDir, isMain } from "./lib/common.mjs";
 
 const MARKER = "cco-hook";
 
@@ -166,6 +166,6 @@ function main() {
   console.log(JSON.stringify({ ok: true, ...result, pluginRoot: PLUGIN_ROOT }, null, 2));
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMain(import.meta.url)) {
   main();
 }

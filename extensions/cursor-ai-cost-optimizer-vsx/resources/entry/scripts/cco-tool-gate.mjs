@@ -25,8 +25,7 @@ import {
   emit,
   asNumber,
   TIERS,
-  isEnabled
-} from "./lib/common.mjs";
+  isEnabled, isMain } from "./lib/common.mjs";
 import { loadConfig } from "./lib/config.mjs";
 import { loadPricing, resolveModelPrice, blendedRatePerMillion } from "./lib/pricing.mjs";
 import { heuristicScores, decideTier, parseOverride, isQuestionLike, isTinyTask } from "./lib/scorer.mjs";

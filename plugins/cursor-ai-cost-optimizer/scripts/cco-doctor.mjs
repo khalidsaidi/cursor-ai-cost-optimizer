@@ -5,7 +5,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { parseArgs, workspacePaths, readJsonSafe, readJsonl, ageHours, TIERS, CCO_AGENT_NAMES, isEnabled } from "./lib/common.mjs";
+import { parseArgs, workspacePaths, readJsonSafe, readJsonl, ageHours, TIERS, CCO_AGENT_NAMES, isEnabled, isMain } from "./lib/common.mjs";
 import { readWorkspaceAgentModel } from "./lib/agents.mjs";
 import { run, cursorAgentBinary } from "./lib/common.mjs";
 
@@ -53,6 +53,6 @@ function main() {
   process.exitCode = d.ok ? 0 : 1;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMain(import.meta.url)) {
   main();
 }

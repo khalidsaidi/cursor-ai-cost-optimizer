@@ -20,11 +20,13 @@ async function main() {
     const workspacePath = path.resolve(__dirname, '../test-fixtures/workspace');
     // Fake Cursor CLI so discovery is deterministic and offline; the extension only writes under the fixture's .cursor/.
 
+    // Short user-data-dir: VS Code puts a unix socket in it and macOS caps socket paths at 103 chars.
+    const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cco-vsc-'));
     await runTests({
       vscodeExecutablePath,
       extensionDevelopmentPath,
       extensionTestsPath,
-      launchArgs: [workspacePath, '--disable-extensions'],
+      launchArgs: [workspacePath, '--disable-extensions', '--user-data-dir', userDataDir],
       extensionTestsEnv: {
         DONT_PROMPT_WSL_INSTALL: '1',
         VSCODE_IPC_HOOK_CLI: '',

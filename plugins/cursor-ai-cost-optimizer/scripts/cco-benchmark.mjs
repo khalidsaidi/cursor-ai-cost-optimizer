@@ -16,7 +16,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { parseArgs, writeJson, nowIso, TIERS, workspacePaths, PLUGIN_ROOT } from "./lib/common.mjs";
+import { parseArgs, writeJson, nowIso, TIERS, workspacePaths, PLUGIN_ROOT, isMain } from "./lib/common.mjs";
 import { runAgent } from "./lib/cli-run.mjs";
 import { discover } from "./cco-discover-models.mjs";
 import { snapshotCliModel, restoreCliModel } from "./lib/models.mjs";
@@ -404,6 +404,6 @@ function main() {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMain(import.meta.url)) {
   main();
 }

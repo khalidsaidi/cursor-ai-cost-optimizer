@@ -4,7 +4,7 @@
  *   node scripts/cco-report.mjs --workspace <root> [--json]
  */
 import path from "node:path";
-import { parseArgs, readJsonl, readJsonSafe, workspacePaths, TIERS } from "./lib/common.mjs";
+import { parseArgs, readJsonl, readJsonSafe, workspacePaths, TIERS, isMain } from "./lib/common.mjs";
 import { loadConfig } from "./lib/config.mjs";
 import { loadPricing, resolveModelPrice } from "./lib/pricing.mjs";
 
@@ -123,6 +123,6 @@ function main() {
   console.log(args.json ? JSON.stringify(report, null, 2) : renderReport(report));
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMain(import.meta.url)) {
   main();
 }

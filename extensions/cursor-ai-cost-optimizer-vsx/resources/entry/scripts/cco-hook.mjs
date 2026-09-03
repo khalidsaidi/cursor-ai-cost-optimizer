@@ -6,6 +6,7 @@
  * per-platform binaries shipped with the VS Code extension (`cco-hook-<platform> sessionStart`).
  * Unknown events are fail-open.
  */
+import { isMain } from "./lib/common.mjs";
 import { pathToFileURL } from "node:url";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

@@ -21,8 +21,7 @@ import {
   emit,
   nowIso,
   CCO_AGENT_NAMES,
-  isEnabled
-} from "./lib/common.mjs";
+  isEnabled, isMain } from "./lib/common.mjs";
 import { loadConfig } from "./lib/config.mjs";
 import { parseOverride, parseScoresLine, heuristicScores, decideTier, applyStateEscalation, formatScoresLine } from "./lib/scorer.mjs";
 import { loadJointState } from "./lib/state.mjs";

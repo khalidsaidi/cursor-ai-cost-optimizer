@@ -4,7 +4,7 @@
  * beforeShellExecution hook: block a short list of clearly destructive commands.
  * Everything else is allowed. Fail-open on any error.
  */
-import { readStdin, safeJsonParse, workspaceFromPayload, workspacePaths, hookLog, emit, isEnabled } from "./lib/common.mjs";
+import { readStdin, safeJsonParse, workspaceFromPayload, workspacePaths, hookLog, emit, isEnabled, isMain } from "./lib/common.mjs";
 import { loadConfig } from "./lib/config.mjs";
 
 const EXPLICITLY_ALLOWED = [

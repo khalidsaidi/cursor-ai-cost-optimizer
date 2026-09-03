@@ -254,3 +254,17 @@ export function parseArgs(argv, spec = {}) {
   }
   return out;
 }
+
+/**
+ * True when the module at `url` is the script Node was started with. Compares real paths, case-insensitively
+ * on Windows (drive-letter case and 8.3 short names differ between argv[1] and import.meta.url there).
+ */
+export function isMain(url) {
+  try {
+    const argv1 = process.argv[1] ? fs.realpathSync.native(path.resolve(process.argv[1])) : "";
+    const self = fs.realpathSync.native(fileURLToPath(url));
+    return process.platform === "win32" ? argv1.toLowerCase() === self.toLowerCase() : argv1 === self;
+  } catch {
+    return false;
+  }
+}

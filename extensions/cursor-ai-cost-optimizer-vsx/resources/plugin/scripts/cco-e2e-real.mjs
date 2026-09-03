@@ -15,7 +15,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { parseArgs, writeJson, readJsonl, workspacePaths, nowIso, TIERS } from "./lib/common.mjs";
+import { parseArgs, writeJson, readJsonl, workspacePaths, nowIso, TIERS, isMain } from "./lib/common.mjs";
 import { runAgent } from "./lib/cli-run.mjs";
 import { discover } from "./cco-discover-models.mjs";
 import { snapshotCliModel, restoreCliModel } from "./lib/models.mjs";
@@ -246,6 +246,6 @@ function main() {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMain(import.meta.url)) {
   main();
 }

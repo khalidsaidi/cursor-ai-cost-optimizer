@@ -3,7 +3,7 @@
  * beforeShellExecution hook: block a short list of clearly destructive commands.
  * Everything else is allowed. Fail-open on any error.
  */
-import { readStdin, safeJsonParse, workspaceFromPayload, workspacePaths, hookLog, emit, isEnabled } from "./lib/common.mjs";
+import { readStdin, safeJsonParse, workspaceFromPayload, workspacePaths, hookLog, emit, isEnabled, isMain } from "./lib/common.mjs";
 import { loadConfig } from "./lib/config.mjs";
 
 const EXPLICITLY_ALLOWED = [
@@ -57,6 +57,6 @@ async function main() {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMain(import.meta.url)) {
   main().catch(() => emit({ continue: true, permission: "allow" }));
 }

@@ -5,7 +5,7 @@
  * Refreshes pricing and model discovery (no probes) and keeps .cursor/agents/cco-*.md in sync,
  * so tier models are in place before the first chat. Fail-open; emits {}.
  */
-import { readStdin, safeJsonParse, workspaceFromPayload, workspacePaths, ensureDir, hookLog, emit, isEnabled } from "./lib/common.mjs";
+import { readStdin, safeJsonParse, workspaceFromPayload, workspacePaths, ensureDir, hookLog, emit, isEnabled, isMain } from "./lib/common.mjs";
 import { loadConfig } from "./lib/config.mjs";
 import { refreshPricingIfStale, refreshDiscoveryIfStale } from "./cco-session-start.mjs";
 

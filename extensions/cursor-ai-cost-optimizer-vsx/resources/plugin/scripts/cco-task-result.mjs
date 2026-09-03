@@ -14,8 +14,7 @@ import {
   hookLog,
   emit,
   asNumber,
-  isEnabled
-} from "./lib/common.mjs";
+  isEnabled, isMain } from "./lib/common.mjs";
 import { loadConfig } from "./lib/config.mjs";
 import { loadJointState, recordOutcome, saveJointState } from "./lib/state.mjs";
 import { escalateTier } from "./lib/scorer.mjs";
@@ -159,6 +158,6 @@ async function main() {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMain(import.meta.url)) {
   main().catch(() => emit({}));
 }

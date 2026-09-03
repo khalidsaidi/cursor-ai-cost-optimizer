@@ -15,8 +15,7 @@ import {
   hookLog,
   emit,
   asNumber,
-  isEnabled
-} from "./lib/common.mjs";
+  isEnabled, isMain } from "./lib/common.mjs";
 import { loadConfig } from "./lib/config.mjs";
 import { loadJointState, recordOutcome, saveJointState } from "./lib/state.mjs";
 import { escalateTier } from "./lib/scorer.mjs";
