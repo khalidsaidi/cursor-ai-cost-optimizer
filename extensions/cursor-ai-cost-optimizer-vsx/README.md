@@ -99,6 +99,20 @@ Measured against the bar set by the big first-party extensions (Copilot Chat, Am
 | On Remove | Hook entries, subagents and state removed. Other tools' entries kept. Nothing left. | Everything under `.cursor/` that CCO wrote is removed; other tools' hook entries and your files are kept. |
 | If you uninstall the extension | Its uninstall hook removes the hook entries, the subagents and its storage. Nothing left. | Project files stay until you run Remove; the shim retires its own hook entries after 7 days. |
 
+## Engineering conventions
+
+The same conventions the first-party extensions (Copilot Chat, Amazon Q, Gemini Code Assist) follow inside the editor:
+
+- Activation on `onStartupFinished`; all work deferred 1.5 s and fully async. No synchronous child process ever runs on the extension host.
+- Every command is wrapped; errors go to the **AI Cost Optimizer** log channel and surface as one message with **View Logs**.
+- Long operations run under a cancellable progress notification; cancelling kills the child process.
+- Commands declare `enablement` on context keys (`cco.mode`, `cco.paused`), so the palette only offers what applies.
+- Setting changes (`cco.hookRuntime`, `cco.nodePath`) take effect immediately through a repair pass.
+- Self-check on activation turns the hooks off if the real hook command fails; kill switch in the status menu.
+- Strict TypeScript plus type-aware ESLint (unhandled promises are errors) gate CI; user-facing strings go through `vscode.l10n` with an exported bundle.
+- Workspace trust and virtual workspaces are declared; state lives in the extension's storage, never in your repo (Everywhere) or only under `.cursor/` (project scope).
+- Unit tests (including the compiled binary and the user scope), a VS Code integration suite, and a real install of each packaged VSIX on six native CI runners.
+
 ## What is written to your workspace
 
 Only files under `<workspace>/.cursor/`; nothing elsewhere in the repo and nothing in your home directory:

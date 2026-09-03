@@ -7,6 +7,7 @@ All notable changes to this extension are documented here. The format is based o
 ## [0.2.0] - 2026-09-02
 
 ### Added
+- First-party conventions: type-aware ESLint in CI, `vscode.l10n` with an exported bundle, command `enablement` via context keys, cancellable setup, live reaction to setting changes, activation timing in the log.
 - Inner workings to the first-party bar: no synchronous child processes on the extension host (setup, repair, pause and removal are async), activation work deferred 1.5 s, a self-check that runs the real hook command once per activation and turns the hooks off with one message if it fails, a **Turn hooks off now** kill switch, and tight per-call hook timeouts (a hung hook is killed after 7 s).
 - "Everywhere" setup (default): nothing written into any project. CCO registers in Cursor's user-level config (`~/.cursor/hooks.json` entries, `~/.cursor/agents/cco-*.md`) and keeps its state in the extension's storage; the routing rule is handed to Cursor per workspace through `workspaceOpen.pluginPaths`. Pause per project from the status menu; Remove and the extension's uninstall hook leave nothing behind.
 - Minimal footprint: setup writes only what routing needs (hooks, shim, rule, five subagents; 8 files) and states the count, the per-call cost and the commit-or-ignore choice in the consent dialog. Skills and chat commands are no longer copied into the workspace.
