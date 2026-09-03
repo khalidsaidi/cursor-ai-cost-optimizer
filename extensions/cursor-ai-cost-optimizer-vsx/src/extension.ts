@@ -279,6 +279,7 @@ export function activate(context: vscode.ExtensionContext) {
             `  extension storage: model mapping, prices, per-project state`,
             ``,
             `No project files. Hooks: ${decideHookModeSafe(opts) === "binary" ? "bundled cco-hook binary" : "Node.js"}, about 0.05 s per tool call.`,
+            `Runs one tiny request per tier through the Cursor CLI to confirm your account can use each model (about $0.01).`,
             `Pause per project from the AI Cost status menu. Remove takes everything back out.`,
           ].join("\n");
           const choice = await vscode.window.showInformationMessage(vscode.l10n.t("Set up AI Cost Optimizer everywhere?"), { modal: true, detail }, vscode.l10n.t("Set up"));
@@ -286,10 +287,12 @@ export function activate(context: vscode.ExtensionContext) {
             return;
           }
         }
-        const result = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: vscode.l10n.t("AI Cost Optimizer: setting up (model discovery)"), cancellable: true }, async (_progress, token) => {
+        // Verify the tier models on this account (one tiny request per tier) so a plan or team restriction is
+        // caught at setup rather than discovered in a chat; skipped automatically when the Cursor CLI is absent.
+        const result = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: vscode.l10n.t("AI Cost Optimizer: setting up (checking the tier models on your account)"), cancellable: true }, async (_progress, token) => {
           const controller = new AbortController();
           token.onCancellationRequested(() => controller.abort());
-          return installUser(opts, stateRoot, firstWorkspace() ?? os.homedir(), controller.signal);
+          return installUser({ ...opts, probe: true }, stateRoot, firstWorkspace() ?? os.homedir(), controller.signal);
         });
         log.info(`[install] everywhere: hooks=${result.hookMode} via ${result.init.runtime}; agents=${JSON.stringify(result.agents)}`);
         log.info(`[install] cco-init output: ${result.init.stdout.trim()}`);

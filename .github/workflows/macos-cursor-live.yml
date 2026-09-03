@@ -25,13 +25,13 @@ jobs:
         run: |
           curl -fsS https://cursor.com/install | bash
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-      - name: CLI answers (auth works)
+      - name: "CLI answers (auth works)"
         run: cursor-agent --version && cursor-agent --trust --mode ask -p "reply with the single word ok" --output-format text | tail -2
       - name: Plugin unit tests on macOS
         run: node --test plugins/cursor-ai-cost-optimizer/test/*.test.mjs
       - name: Real end-to-end routing suite (project scope)
         run: node plugins/cursor-ai-cost-optimizer/scripts/cco-e2e-real.mjs --workspace "$PWD"
-      - name: User scope on macOS: ~/.cursor hooks + agents, CLI session fires the hooks, nothing in the repo
+      - name: "User scope on macOS: ~/.cursor hooks and agents, a CLI session fires the hooks, nothing in the repo"
         run: |
           set -euo pipefail
           root="$HOME/Library/Application Support/cco-live/cco"
