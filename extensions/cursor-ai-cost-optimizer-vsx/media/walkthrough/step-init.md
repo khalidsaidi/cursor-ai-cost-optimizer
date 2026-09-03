@@ -1,9 +1,19 @@
-# Map tiers to real models
+# Start a new chat and work normally
 
-The install ran the plugin's discovery without probing, so the tiers already point at models your account can run. To probe and pin the best model per tier (and refresh prices), start a **new chat** and run the `cco-init` skill:
+Keep whatever chat model you like. AI Cost Optimizer routes each task to the cheapest tier that can do it well and runs it on that tier's model:
+
+| Tier | Typical work | Default model |
+|---|---|---|
+| FAST | quick answers, small edits, lookups | Composer 2.5 |
+| BALANCED | normal features and bug fixes | Claude Sonnet 5 (thinking) |
+| DEEP | risky, complex, multi-file, security, data | Claude Opus 5 (thinking) |
+
+Each routed task ends with one line, for example:
 
 ```
-/cco-init
+[cco: FAST → composer-2.5 • 0.3x of claude-opus-5-thinking-high • est. $0.02]
 ```
 
-You can also edit `.cursor/cco.json` (`modelOverrides`) and re-run it. The status bar item `CCO: on` shows the current mapping in its tooltip.
+Nothing is blocked. Cost routing is advice to the chat model; only your explicit `[cco:<tier>]` tokens and risky work (which always goes to the strong tier) are enforced.
+
+The status bar item **AI Cost** shows the tier mapping, rates relative to your chat model, and the estimated savings for this project. Run `/cco-report` in a chat for the full report, `/cco-models` to change models, `/cco-off` to pause routing in this project.

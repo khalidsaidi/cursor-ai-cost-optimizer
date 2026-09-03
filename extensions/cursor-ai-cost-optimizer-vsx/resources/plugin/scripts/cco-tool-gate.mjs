@@ -287,6 +287,10 @@ async function main() {
           ? `CCO: research goes to cco-explore (${verdict.model}) from here; the ${session.model} stays for the decisions and edits.`
           : verdict.phase === "post"
           ? "CCO: result relayed from the tier subagent (no re-verification on the chat model)."
+          : String(verdict.reason).startsWith("override_")
+          ? `CCO: [cco:${verdict.tier}] → running on ${verdict.model}.`
+          : String(verdict.reason).startsWith("quality_")
+          ? `CCO: this looks risky${verdict.decision?.scores ? ` (risk ${verdict.decision.scores.risk}/10)` : ""}, so it runs on the ${String(verdict.tier).toUpperCase()} tier (${verdict.model}) instead of ${session.model || "the chat model"}. Prefix the prompt with [cco:fast] to keep it here.`
           : `CCO: routing this to the ${String(verdict.tier).toUpperCase()} tier on ${verdict.model} (cheaper per token than ${session.model || "the chat model"}); prefix a prompt with [cco:deep] to force the strong model.`;
       emit({ permission: "deny", agent_message: message, user_message: userMessage });
       return;

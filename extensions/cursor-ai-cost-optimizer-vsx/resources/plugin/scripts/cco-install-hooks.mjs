@@ -30,7 +30,7 @@ import { spawnSync } from "node:child_process";
 function candidates() {
   const out = [];
   if (process.env.CCO_PLUGIN_DIR) out.push(process.env.CCO_PLUGIN_DIR);
-  const pinned = path.join(path.dirname(new URL(import.meta.url).pathname), "cco", "plugin-path.txt");
+  const pinned = path.join(path.dirname(fileURLToPath(import.meta.url)), "cco", "plugin-path.txt");
   try { out.push(fs.readFileSync(pinned, "utf8").trim()); } catch {}
   const plugins = path.join(os.homedir(), ".cursor", "plugins");
   out.push(path.join(plugins, "local", "cursor-ai-cost-optimizer"));

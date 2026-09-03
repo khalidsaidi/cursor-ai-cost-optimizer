@@ -8,7 +8,6 @@ import { costStatement, formatUsd, readSavings } from "./pricing";
 import { decideTier, heuristicScores, overrideToken, parseOverride, DEFAULT_CONFIG } from "./scorer";
 
 const EXTENSION_ID = "khalidsaidi.cursor-ai-cost-optimizer";
-const NOTICE_ACK_KEY = "cco.noticeVersionAck"; // AWS CURRENT_TELEMETRY_NOTICE_VERSION pattern: the acknowledged version
 const MIGRATION_WARNED_KEY = "cco.settingsMigrationWarned";
 const REMOVED_SETTINGS = ["cco.budgetPressure", "cco.economyMode"];
 
@@ -38,22 +37,29 @@ function firstWorkspace(): string | null {
 interface Settings {
   hookRuntime: HookRuntimePreference;
   nodePath: string | null;
-  suppress: { doctorRepaired: boolean; installNotice: boolean };
 }
 function settings(): Settings {
   const cfg = vscode.workspace.getConfiguration("cco");
-  const suppress = cfg.get<Record<string, boolean>>("suppressPrompts", {}) || {};
   return {
     hookRuntime: cfg.get<HookRuntimePreference>("hookRuntime", "auto"),
     nodePath: cfg.get<string>("nodePath", "") || null,
-    suppress: { doctorRepaired: Boolean(suppress.doctorRepaired), installNotice: Boolean(suppress.installNotice) },
   };
 }
-async function suppressPrompt(key: "doctorRepaired" | "installNotice"): Promise<void> {
-  const cfg = vscode.workspace.getConfiguration("cco");
-  const current = { ...(cfg.get<Record<string, boolean>>("suppressPrompts", {}) || {}) };
-  current[key] = true;
-  await cfg.update("suppressPrompts", current, vscode.ConfigurationTarget.Global);
+
+/** The folder a command acts on: the only folder, or the one the user picks in a multi-root workspace. */
+async function pickWorkspace(purpose: string): Promise<string | null> {
+  const folders = vscode.workspace.workspaceFolders ?? [];
+  if (folders.length === 0) {
+    return null;
+  }
+  if (folders.length === 1) {
+    return folders[0].uri.fsPath;
+  }
+  const choice = await vscode.window.showQuickPick(
+    folders.map((f) => ({ label: f.name, description: f.uri.fsPath, fsPath: f.uri.fsPath })),
+    { placeHolder: `Which folder do you want to ${purpose}?` }
+  );
+  return choice?.fsPath ?? null;
 }
 
 /** Copilot configurationMigration pattern: removed settings are cleared from every target, with one warning. */
@@ -100,7 +106,7 @@ export function activate(context: vscode.ExtensionContext) {
   // ---- status bar: "CCO: on/off" (+ $(warning) when pricing is stale or a tier is inherit) ----
   const status = vscode.window.createStatusBarItem("cco.status", vscode.StatusBarAlignment.Right, 100);
   status.name = "AI Cost Optimizer";
-  status.command = "cco.recommendTier";
+  status.command = "cco.showMenu";
   context.subscriptions.push(status);
   const refreshStatus = () => {
     const ws = firstWorkspace();
@@ -128,9 +134,9 @@ export function activate(context: vscode.ExtensionContext) {
         md.appendMarkdown(`\n_Rates relative to your chat model appear after the first chat in this project._\n`);
       }
     } else {
-      md.appendMarkdown(`[Install for this workspace](command:cco.installCursorAssets)\n`);
+      md.appendMarkdown(`Not set up in this project yet. [Set up for this workspace](command:cco.installCursorAssets)\n`);
     }
-    status.text = `${warn ? "$(warning) " : ""}CCO: ${s.enabled ? "on" : "off"}`;
+    status.text = warn ? "$(warning) AI Cost" : s.installed ? (s.enabled ? "$(zap) AI Cost" : "$(zap) AI Cost: off") : "$(zap) AI Cost";
     status.tooltip = md;
     status.show();
   };
@@ -146,13 +152,6 @@ export function activate(context: vscode.ExtensionContext) {
         if (result.installed) {
           log.info(`[doctor] ${folder.uri.fsPath}: mode=${result.hookMode} ${result.changed ? `repaired (${result.actions.join(", ")})` : "ok"}`);
         }
-        if (result.changed && !settings().suppress.doctorRepaired) {
-          void notify("info", `AI Cost Optimizer repaired ${path.basename(folder.uri.fsPath)}: ${result.actions.join(", ")}.`, ["Don't show again"]).then((choice) => {
-            if (choice === "Don't show again") {
-              void suppressPrompt("doctorRepaired");
-            }
-          });
-        }
       } catch (error) {
         void notify("error", `AI Cost Optimizer doctor failed in ${path.basename(folder.uri.fsPath)}: ${String((error as Error)?.message ?? error)}`);
       }
@@ -162,26 +161,17 @@ export function activate(context: vscode.ExtensionContext) {
   runDoctor();
   context.subscriptions.push(vscode.workspace.onDidChangeWorkspaceFolders(runDoctor));
 
-  // ---- first-run / what's-new notice (version-keyed in globalState) ----
-  const ack = context.globalState.get<string>(NOTICE_ACK_KEY, "");
-  if (ack !== extensionVersion && ack !== "never" && !settings().suppress.installNotice) {
-    void context.globalState.update(NOTICE_ACK_KEY, extensionVersion);
-    void notify("info", `AI Cost Optimizer ${extensionVersion} installed — nothing is written until you run Install.`, ["Open walkthrough", "Don't show again"]).then((choice) => {
-      if (choice === "Open walkthrough") {
-        void vscode.commands.executeCommand("workbench.action.openWalkthrough", `${EXTENSION_ID}#cco.gettingStarted`, false);
-      } else if (choice === "Don't show again") {
-        void context.globalState.update(NOTICE_ACK_KEY, "never");
-        void suppressPrompt("installNotice");
-      }
-    });
-  }
+  // No first-run toast: VS Code/Cursor opens the walkthrough for a newly installed extension, the status bar
+  // item shows the state, and nothing is written until the user runs the install command.
   void migrateRemovedSettings(context);
 
   // ---- commands ----
-  const installCmd = vscode.commands.registerCommand("cco.installCursorAssets", async (args?: { confirm?: boolean }) => {
-    const ws = firstWorkspace();
+  const installCmd = vscode.commands.registerCommand("cco.installCursorAssets", async (args?: { confirm?: boolean; workspace?: string }) => {
+    const ws = args?.workspace ?? (await pickWorkspace("set up"));
     if (!ws) {
-      void notify("error", "AI Cost Optimizer: open a folder first.");
+      if ((vscode.workspace.workspaceFolders ?? []).length === 0) {
+        void notify("error", "AI Cost Optimizer: open a folder first.");
+      }
       return;
     }
     try {
@@ -189,8 +179,8 @@ export function activate(context: vscode.ExtensionContext) {
       const plan = plannedFiles(ws, opts);
       if (args?.confirm !== false) {
         const detail = [`Creates:`, ...plan.creates.map((f) => `  ${f}`), ``, `Modifies:`, ...plan.modifies.map((f) => `  ${f}`), ``, `Hook runtime: ${plan.hookMode === "binary" ? "bundled cco-hook binary (no Node.js needed)" : "node .cursor/cco-hook.mjs (Node.js >= 18 on PATH)"}`, `Nothing is written outside ${ws}.`].join("\n");
-        const choice = await vscode.window.showInformationMessage(`Install AI Cost Optimizer into ${path.basename(ws)}/.cursor/?`, { modal: true, detail }, "Install");
-        if (choice !== "Install") {
+        const choice = await vscode.window.showInformationMessage(`Set up AI Cost Optimizer in ${path.basename(ws)}/.cursor/?`, { modal: true, detail }, "Set up");
+        if (choice !== "Set up") {
           return;
         }
       }
@@ -201,10 +191,11 @@ export function activate(context: vscode.ExtensionContext) {
       }
       log.info(`[install] cco-init output: ${result.init.stdout.trim()}`);
       refreshStatus();
-      const tiers = Object.entries(result.agents).map(([k, v]) => `${k.replace("cco-", "")}→${v ?? "?"}`).join(", ");
-      void notify("info", `AI Cost Optimizer installed in .cursor/ (${result.hookMode} hooks; ${tiers}). Start a new chat.`, ["Open hooks.json"]).then((choice) => {
-        if (choice === "Open hooks.json") {
-          void vscode.window.showTextDocument(vscode.Uri.file(result.hooksPath));
+      const tiers = Object.entries(result.agents).map(([k, v]) => `${k.replace("cco-", "")} → ${v ?? "?"}`).join(", ");
+      log.info(`[install] tiers: ${tiers}`);
+      void vscode.window.showInformationMessage(`AI Cost Optimizer is set up for ${path.basename(ws)}. Start a new chat to use it.`, "Show details").then((choice) => {
+        if (choice === "Show details") {
+          log.show(true);
         }
       });
       return result;
@@ -215,17 +206,25 @@ export function activate(context: vscode.ExtensionContext) {
     }
   });
 
-  const uninstallCmd = vscode.commands.registerCommand("cco.uninstallCursorAssets", async () => {
-    const ws = firstWorkspace();
+  const uninstallCmd = vscode.commands.registerCommand("cco.uninstallCursorAssets", async (args?: { confirm?: boolean; workspace?: string }) => {
+    const ws = args?.workspace ?? (await pickWorkspace("remove AI Cost Optimizer from"));
     if (!ws) {
-      void notify("error", "AI Cost Optimizer: open a folder first.");
+      if ((vscode.workspace.workspaceFolders ?? []).length === 0) {
+        void notify("error", "AI Cost Optimizer: open a folder first.");
+      }
       return;
+    }
+    if (args?.confirm !== false) {
+      const choice = await vscode.window.showWarningMessage(`Remove AI Cost Optimizer from ${path.basename(ws)}/.cursor/?`, { modal: true, detail: "Removes CCO's hook entries, the generated cco-* subagents, the rule/skills/commands it added, and its state folder. Your own files and other tools' hook entries are kept." }, "Remove");
+      if (choice !== "Remove") {
+        return;
+      }
     }
     try {
       const result = uninstallWorkspace(ws, options());
       log.info(`[uninstall] ${ws}: via ${result.init.runtime} (status ${result.init.status}); removed ${result.removed.join(", ")}`);
       refreshStatus();
-      void notify("info", `AI Cost Optimizer removed from ${path.basename(ws)}/.cursor/ (other hook entries and your own files were kept).`);
+      void vscode.window.showInformationMessage(`AI Cost Optimizer was removed from ${path.basename(ws)}.`);
       return result;
     } catch (error) {
       const message = String((error as Error)?.message ?? error);
@@ -235,6 +234,27 @@ export function activate(context: vscode.ExtensionContext) {
   });
 
   const showLogCmd = vscode.commands.registerCommand("cco.showOutputChannel", () => log.show(true));
+
+  // Status bar click: a small menu, like the Copilot status item.
+  const menuCmd = vscode.commands.registerCommand("cco.showMenu", async () => {
+    const ws = firstWorkspace();
+    const s = ws ? workspaceStatus(ws) : null;
+    const items: Array<vscode.QuickPickItem & { run: () => unknown }> = [];
+    if (!s?.installed) {
+      items.push({ label: "$(zap) Set up for this workspace", description: "writes only inside .cursor/", run: () => vscode.commands.executeCommand("cco.installCursorAssets") });
+    } else {
+      items.push({ label: "$(graph) Tier rates and savings", description: "what each tier costs relative to your chat model", run: () => vscode.commands.executeCommand("cco.recommendTier") });
+      items.push({ label: "$(sync) Update setup", description: "re-run model discovery and refresh files", run: () => vscode.commands.executeCommand("cco.installCursorAssets") });
+      items.push({ label: "$(trash) Remove from this workspace", run: () => vscode.commands.executeCommand("cco.uninstallCursorAssets") });
+    }
+    items.push({ label: "$(output) Show log", run: () => log.show(true) });
+    items.push({ label: "$(bug) Copy diagnostics", run: () => vscode.commands.executeCommand("cco.collectDiagnostics") });
+    items.push({ label: "$(book) Getting started", run: () => vscode.commands.executeCommand("workbench.action.openWalkthrough", `${EXTENSION_ID}#cco.gettingStarted`, false) });
+    const choice = await vscode.window.showQuickPick(items, { placeHolder: s?.installed ? `AI Cost Optimizer is ${s.enabled ? "active" : "off"} in ${path.basename(ws as string)}` : "AI Cost Optimizer" });
+    if (choice) {
+      await choice.run();
+    }
+  });
 
   // Copilot-style cost statement: tier → model • Nx of the chat model ("Rate is counted at Nx.")
   const recommendCmd = vscode.commands.registerCommand("cco.recommendTier", async () => {
@@ -329,7 +349,7 @@ export function activate(context: vscode.ExtensionContext) {
     }
   });
 
-  context.subscriptions.push(installCmd, uninstallCmd, showLogCmd, recommendCmd, insertFast, insertBal, insertDeep, diagCmd);
+  context.subscriptions.push(installCmd, uninstallCmd, showLogCmd, menuCmd, recommendCmd, insertFast, insertBal, insertDeep, diagCmd);
 
   try {
     decideHookMode(options());

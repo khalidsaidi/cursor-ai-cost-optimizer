@@ -54,7 +54,7 @@ test("thresholds map effort to tiers", () => {
 });
 
 test("heuristic scores match the bundled plugin scorer.mjs on sample prompts", async () => {
-  const pluginScorer = await import(path.join(RESOURCES, "plugin", "scripts", "lib", "scorer.mjs"));
+  const pluginScorer = await import(require("url").pathToFileURL(path.join(RESOURCES, "plugin", "scripts", "lib", "scorer.mjs")).href);
   const prompts = [
     "quick: what git command shows the last 3 commits?",
     "Rotate the production OAuth secrets and update the payment webhook signature verification across the services",

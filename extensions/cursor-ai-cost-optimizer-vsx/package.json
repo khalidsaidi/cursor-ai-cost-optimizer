@@ -56,17 +56,17 @@
       {
         "command": "cco.installCursorAssets",
         "category": "AI Cost Optimizer",
-        "title": "Install / Update in This Workspace"
+        "title": "Set Up / Update in This Workspace"
       },
       {
         "command": "cco.uninstallCursorAssets",
         "category": "AI Cost Optimizer",
-        "title": "Uninstall from This Workspace"
+        "title": "Remove from This Workspace"
       },
       {
         "command": "cco.recommendTier",
         "category": "AI Cost Optimizer",
-        "title": "Recommend Tier (FAST / BALANCED / DEEP)"
+        "title": "Show Tier Rates / Recommend a Tier"
       },
       {
         "command": "cco.insertOverrideFast",
@@ -92,6 +92,11 @@
         "command": "cco.collectDiagnostics",
         "category": "AI Cost Optimizer",
         "title": "Collect Diagnostics (copy to clipboard)"
+      },
+      {
+        "command": "cco.showMenu",
+        "title": "Open Status Menu",
+        "category": "AI Cost Optimizer"
       }
     ],
     "menus": {
@@ -137,24 +142,6 @@
           "default": "",
           "scope": "machine",
           "markdownDescription": "Absolute path of the Node.js executable used to run the plugin's setup scripts (`cco-init`, discovery). Default: `node` on PATH, then Cursor's own Node runtime. Ignored when `#cco.hookRuntime#` is `binary`."
-        },
-        "cco.suppressPrompts": {
-          "type": "object",
-          "default": {},
-          "additionalProperties": false,
-          "properties": {
-            "doctorRepaired": {
-              "type": "boolean",
-              "default": false,
-              "markdownDescription": "Do not notify when the activation-time doctor repairs stale hook or binary paths (repairs are always written to the log)."
-            },
-            "installNotice": {
-              "type": "boolean",
-              "default": false,
-              "markdownDescription": "Do not show the one-time \"installed / what's new\" notice after an install or version change."
-            }
-          },
-          "markdownDescription": "Prompts you have dismissed with **Don't show again**. Set a key back to `false` to see that prompt again."
         }
       }
     },
@@ -162,12 +149,12 @@
       {
         "id": "cco.gettingStarted",
         "title": "Get started with AI Cost Optimizer",
-        "description": "Three steps: install into your project, map the tiers to real models, steer with override tokens.",
+        "description": "Set it up in your project, start a new chat, steer with override tokens when you want to.",
         "steps": [
           {
             "id": "cco.step.install",
-            "title": "Install into this workspace",
-            "description": "Writes the routing rule, tier subagents and hooks under .cursor/ (nothing outside your project).\n[Install / Update in This Workspace](command:cco.installCursorAssets)",
+            "title": "Set up in this workspace",
+            "description": "Writes the routing rule, tier subagents and hooks under .cursor/ (nothing outside your project). You confirm the file list first.\n[Set Up / Update in This Workspace](command:cco.installCursorAssets)",
             "media": {
               "markdown": "media/walkthrough/step-install.md"
             },
@@ -176,17 +163,17 @@
             ]
           },
           {
-            "id": "cco.step.init",
-            "title": "Map tiers to real models",
-            "description": "The install already ran discovery without probing. In a new chat, run the cco-init skill (/cco-init) to probe and pin the best model per tier.",
+            "id": "cco.step.chat",
+            "title": "Start a new chat and work normally",
+            "description": "Keep your usual chat model. Each routed task ends with one line like `[cco: FAST → composer-2.5 • 0.3x of your chat model • est. $0.02]`. Risky work is always sent to the strong tier.",
             "media": {
               "markdown": "media/walkthrough/step-init.md"
             }
           },
           {
             "id": "cco.step.override",
-            "title": "Steer with override tokens",
-            "description": "Force a tier with [cco:fast], [cco:balanced] or [cco:deep] anywhere in a prompt; [cco:auto] restores routing.\n[Insert [cco:fast]](command:cco.insertOverrideFast)",
+            "title": "Steer when you want to",
+            "description": "Force a tier with [cco:fast], [cco:balanced] or [cco:deep] anywhere in a prompt; [cco:auto] restores routing, [cco:off] bypasses it for one request.\n[Insert [cco:fast]](command:cco.insertOverrideFast)",
             "media": {
               "markdown": "media/walkthrough/step-override.md"
             },
@@ -208,7 +195,6 @@
     "package": "node ./scripts/package-extension.mjs",
     "package:all": "node ./scripts/package-extension.mjs --all",
     "verify:vsix": "node ./scripts/verify-vsix.mjs",
-    "package:all": "node ./scripts/package-extension.mjs --all",
     "package:universal": "node ./scripts/package-extension.mjs --no-binaries",
     "publish:openvsx": "node ./scripts/publish-openvsx.mjs",
     "test": "npm run test:unit && npm run test:integration",
@@ -223,7 +209,7 @@
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.85.0",
-    "@vscode/test-electron": "^2.5.2",
+    "@vscode/test-electron": "^3.1.0",
     "esbuild": "^0.25.9",
     "mocha": "^10.7.3",
     "postject": "^1.0.0-alpha.6",

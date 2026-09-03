@@ -11,7 +11,7 @@ const PLUGIN = path.join(ROOT, "resources", "plugin");
 const BUNDLED = path.join(PLUGIN, "config", "pricing.json");
 
 test("resolveModelPrice / blendedRate match the plugin implementation for many ids", async () => {
-  const plugin = await import(path.join(PLUGIN, "scripts", "lib", "pricing.mjs"));
+  const plugin = await import(require("url").pathToFileURL(path.join(PLUGIN, "scripts", "lib", "pricing.mjs")).href);
   const table = P.loadPricing(null, BUNDLED);
   const ids = ["auto", "composer-2.5", "composer-2.5-fast", "claude-sonnet-5-thinking-high", "claude-opus-5-thinking-high", "cursor-grok-4.6-high", "cursor-grok-4.6-xhigh-fast", "gpt-5.6-codex-high", "gemini-3.8-flash", "kimi-k3-code", "totally-unknown-model", ...table.models.slice(0, 40).map((m) => plugin.normalizeName(m.name).replace(/\s+/g, "-"))];
   for (const id of ids) {

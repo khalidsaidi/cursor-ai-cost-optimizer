@@ -25,7 +25,7 @@ the Cursor plugin marketplace, and ships a self-contained hook binary for machin
   never runs FAST); the tool gate keeps expensive chat models from doing cheap work themselves; outcome learning
   escalates tiers that keep failing; every decision is logged to `.cursor/cco/state/decisions.jsonl`.
 - **Zero-dependency hooks**: platform builds bundle a `cco-hook` binary, so hooks run without Node.js.
-- **Status bar** `CCO: on/off` with each tier's model and rate multiplier, the estimated savings in this project,
+- **Status bar** `AI Cost` with each tier's model and rate multiplier, the estimated savings in this project,
   and a warning icon when the price table is older than 7 days or a tier is still `inherit` (run `/cco-init`).
 - **Recommend Tier** scores selected text with the same heuristics the hooks use.
 
@@ -46,7 +46,6 @@ the Cursor plugin marketplace, and ships a self-contained hook binary for machin
 | --- | --- | --- |
 | `cco.hookRuntime` | `auto` | `auto` uses the bundled binary when this build has one for your platform, else Node.js; `binary` / `node` force one. |
 | `cco.nodePath` | `""` | Node.js executable used to run the plugin's setup scripts (default: `node` on PATH, then Cursor's own Node). |
-| `cco.suppressPrompts` | `{}` | Prompts dismissed with "Don't show again": `doctorRepaired`, `installNotice`. |
 
 Per-project settings live in `.cursor/cco.json` (`"enabled": false` opts a project out; `modelOverrides`
 pins models; `shellGuard.enabled` turns on the destructive-command guard).

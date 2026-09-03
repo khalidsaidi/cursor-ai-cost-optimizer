@@ -35,16 +35,20 @@ jobs:
         run: |
           set -euo pipefail
           ws="$(mktemp -d)"
-          node plugins/cursor-ai-cost-optimizer/scripts/cco-init.mjs --workspace "$ws" --json > "$ws/init.json"
-          test -f "$ws/.cursor/hooks.json" && test -f "$ws/.cursor/cco-hook.mjs" && test -f "$ws/.cursor/agents/cco-fast.md"
-          test ! -e "$ws/.cursor/cco.json"   # settings file is created only when a setting is changed
+          node plugins/cursor-ai-cost-optimizer/scripts/cco-init.mjs --workspace "$ws" --json > "$ws/init.json" || { echo "cco-init failed"; cat "$ws/init.json"; exit 1; }
+          echo "--- init.json"; cat "$ws/init.json"; echo; echo "--- .cursor"; ls -la "$ws/.cursor" "$ws/.cursor/cco"
+          test -f "$ws/.cursor/hooks.json" || { echo "missing hooks.json"; exit 1; }
+          test -f "$ws/.cursor/cco-hook.mjs" || { echo "missing shim"; exit 1; }
+          test -f "$ws/.cursor/agents/cco-fast.md" || { echo "missing agents"; exit 1; }
+          test ! -e "$ws/.cursor/cco.json" || { echo "cco.json must not be created by init"; exit 1; }
           cd "$ws"
           out="$(printf '{"hook_event_name":"preToolUse","tool_name":"Read","conversation_id":"x","workspace_roots":["%s"]}' "$PWD" | node .cursor/cco-hook.mjs preToolUse)"
-          echo "$out" | grep -q '"permission":"allow"'
+          echo "--- Read: $out"; echo "$out" | grep -q '"permission":"allow"' || { echo "expected allow"; exit 1; }
           out="$(printf '{"hook_event_name":"preToolUse","tool_name":"Task","conversation_id":"x","tool_input":{"description":"d","prompt":"CCO-SCORES: complexity=2 risk=9 breadth=1 uncertainty=0 latency=0\nrefund flow","subagent_type":"cco-fast"},"workspace_roots":["%s"]}' "$PWD" | node .cursor/cco-hook.mjs preToolUse)"
-          echo "$out" | grep -q 'cco-deep'
+          echo "--- Task: $out"; echo "$out" | grep -q 'cco-deep' || { echo "expected reroute to cco-deep"; exit 1; }
           node "$GITHUB_WORKSPACE/plugins/cursor-ai-cost-optimizer/scripts/cco-init.mjs" --workspace "$PWD" --uninstall > /dev/null
-          test ! -e .cursor/hooks.json && test ! -e .cursor/cco-hook.mjs && test ! -e .cursor/cco
+          test ! -e .cursor/hooks.json && test ! -e .cursor/cco-hook.mjs && test ! -e .cursor/cco || { echo "uninstall left files"; ls -la .cursor; exit 1; }
+          echo "OK"
 
   extension:
     name: extension (${{ matrix.target }} on ${{ matrix.os }})
