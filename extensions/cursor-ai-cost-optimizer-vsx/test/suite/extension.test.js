@@ -86,7 +86,9 @@ describe('AI Cost Optimizer extension', () => {
       assert.ok(Array.isArray(hooks.hooks[event]) && hooks.hooks[event].length > 0, `hook event present: ${event}`);
     }
     const gate = hooks.hooks.preToolUse.find((e) => CCO_RE.test(e.command));
-    assert.ok(gate && gate.matcher === '.*' && gate.timeout === 20, 'matcher/timeout preserved');
+    const template = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'resources', 'plugin', 'hooks', 'hooks.json'), 'utf8'));
+    const expected = template.hooks.preToolUse[0];
+    assert.ok(gate && gate.matcher === expected.matcher && gate.timeout === expected.timeout, 'matcher/timeout preserved');
   });
 
   it('uninstall removes CCO pieces but keeps others', async () => {
