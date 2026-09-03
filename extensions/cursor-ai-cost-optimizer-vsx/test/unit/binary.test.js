@@ -44,7 +44,7 @@ test("compiled binary: shell guard is opt-in (allows by default), preToolUse Rea
     assert.equal(t.run("preToolUse", { tool_name: "Read", tool_input: { path: "README.md" }, conversation_id: "c1" }).out.permission, "allow");
     assert.deepEqual(t.run("somethingElse", {}).out, { continue: true });
   } finally {
-    fs.rmSync(t.ws, { recursive: true, force: true });
+    fs.rmSync(t.ws, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 });
 
@@ -55,7 +55,7 @@ test("compiled binary: shell guard denies rm -rf / when enabled in .cursor/cco.j
     assert.equal(deny.status, 0, deny.stderr);
     assert.equal(deny.out.permission, "deny", JSON.stringify(deny.out));
   } finally {
-    fs.rmSync(t.ws, { recursive: true, force: true });
+    fs.rmSync(t.ws, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 });
 
@@ -72,7 +72,7 @@ test("compiled binary: preToolUse Task cco-fast allows with updated_input and lo
     assert.equal(decisions[0].model, "composer-2.5", "model read from .cursor/agents/cco-fast.md");
     assert.equal(fs.existsSync(path.join(t.ws, ".ai")), false, "no .ai directory in the workspace");
   } finally {
-    fs.rmSync(t.ws, { recursive: true, force: true });
+    fs.rmSync(t.ws, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 });
 
@@ -82,7 +82,7 @@ test("compiled binary: config from .cursor/cco.json overrides plugin defaults (r
     const res = t.run("preToolUse", { conversation_id: "conv-2", tool_name: "Task", tool_input: { description: "x", prompt: "CCO-SCORES: complexity=1 risk=3 breadth=0 uncertainty=0 latency=5\nShow the last 3 commits", subagent_type: "cco-fast" } });
     assert.equal(res.out.updated_input?.subagent_type, "cco-deep", JSON.stringify(res.out));
   } finally {
-    fs.rmSync(t.ws, { recursive: true, force: true });
+    fs.rmSync(t.ws, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 });
 
@@ -91,9 +91,9 @@ test("compiled binary: inert when the workspace opts out or has no tier agents",
   try {
     assert.deepEqual(t.run("preToolUse", { conversation_id: "conv-3", tool_name: "Task", tool_input: { prompt: "x", subagent_type: "cco-fast" } }).out, { permission: "allow" });
     fs.writeFileSync(t.p.configPath, "{}");
-    fs.rmSync(t.p.agentsDir, { recursive: true, force: true });
+    fs.rmSync(t.p.agentsDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
     assert.deepEqual(t.run("preToolUse", { conversation_id: "conv-4", tool_name: "Task", tool_input: { prompt: "x", subagent_type: "cco-fast" } }).out, { permission: "allow" });
   } finally {
-    fs.rmSync(t.ws, { recursive: true, force: true });
+    fs.rmSync(t.ws, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 });

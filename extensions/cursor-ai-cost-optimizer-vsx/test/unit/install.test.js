@@ -123,7 +123,7 @@ test("installWorkspace (node runtime): plugin layout + rule, nothing outside .cu
     assert.ok(fs.existsSync(path.join(p.agentsDir, "cco-fast.md")), "user-authored agent kept");
     assert.equal(workspaceStatus(ws).enabled, false);
   } finally {
-    fs.rmSync(ws, { recursive: true, force: true });
+    fs.rmSync(ws, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 });
 
@@ -167,8 +167,8 @@ test("installWorkspace (binary mode) + doctor: binary at .cursor/cco/bin, quoted
       fs.renameSync(moved, ws);
     }
   } finally {
-    fs.rmSync(ws, { recursive: true, force: true });
-    fs.rmSync(ext, { recursive: true, force: true });
+    fs.rmSync(ws, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+    fs.rmSync(ext, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 });
 
@@ -181,7 +181,7 @@ test("pre-release files under .cursor/cco are cleaned on install", async () => {
     assert.deepEqual(cleanupLegacyWorkspace(ws), [".cursor/cco/scripts", ".cursor/cco-runtime.json"]);
     assert.deepEqual(cleanupLegacyWorkspace(ws), []);
   } finally {
-    fs.rmSync(ws, { recursive: true, force: true });
+    fs.rmSync(ws, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 });
 
@@ -199,7 +199,7 @@ test("installWorkspace via the compiled binary (hookRuntime=binary runs cco-init
     assert.equal(fs.existsSync(workspacePaths(ws).ccoDir), false);
     assert.ok(un.init.ran);
   } finally {
-    fs.rmSync(ws, { recursive: true, force: true });
+    fs.rmSync(ws, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 });
 

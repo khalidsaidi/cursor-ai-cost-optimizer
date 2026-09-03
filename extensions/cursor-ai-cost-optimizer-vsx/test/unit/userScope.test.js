@@ -53,7 +53,7 @@ test("everywhere scope: nothing in the repo, ~/.cursor hooks + agents, pause per
   } finally {
     process.env.HOME = saved.HOME;
     process.env.USERPROFILE = saved.USERPROFILE;
-    fs.rmSync(home, { recursive: true, force: true });
-    fs.rmSync(ws, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+    fs.rmSync(ws, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 });

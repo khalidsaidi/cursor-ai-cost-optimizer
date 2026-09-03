@@ -54,6 +54,10 @@ export function runHookCommand(command: string, cwd: string, payload: object, ti
       }
       resolve({ ok, ms: Date.now() - started, output: out.slice(-500), error: ok ? null : (err || `exit ${code}, output: ${line.slice(0, 200)}`).slice(0, 500) });
     });
-    child.stdin?.end(JSON.stringify(payload));
+    // a command that cannot spawn closes stdin before we write: swallow EPIPE, the close/error handlers report the failure
+    child.stdin?.on("error", () => {});
+    try {
+      child.stdin?.end(JSON.stringify(payload));
+    } catch {}
   });
 }

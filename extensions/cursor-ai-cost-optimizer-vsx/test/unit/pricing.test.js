@@ -59,6 +59,6 @@ test("rate multipliers, staleness, savings and the cost statement", () => {
     assert.match(c.lines[0].text, /^FAST → composer-2\.5 • [0-9.]+x of claude-opus-5-thinking-high \(Rate is counted at [0-9.]+x\.\)$/);
     assert.equal(P.costStatement(ws, BUNDLED, "auto").chatModelLabel, "Auto");
   } finally {
-    fs.rmSync(ws, { recursive: true, force: true });
+    fs.rmSync(ws, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 });
