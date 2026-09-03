@@ -70,6 +70,12 @@ node --test plugins/cursor-ai-cost-optimizer/test/*.test.mjs
 
 The extension ships one VSIX per target: Linux x64, Linux ARM64, Windows x64, Windows ARM64, macOS Intel and macOS Apple Silicon. CI builds the hook binary natively on a GitHub-hosted runner of each platform, runs the plugin unit tests, the extension unit tests (including the compiled binary), real hook payloads through the binary, the VS Code integration suite, packages the VSIX with `--target`, and installs it into a downloaded VS Code to prove it is installable there. The plugin's own test job additionally runs the project-local install, a hook call through the committed shim, and the uninstall on all six runners. Locally, `npm run package:all` cross-compiles all six binaries with Bun and packages all six VSIX.
 
+## Live runs on real Cursor
+
+- **macOS**: the `Live Cursor on macOS` workflow (label a PR `live-macos`, or dispatch it) installs the real Cursor CLI on a macOS runner with a `CURSOR_API_KEY` secret, runs the six usage-priced end-to-end scenarios and a user-scope session (hooks in `~/.cursor`, nothing in the repo). Last run: 6/6 passed, hooks fired.
+- **Windows**: native Windows Cursor, installed from the Windows x64 VSIX into a throwaway profile and driven through the real command palette (`scripts` in the extension's proof runbook). Verified setup, hooks, plugin path after reload, and delegation.
+- **Older Cursor versions**: extracted Linux builds run under WSLg with the same flow.
+
 ## Marketplace readiness
 
 In Cursor, install the official **create-plugin** plugin and run its **review-plugin-submission** skill on this repo before submitting.
