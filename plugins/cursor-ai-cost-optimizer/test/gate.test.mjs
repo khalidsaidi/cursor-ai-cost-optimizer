@@ -231,7 +231,7 @@ test("task guard appends the project's acceptance test command and a cost estima
   const { detectTestCommand, estimateTaskCostUsd } = await import("../scripts/lib/project.mjs");
   const ws = fs.mkdtempSync(path.join(os.tmpdir(), "cco-accept-"));
   writeWorkspaceAgents(ws, { "cco-fast": "composer-2.5", "cco-balanced": "claude-sonnet-5-thinking-high", "cco-deep": "claude-opus-5-thinking-high", "cco-verifier": "composer-2.5", "cco-explore": "composer-2.5" });
-  fs.writeFileSync(path.join(ws, "package.json"), JSON.stringify({ name: "x", scripts: { test: "node --test test/" } }));
+  fs.writeFileSync(path.join(ws, "package.json"), JSON.stringify({ name: "x", scripts: { test: "node --test" } }));
   assert.equal(detectTestCommand(ws).command, "npm test");
   assert.equal(detectTestCommand(fs.mkdtempSync(path.join(os.tmpdir(), "cco-empty-"))), null);
   const out = runHook("cco-task-guard.mjs", { hook_event_name: "preToolUse", conversation_id: "conv-T", model: "claude-opus-5-thinking-high", tool_name: "Task", tool_input: { description: "helper", prompt: "CCO-SCORES: complexity=3 risk=0 breadth=1 uncertainty=0 latency=0\nadd a helper", subagent_type: "cco-fast" }, workspace_roots: [ws] });

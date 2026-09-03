@@ -118,7 +118,7 @@ function seedRealRepo(ws, { breakScorer }) {
   for (const dir of ["scripts", "test", "config", "agents"]) {
     fs.cpSync(path.join(src, dir), path.join(ws, dir), { recursive: true });
   }
-  fs.writeFileSync(path.join(ws, "package.json"), JSON.stringify({ name: "cco-fixture", type: "module", private: true, scripts: { test: "node --test test/" } }, null, 2));
+  fs.writeFileSync(path.join(ws, "package.json"), JSON.stringify({ name: "cco-fixture", type: "module", private: true, scripts: { test: "node --test" } }, null, 2));
   if (breakScorer) {
     const scorerPath = path.join(ws, "scripts", "lib", "scorer.mjs");
     const text = fs.readFileSync(scorerPath, "utf8");

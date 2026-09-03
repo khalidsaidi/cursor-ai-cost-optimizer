@@ -17,7 +17,8 @@ export function detectTestCommand(workspace) {
     const full = path.join(workspace, dir);
     try {
       if (fs.readdirSync(full).some((f) => /\.test\.(mjs|cjs|js|ts)$/.test(f))) {
-        return { command: `node --test ${dir}/`, kind: "node-test" };
+        // no directory argument: Node 18/20/22 all discover test files themselves (Node 22 no longer accepts a directory)
+        return { command: "node --test", kind: "node-test" };
       }
     } catch {}
   }

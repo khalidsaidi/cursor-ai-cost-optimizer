@@ -160,7 +160,7 @@ function mainInner() {
       for (const dir of ["scripts", "test", "config"]) {
         fs.cpSync(path.join(REPO_PLUGIN_ROOT, dir), path.join(ws, dir), { recursive: true });
       }
-      fs.writeFileSync(path.join(ws, "package.json"), JSON.stringify({ name: "fixture", type: "module", private: true, scripts: { test: "node --test test/" } }, null, 2));
+      fs.writeFileSync(path.join(ws, "package.json"), JSON.stringify({ name: "fixture", type: "module", private: true, scripts: { test: "node --test" } }, null, 2));
     }
     // Reuse the seed's discovered runtime so the session-start hook does not need to probe again.
     // Each case gets the seed's full .cursor setup (agents, hooks, config, mapping) before the session starts.

@@ -120,7 +120,7 @@ test("installWorkspace (node runtime): identical plugin layout + rule/skills/com
   }
 });
 
-test("installWorkspace (binary mode) + doctor: binary at .cursor/cco/bin, quoted absolute commands, repoint/refresh", () => {
+test("installWorkspace (binary mode) + doctor: binary at .cursor/cco/bin, quoted absolute commands, repoint/refresh", { skip: process.platform === "win32" && "uses a shell-script stand-in for the binary; the real-binary path is covered by the compiled-binary test" }, () => {
   const ws = tmp("ws");
   const ext = tmp("ext");
   try {
