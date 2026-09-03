@@ -13,7 +13,9 @@ the Cursor plugin marketplace, and ships a self-contained hook binary for machin
      config (`~/.cursor/hooks.json` entries, `~/.cursor/agents/cco-*.md`) and keeps its state in the extension's
      storage, the way Copilot keeps its state in the editor. Pause it per project from the same menu.
    - **This project only**: 8 files under the project's `.cursor/`, shareable with teammates through git.
-   You see exactly what will be written before anything happens.
+   You see exactly what will be written before anything happens. After an Everywhere setup, reload the window once
+   (the notification offers it): Cursor loads the routing rule when a workspace opens, so the current window needs
+   a reload; new windows get it automatically.
 2. **Start a new chat and work normally.** Keep your usual chat model. Each routed task ends with one line like
    `[cco: FAST → composer-2.5 • 0.3x of your chat model • est. $0.02]`. Nothing is blocked; risky work always
    goes to the strong tier.

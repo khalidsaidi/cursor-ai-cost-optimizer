@@ -6,6 +6,9 @@ All notable changes to this extension are documented here. The format is based o
 
 ## [0.2.0] - 2026-09-02
 
+### Fixed
+- After an Everywhere setup the current window did not get the routing rule (Cursor requests plugin paths only at workspace open); the setup notification now offers Reload Window. Found in a native Windows Cursor run.
+
 ### Added
 - First-party conventions: type-aware ESLint in CI, `vscode.l10n` with an exported bundle, command `enablement` via context keys, cancellable setup, live reaction to setting changes, activation timing in the log.
 - Inner workings to the first-party bar: no synchronous child processes on the extension host (setup, repair, pause and removal are async), activation work deferred 1.5 s, a self-check that runs the real hook command once per activation and turns the hooks off with one message if it fails, a **Turn hooks off now** kill switch, and tight per-call hook timeouts (a hung hook is killed after 7 s).

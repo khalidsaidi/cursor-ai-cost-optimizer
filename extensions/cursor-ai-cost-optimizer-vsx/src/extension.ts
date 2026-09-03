@@ -294,8 +294,11 @@ export function activate(context: vscode.ExtensionContext) {
         log.info(`[install] everywhere: hooks=${result.hookMode} via ${result.init.runtime}; agents=${JSON.stringify(result.agents)}`);
         log.info(`[install] cco-init output: ${result.init.stdout.trim()}`);
         refreshStatus();
-        void vscode.window.showInformationMessage(vscode.l10n.t("AI Cost Optimizer is set up. Start a new chat to use it."), vscode.l10n.t("Show details")).then((choice) => {
-          if (choice === vscode.l10n.t("Show details")) {
+        // Cursor asks for plugin paths only when a workspace opens, so the routing rule reaches this window after a reload.
+        void vscode.window.showInformationMessage(vscode.l10n.t("AI Cost Optimizer is set up. Reload the window to start routing here; new windows get it automatically."), vscode.l10n.t("Reload Window"), vscode.l10n.t("Show details")).then((choice) => {
+          if (choice === vscode.l10n.t("Reload Window")) {
+            void vscode.commands.executeCommand("workbench.action.reloadWindow");
+          } else if (choice === vscode.l10n.t("Show details")) {
             log.show(true);
           }
         });

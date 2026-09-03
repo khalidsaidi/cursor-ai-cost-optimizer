@@ -178,7 +178,7 @@
           {
             "id": "cco.step.chat",
             "title": "Start a new chat and work normally",
-            "description": "Keep your usual chat model. Each routed task ends with one line like `[cco: FAST \u2192 composer-2.5 \u2022 0.3x of your chat model \u2022 est. $0.02]`. Risky work is always sent to the strong tier.",
+            "description": "Keep your usual chat model. Each routed task ends with one line like `[cco: FAST → composer-2.5 • 0.3x of your chat model • est. $0.02]`. Risky work is always sent to the strong tier.",
             "media": {
               "markdown": "media/walkthrough/step-init.md"
             }
@@ -201,38 +201,7 @@
     ]
   },
   "scripts": {
-    "sync:assets": "node ./scripts/sync-assets.mjs",
-    "compile": "tsc -p .",
-    "compile:binaries": "node ./scripts/compile-binaries.mjs --current-only",
-    "compile:binaries:all": "node ./scripts/compile-binaries.mjs",
-    "package": "node ./scripts/package-extension.mjs",
-    "package:all": "node ./scripts/package-extension.mjs --all",
-    "verify:vsix": "node ./scripts/verify-vsix.mjs",
-    "package:universal": "node ./scripts/package-extension.mjs --no-binaries",
-    "publish:openvsx": "node ./scripts/publish-openvsx.mjs",
-    "test": "npm run test:unit && npm run test:integration",
-    "test:unit": "npm run compile && node --test test/unit/binary.test.js test/unit/install.test.js test/unit/pricing.test.js test/unit/scorer.test.js test/unit/userScope.test.js test/unit/selfcheck.test.js",
-    "test:integration": "npm run compile && xvfb-run -a node ./test/runTest.js",
-    "test:cursor": "npm run compile && bash ./scripts/test-cursor.sh",
-    "proof:ide-auth": "npm run compile && bash ./scripts/proof-ide-auth.sh",
-    "uat:video": "npm run compile && bash ./scripts/uat-video-runbook.sh",
-    "proof:no-stone": "bash ./scripts/proof-no-stone-unturned.sh",
-    "vscode:uninstall": "node ./scripts/uninstall.js",
-    "lint": "eslint src",
-    "vscode:prepublish": "npm run lint && npm run compile"
-  },
-  "devDependencies": {
-    "@eslint/js": "^9.39.5",
-    "@types/node": "^20.0.0",
-    "@types/vscode": "^1.85.0",
-    "@vscode/l10n-dev": "^0.0.35",
-    "@vscode/test-electron": "^3.1.0",
-    "esbuild": "^0.25.9",
-    "eslint": "^9.39.5",
-    "mocha": "^10.7.3",
-    "postject": "^1.0.0-alpha.6",
-    "typescript": "^5.4.0",
-    "typescript-eslint": "^8.69.0"
+    "vscode:uninstall": "node ./scripts/uninstall.js"
   },
   "l10n": "./l10n"
 }
