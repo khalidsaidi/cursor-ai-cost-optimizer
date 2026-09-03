@@ -91,7 +91,7 @@ Measured against the bar set by the big first-party extensions (Copilot Chat, Am
 | --- | --- | --- |
 | On install | Registers commands and a status bar item. No toast, no files, no settings changed. | same |
 | On setup (you confirm first) | CCO entries merged into `~/.cursor/hooks.json`, five subagents in `~/.cursor/agents/`, state in the extension's storage. **No project files.** | 8 files under the project's `.cursor/` plus a git-ignored state folder; they show up in git status. |
-| While you chat | One hook process per tool call: about 0.05 s (44 ms measured with Node, 37 ms with the binary); a hung hook is killed after 7 s and the call proceeds. One footer line per routed task. Nothing blocked by default. | same |
+| While you chat | One hook process per tool call: about 0.05 s (44 ms measured with Node, 37 ms with the binary); a hung hook is killed after 5 s and the call proceeds (measured in Cursor: a failed or hung hook never blocks the chat, it costs at most its timeout). One footer line per routed task. Nothing blocked by default. | same |
 | Projects you paused / did not set up | Paused projects get no rule and inert hooks. | Untouched: no files, no messages, no hooks. |
 | On extension update | Hook entries are repointed silently. | The pinned plugin path and binary are refreshed silently. |
 | On every activation | 1.5 s after startup, off the extension host thread: a repair pass, then a self-check that runs the real hook command once. If it fails or does not answer in 6 s, the hooks are turned off and you get one message. | same |

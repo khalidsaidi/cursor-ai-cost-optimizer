@@ -63,6 +63,7 @@ node --test plugins/cursor-ai-cost-optimizer/test/*.test.mjs
 - The extension's default setup ("Everywhere") writes nothing into any project: CCO entries in `~/.cursor/hooks.json`, five subagents in `~/.cursor/agents/`, state in the extension's storage, and the routing rule handed to Cursor per workspace via `workspaceOpen.pluginPaths`. Pause per project; Remove or uninstall leaves nothing behind.
 - "This project only" (the marketplace plugin's `/cco-init`, or the extension's second option) writes 8 files under the project's `.cursor/` plus a git-ignored state folder, after you confirm the list. Commit them for teammates or ignore `.cursor/`. Projects you did not set up are untouched.
 - Per-call overhead: one hook process per tool call, 44 ms with Node and 37 ms with the compiled binary (measured on this machine). Nothing is blocked by default.
+- Failure behavior, measured in Cursor 3.17 from its own hooks log: a hook command that cannot start fails in about 30 ms and Cursor proceeds with no visible error; a hung hook is killed at the entry's timeout (5 s for per-call events) and Cursor proceeds. The extension also self-checks its hook once per activation and turns the hooks off if the check fails.
 - Removal takes everything back out and keeps other tools' hook entries.
 
 ## Platform coverage

@@ -17,20 +17,20 @@
       {
         "command": "node \"${CURSOR_PLUGIN_ROOT}/scripts/cco-hook.mjs\" preToolUse",
         "matcher": ".*",
-        "timeout": 8
+        "timeout": 5
       }
     ],
     "postToolUse": [
       {
         "command": "node \"${CURSOR_PLUGIN_ROOT}/scripts/cco-hook.mjs\" postToolUse",
         "matcher": "Task",
-        "timeout": 10
+        "timeout": 8
       }
     ],
     "subagentStop": [
       {
         "command": "node \"${CURSOR_PLUGIN_ROOT}/scripts/cco-hook.mjs\" subagentStop",
-        "timeout": 10
+        "timeout": 8
       }
     ],
     "beforeShellExecution": [

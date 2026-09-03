@@ -156,7 +156,7 @@ async function dispatchWith(eventName, raw) {
   const { spawnSync } = await import("node:child_process");
   // Per-call events must never stall the editor: a hung script is killed and the call is allowed.
   const perCall = /^(preToolUse|postToolUse|beforeSubmitPrompt|beforeShellExecution|subagentStop)$/.test(eventName);
-  const res = spawnSync(process.execPath, [path.join(here, script), eventName], { input: raw, encoding: "utf8", timeout: perCall ? 7_000 : 25_000 });
+  const res = spawnSync(process.execPath, [path.join(here, script), eventName], { input: raw, encoding: "utf8", timeout: perCall ? 4_500 : 25_000 });
   const output = res.stdout ? res.stdout : `${JSON.stringify({ continue: true, permission: "allow" })}\n`;
   if (claimed.result) {
     writeReplay(claimed.result, output);
