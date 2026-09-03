@@ -58,6 +58,13 @@ node scripts/validate-template.mjs
 node --test plugins/cursor-ai-cost-optimizer/test/*.test.mjs
 ```
 
+## What it does to your Cursor
+
+- Projects you did not set up are untouched: no files, no chat messages, no hooks.
+- Setup (after you confirm the file list) writes 8 files under the project's `.cursor/` plus a git-ignored state folder. Commit them for teammates or ignore `.cursor/`.
+- Per-call overhead: one hook process per tool call, 44 ms with Node and 37 ms with the compiled binary (measured on this machine). Nothing is blocked by default.
+- Removal takes everything back out and keeps other tools' hook entries.
+
 ## Platform coverage
 
 The extension ships one VSIX per target: Linux x64, Linux ARM64, Windows x64, Windows ARM64, macOS Intel and macOS Apple Silicon. CI builds the hook binary natively on a GitHub-hosted runner of each platform, runs the plugin unit tests, the extension unit tests (including the compiled binary), real hook payloads through the binary, the VS Code integration suite, packages the VSIX with `--target`, and installs it into a downloaded VS Code to prove it is installable there. The plugin's own test job additionally runs the project-local install, a hook call through the committed shim, and the uninstall on all six runners. Locally, `npm run package:all` cross-compiles all six binaries with Bun and packages all six VSIX.

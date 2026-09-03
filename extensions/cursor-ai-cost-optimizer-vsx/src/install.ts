@@ -150,6 +150,15 @@ function sha256File(filePath: string): string {
 }
 function sameFile(a: string, b: string): boolean {
   try {
+    const sa = fs.statSync(a);
+    const sb = fs.statSync(b);
+    if (sa.size !== sb.size) {
+      return false;
+    }
+  } catch {
+    return false;
+  }
+  try {
     return fs.statSync(a).size === fs.statSync(b).size && sha256File(a) === sha256File(b);
   } catch {
     return false;
@@ -383,16 +392,11 @@ export function readWorkspaceAgents(workspace: string): Record<string, string | 
 }
 
 /** Extension-added files, relative to the workspace (rule, skills, commands from the bundled plugin). */
+/** Only what routing needs in the workspace: the rule. Skills and chat commands stay in the extension. */
 export function extensionAssetList(pluginRoot: string): string[] {
   const out: string[] = [];
   for (const rel of listFiles(path.join(pluginRoot, "rules"))) {
     out.push(`.cursor/rules/${rel}`);
-  }
-  for (const rel of listFiles(path.join(pluginRoot, "skills"))) {
-    out.push(`.cursor/skills/${rel}`);
-  }
-  for (const rel of listFiles(path.join(pluginRoot, "commands"))) {
-    out.push(`.cursor/commands/${rel}`);
   }
   return out.sort();
 }
@@ -401,7 +405,7 @@ export function extensionAssetList(pluginRoot: string): string[] {
 export function plannedFiles(workspace: string, opts: Options): { creates: string[]; modifies: string[]; hookMode: HookMode } {
   const p = workspacePaths(workspace);
   const hookMode = decideHookMode(opts);
-  const creates = [".cursor/agents/cco-{fast,balanced,deep,verifier,explore}.md", ".cursor/cco-hook.mjs", ".cursor/cco/ (plugin-path.txt, runtime.json, pricing.json, state/; git-ignored)", ...extensionAssetList(opts.pluginRoot)];
+  const creates = [".cursor/cco-hook.mjs", ".cursor/agents/cco-{fast,balanced,deep,verifier,explore}.md", ...extensionAssetList(opts.pluginRoot), ".cursor/cco/ (runtime, prices, logs; ignores itself in git)"];
   if (hookMode === "binary") {
     creates.push(`.cursor/cco/bin/${binaryFileName()}`);
   }
@@ -482,8 +486,6 @@ function writeExtensionAssets(workspace: string, pluginRoot: string): string[] {
   };
   const p = workspacePaths(workspace);
   copy(path.join(pluginRoot, "rules"), p.rulesDir, ".cursor/rules");
-  copy(path.join(pluginRoot, "skills"), p.skillsDir, ".cursor/skills");
-  copy(path.join(pluginRoot, "commands"), p.commandsDir, ".cursor/commands");
   return written.sort();
 }
 

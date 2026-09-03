@@ -178,7 +178,16 @@ export function activate(context: vscode.ExtensionContext) {
       const opts = options();
       const plan = plannedFiles(ws, opts);
       if (args?.confirm !== false) {
-        const detail = [`Creates:`, ...plan.creates.map((f) => `  ${f}`), ``, `Modifies:`, ...plan.modifies.map((f) => `  ${f}`), ``, `Hook runtime: ${plan.hookMode === "binary" ? "bundled cco-hook binary (no Node.js needed)" : "node .cursor/cco-hook.mjs (Node.js >= 18 on PATH)"}`, `Nothing is written outside ${ws}.`].join("\n");
+        const detail = [
+          `Writes 8 files under ${path.basename(ws)}/.cursor/ (they will show up in git status):`,
+          ...plan.creates.map((f) => `  ${f}`),
+          ``,
+          `Modifies: ${plan.modifies.join(", ")}`,
+          `Hooks: ${plan.hookMode === "binary" ? "bundled cco-hook binary (no Node.js needed)" : "node .cursor/cco-hook.mjs, about 0.05 s per tool call"}`,
+          ``,
+          `Commit these to share the setup with teammates (they are a no-op without the extension), or add .cursor/ to .gitignore.`,
+          `Nothing is written outside this folder. Remove from This Workspace takes it all back out.`,
+        ].join("\n");
         const choice = await vscode.window.showInformationMessage(`Set up AI Cost Optimizer in ${path.basename(ws)}/.cursor/?`, { modal: true, detail }, "Set up");
         if (choice !== "Set up") {
           return;

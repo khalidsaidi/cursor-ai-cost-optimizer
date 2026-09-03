@@ -68,7 +68,7 @@ test("buildHookEntries keeps matcher/timeout from the plugin hooks.json; mergeHo
   assert.equal(stripCcoHooks({ version: 1, hooks: { a: [{ command: '"/x/cco-hook" a' }] } }), null);
 });
 
-test("installWorkspace (node runtime): identical plugin layout + rule/skills/commands, nothing outside .cursor/", () => {
+test("installWorkspace (node runtime): plugin layout + rule, nothing outside .cursor/, no skills/commands copies", () => {
   const ws = tmp("ws");
   try {
     fs.writeFileSync(path.join(ws, "README.md"), "# fixture\n");
@@ -76,13 +76,20 @@ test("installWorkspace (node runtime): identical plugin layout + rule/skills/com
     fs.writeFileSync(path.join(ws, ".cursor", "hooks.json"), JSON.stringify({ version: 1, hooks: { afterFileEdit: [{ command: "other-tool-hook" }] } }));
     const plan = plannedFiles(ws, base());
     assert.ok(plan.creates.some((f) => f.startsWith(".cursor/agents/")) && plan.creates.includes(".cursor/rules/cco-routing.mdc") && plan.modifies[0].startsWith(".cursor/hooks.json"));
+    assert.equal(plan.creates.some((f) => f.includes("skills") || f.includes("commands")), false);
 
     const r = installWorkspace(ws, base());
     assert.equal(r.hookMode, "node");
     assert.equal(r.init.runtime, "node");
     assert.equal(r.init.status, 0, r.init.error);
     const p = workspacePaths(ws);
-    for (const rel of ["hooks.json", "cco-hook.mjs", "cco/plugin-path.txt", "cco/runtime.json", "cco/extension-manifest.json", "agents/cco-fast.md", "agents/cco-verifier.md", "rules/cco-routing.mdc", "skills/cco-init/SKILL.md", "commands/cco.md"]) {
+    for (const rel of ["hooks.json", "cco-hook.mjs", "cco/plugin-path.txt", "cco/runtime.json", "cco/extension-manifest.json", "agents/cco-fast.md", "agents/cco-verifier.md", "rules/cco-routing.mdc"]) {
+      assert.ok(fs.existsSync(path.join(p.cursorDir, rel)), `missing .cursor/${rel}`);
+    }
+    for (const rel of ["skills", "commands"]) {
+      assert.equal(fs.existsSync(path.join(p.cursorDir, rel)), false, `.cursor/${rel} must not be created`);
+    }
+    for (const rel of []) {
       assert.ok(fs.existsSync(path.join(p.cursorDir, rel)), `missing .cursor/${rel}`);
     }
     assert.equal(fs.readFileSync(p.pluginPathFile, "utf8").trim(), PLUGIN, "shim pinned to the bundled plugin");

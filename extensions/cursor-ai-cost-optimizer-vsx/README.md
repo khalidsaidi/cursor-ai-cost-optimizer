@@ -79,6 +79,20 @@ real hook payloads through the binary, runs the VS Code integration suite, packa
 installs that VSIX into a downloaded VS Code with `--install-extension`, lists it back with its version and
 uninstalls it (`npm run verify:vsix`). A release publishes all six under the same version.
 
+## What it does to your Cursor
+
+Measured against the bar set by the big first-party extensions:
+
+| | This extension |
+| --- | --- |
+| On install | Registers commands and a status bar item. No toast, no files, no settings changed. |
+| On setup (you confirm first) | 8 files under the project's `.cursor/`: hooks.json (merged), the shim, the rule, five subagents. Plus a git-ignored state folder. They show up in git status; commit them or ignore `.cursor/`. |
+| While you chat | One hook process per tool call: about 0.05 s (44 ms measured with Node, 37 ms with the binary). One footer line per routed task. Nothing blocked by default. |
+| Projects you did not set up | Untouched. No files, no messages, no hooks. |
+| On extension update | The pinned plugin path and binary are refreshed silently. |
+| On Remove from This Workspace | Everything above is removed; other tools' hook entries and your files are kept. |
+| If you uninstall the extension without removing | Project files stay; the shim retires its own hook entries after 7 days. Run Remove first to leave nothing. |
+
 ## What is written to your workspace
 
 Only files under `<workspace>/.cursor/`; nothing elsewhere in the repo and nothing in your home directory:
@@ -87,7 +101,7 @@ Only files under `<workspace>/.cursor/`; nothing elsewhere in the repo and nothi
   `node .cursor/cco-hook.mjs <event>`); entries from other tools are preserved.
 - `.cursor/agents/cco-{fast,balanced,deep,verifier}.md` — tier subagents with a concrete `model:`; generated
   files carry a marker and are never overwritten if you edit them.
-- `.cursor/rules/cco-routing.mdc`, `.cursor/skills/cco-*/SKILL.md`, `.cursor/commands/cco*.md`.
+- `.cursor/rules/cco-routing.mdc` — the routing rule. (Skills and chat commands are not copied; the extension's own commands cover them.)
 - `.cursor/cco.json` — project settings (optional; created when you change a setting). `.cursor/cco-hook.mjs` — hook shim, committed next to hooks.json. `.cursor/cco/` — `plugin-path.txt`, `runtime.json`,
   `pricing.json`, `bin/cco-hook` (binary mode), `extension-manifest.json`, and `state/` (logs, sessions).
   Add `.cursor/cco/` to `.gitignore` if you do not want logs in git — the extension never edits `.gitignore`.
@@ -119,7 +133,7 @@ This Workspace** to remove everything; add `.cursor/cco/` to `.gitignore` to kee
 1. Run **AI Cost Optimizer: Remove from This Workspace** in every project where you installed it. It removes
    the CCO entries from `.cursor/hooks.json` (other entries stay), `.cursor/agents/cco-{fast,balanced,deep,verifier}.md`
    (only files carrying the generated marker), `.cursor/cco.json`, `.cursor/cco/` (shim, binary, runtime,
-   pricing, state), `.cursor/rules/cco-routing.mdc`, `.cursor/skills/cco-*` and `.cursor/commands/cco*.md`.
+   pricing, state) and `.cursor/rules/cco-routing.mdc`.
 2. Then uninstall the extension. Removing the extension **alone** leaves those files in place: the hook entries
    keep pointing at `.cursor/cco/bin/cco-hook` (still present, so hooks keep working) or, in node mode, at the
    shim whose `plugin-path.txt` points at the deleted extension folder — Cursor then reports failing hooks and the

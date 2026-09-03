@@ -40,7 +40,7 @@ describe('AI Cost Optimizer extension', () => {
     }
   });
 
-  it('install writes only under .cursor/ (plugin layout + rule/skills/commands + hooks), preserving foreign hook entries', async () => {
+  it('install writes only under .cursor/ (plugin layout + rule + hooks), preserving foreign hook entries', async () => {
     const root = workspaceRoot();
     assert.ok(root, 'Expected a workspace folder');
     fs.rmSync(path.join(root, '.cursor'), { recursive: true, force: true });
@@ -53,7 +53,7 @@ describe('AI Cost Optimizer extension', () => {
 
     await vscode.commands.executeCommand('cco.installCursorAssets', { confirm: false });
 
-    const files = ['.cursor/hooks.json', '.cursor/cco-hook.mjs', '.cursor/cco/plugin-path.txt', '.cursor/cco/runtime.json', '.cursor/cco/extension-manifest.json', '.cursor/agents/cco-fast.md', '.cursor/agents/cco-balanced.md', '.cursor/agents/cco-deep.md', '.cursor/agents/cco-verifier.md', '.cursor/agents/cco-explore.md', '.cursor/rules/cco-routing.mdc', '.cursor/skills/cco-init/SKILL.md', '.cursor/commands/cco.md'];
+    const files = ['.cursor/hooks.json', '.cursor/cco-hook.mjs', '.cursor/cco/plugin-path.txt', '.cursor/cco/runtime.json', '.cursor/cco/extension-manifest.json', '.cursor/agents/cco-fast.md', '.cursor/agents/cco-balanced.md', '.cursor/agents/cco-deep.md', '.cursor/agents/cco-verifier.md', '.cursor/agents/cco-explore.md', '.cursor/rules/cco-routing.mdc'];
     for (const rel of files) {
       proof.installChecks.files[rel] = fs.existsSync(path.join(root, ...rel.split('/')));
       assert.ok(proof.installChecks.files[rel], `Expected ${rel}`);
