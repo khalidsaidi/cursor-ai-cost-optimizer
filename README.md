@@ -1,65 +1,67 @@
 # cursor-ai-cost-optimizer
 
-A **Cursor Marketplace plugin repo** containing a single plugin:
+A Cursor Marketplace repo containing one plugin, **AI Cost Optimizer (CCO)**, plus an Open VSX extension that installs the same assets without the marketplace.
 
-- `cursor-ai-cost-optimizer` — **AI Cost Optimizer** (fuzzy-logic router that chooses FAST/BALANCED/DEEP effort and routes to the right subagent)
+CCO routes each request to the cheapest effort tier that can do it well (FAST / BALANCED / DEEP), runs that tier on its own model through Cursor subagents, and enforces the routing with hooks so savings do not depend on the chat model remembering a rule.
 
-## Repository structure
-This repo uses Cursor’s multi-plugin marketplace layout (even though it contains just one plugin):
-- `.cursor-plugin/marketplace.json` — lists plugins
-- `plugins/cursor-ai-cost-optimizer/.cursor-plugin/plugin.json` — per-plugin manifest
-- plugin components live under `plugins/cursor-ai-cost-optimizer/`
+- Plugin docs: [`plugins/cursor-ai-cost-optimizer/README.md`](plugins/cursor-ai-cost-optimizer/README.md)
+- Extension: [`extensions/cursor-ai-cost-optimizer-vsx/`](extensions/cursor-ai-cost-optimizer-vsx/)
+- Changelog: [`plugins/cursor-ai-cost-optimizer/CHANGELOG.md`](plugins/cursor-ai-cost-optimizer/CHANGELOG.md)
 
-## Component coverage
-- Rules: `plugins/cursor-ai-cost-optimizer/rules/cco-routing.mdc`
-- Skills: `plugins/cursor-ai-cost-optimizer/skills/cco-init/SKILL.md`, `plugins/cursor-ai-cost-optimizer/skills/cco-model-config/SKILL.md`, `plugins/cursor-ai-cost-optimizer/skills/cco-report/SKILL.md`
-- Agents: `plugins/cursor-ai-cost-optimizer/agents/cco-router.md`, `plugins/cursor-ai-cost-optimizer/agents/cco-fast.md`, `plugins/cursor-ai-cost-optimizer/agents/cco-balanced.md`, `plugins/cursor-ai-cost-optimizer/agents/cco-deep.md`, `plugins/cursor-ai-cost-optimizer/agents/cco-verifier.md`
-- Commands: `plugins/cursor-ai-cost-optimizer/commands/cco.md`, `plugins/cursor-ai-cost-optimizer/commands/cco-models.md`, `plugins/cursor-ai-cost-optimizer/commands/cco-benchmark.md`
-- Hooks: `plugins/cursor-ai-cost-optimizer/hooks/hooks.json`
-- Pricing refresh: `plugins/cursor-ai-cost-optimizer/scripts/cco-session-start.mjs` (runs on `sessionStart`, caches `.cursor/cco-pricing.json`)
-- Joint scorer + benchmark: `plugins/cursor-ai-cost-optimizer/scripts/cco-joint-engine.mjs`, `plugins/cursor-ai-cost-optimizer/scripts/cco-joint-chaos-real.mjs`
+## What actually happens
 
-## Real benchmark highlight
-Latest real chaos benchmark (February 21, 2026, 24 paired runs):
-- Estimated cost: `$0.194389` -> `$0.041031` (`78.89%` reduction)
-- Quality pass rate preserved: `75.00%` baseline vs `75.00%` joint
-- Avg `duration_api_ms`: `14379.7` -> `5466.8`
+| Mechanism | Where | Verified against cursor-agent 2026.08.31 |
+|---|---|---|
+| Tier subagents run on real models | `.cursor/agents/cco-*.md` written by setup with `model:` | Task tool shows the subagent's model; plugin-provided agents always inherit; `~/.cursor/agents` is not loaded by the CLI |
+| Delegation guard | `preToolUse` hook on Task, `updated_input` | reroutes `subagent_type`; the rewritten agent's model is used |
+| Tool gate | `preToolUse` hook from the project's `.cursor/hooks.json` (the IDE ignores plugin-declared hooks) | parent conversation redirected; subagent conversations untouched; inert in projects not set up |
+| Session context | `sessionStart.additional_context` | mapping + prices visible to the model |
+| Real cost accounting | `stream-json` `result.usage` × published per-model rates | input/output/cache read/cache write tokens |
 
-Visual summary:
-- `plugins/cursor-ai-cost-optimizer/assets/benchmark-dashboard.svg`
-- `plugins/cursor-ai-cost-optimizer/assets/benchmark-scenario-map.svg`
-- `plugins/cursor-ai-cost-optimizer/assets/benchmark-top10-savings.svg`
+## What a user sees
 
-## Validate locally
-```bash
-node scripts/validate-template.mjs
-```
+In Cursor, on Auto or any model, in a real codebase: the request, one line like "routing this to the cheap tier", a `cco-fast` subagent card that completes, the answer, and a footer `[cco: FAST → composer-2.5]`. Risky work shows a `cco-deep` card on Opus 5 instead. No configuration beyond a one-time `cco-init` (the routing rule runs it itself on first use), and everything CCO writes stays inside the project's `.cursor/` folder. Verified by watching a real Cursor desktop session on 2026-09-02 (hooks, delegation, and files all confirmed on disk).
 
-## Real Cursor Model Discovery
-To map CCO tiers to models that are actually runnable for the current user/session:
-```bash
-node plugins/cursor-ai-cost-optimizer/scripts/cco-discover-models.mjs --workspace .
-```
-This writes `.cursor/cco-runtime.json` with discovered `fast`/`balanced`/`deep` model mappings.
+## Measured results (maintainer's account, Pro plan, 2026-09-02)
 
-To run real Cursor end-to-end checks (discovery + router behavior):
+Real `cursor-agent` runs, cost = CLI-reported tokens × Cursor's published per-model rates, quality = deterministic checks (tests pass, files exist). Tier models discovered: fast = Composer 2.5, balanced = Claude Sonnet 5 thinking, deep = Claude Opus 5 thinking. Quality was 100% for every policy in every run.
+
+**Model for model** (the same task run directly on the tier model instead of Opus 5): 48–52% cheaper across three runs of 6–7 tasks; 81–93% median per task.
+
+**Inside a chat whose model is Opus 5** (the chat model's routing turn plus the full subagent session, warm context): +15% on one run of toy tasks, −22% on a second, −65% on two real-codebase tasks. Reason: Opus finished each of those tasks in one or two turns, and CCO's routing turn is itself an Opus turn; the deep tier is the same model and is kept in the chat by design. Delegating from a frontier chat model only pays on work that would take that model many turns.
+
+What this means for a user who wants to spend less:
+- The savings come from running the work on the cheaper model end to end. With Auto or a cheap chat model, CCO's job is to guarantee the strong model on risky or complex work and the cheap one everywhere else, with every decision logged.
+- With a frontier chat model, CCO gives explicit tiers and telemetry, but do not expect it to cut the bill on small tasks; the chat model's own turns dominate.
+
+Reproduce (costs usage):
+
 ```bash
 node plugins/cursor-ai-cost-optimizer/scripts/cco-e2e-real.mjs --workspace .
+node plugins/cursor-ai-cost-optimizer/scripts/cco-benchmark.mjs --workspace . --repeats 1 --include-overhead
 ```
-This writes `.ai/cco/e2e-real-report.md` and `.ai/cco/e2e-real-report.json`.
 
-To run the joint-scoring chaos benchmark (real Cursor calls in isolated tmp workspace):
+Reports: `.ai/cco/e2e-real-report.md`, `.ai/cco/benchmark-report.md`.
+
+## Repository structure
+
+- `.cursor-plugin/marketplace.json` — marketplace manifest
+- `plugins/cursor-ai-cost-optimizer/` — the plugin (rules, agents, skills, commands, hooks, scripts, config, tests)
+- `extensions/cursor-ai-cost-optimizer-vsx/` — VS Code / Open VSX extension mirroring the plugin assets
+- `scripts/validate-template.mjs` — marketplace layout validator
+- `docs/add-a-plugin.md` — how to add another plugin to this repo
+
+## Validate locally
+
 ```bash
-node plugins/cursor-ai-cost-optimizer/scripts/cco-joint-chaos-real.mjs --workspace . --repeats 2
+node scripts/validate-template.mjs
+node --test plugins/cursor-ai-cost-optimizer/test/
 ```
-This writes `.ai/cco/joint-chaos-real-report.md` and `.ai/cco/joint-chaos-real-report.json`.
 
-User-friendly model setup is available via `/cco-models`:
-- Adaptive (recommended for most users)
-- Fixed models
-- Manual (advanced)
+## Platform coverage
 
-## Marketplace readiness checks (recommended)
-In Cursor, install the official **create-plugin** plugin and run its submission review on this repo:
-- `/add-plugin create-plugin`
-- run **review-plugin-submission** on this workspace (see instructions printed at the end of the runbook)
+The extension ships one VSIX per target: Linux x64, Linux ARM64, Windows x64, Windows ARM64, macOS Intel and macOS Apple Silicon. CI builds the hook binary natively on a GitHub-hosted runner of each platform, runs the plugin unit tests, the extension unit tests (including the compiled binary), real hook payloads through the binary, the VS Code integration suite, packages the VSIX with `--target`, and installs it into a downloaded VS Code to prove it is installable there. The plugin's own test job additionally runs the project-local install, a hook call through the committed shim, and the uninstall on all six runners. Locally, `npm run package:all` cross-compiles all six binaries with Bun and packages all six VSIX.
+
+## Marketplace readiness
+
+In Cursor, install the official **create-plugin** plugin and run its **review-plugin-submission** skill on this repo before submitting.

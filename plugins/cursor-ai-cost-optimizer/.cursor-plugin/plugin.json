@@ -1,27 +1,39 @@
 {
   "name": "cursor-ai-cost-optimizer",
   "displayName": "AI Cost Optimizer",
-  "version": "0.1.3",
-  "description": "Fuzzy-logic router that picks the cheapest sufficient effort level (fast/balanced/deep) and routes work to the right subagent.",
-  "author": { "name": "Khalid Saidi" },
+  "version": "0.2.0",
+  "description": "Routes each request to the cheapest sufficient effort tier (fast/balanced/deep), runs it on a tier-specific model via subagents, and enforces the routing with hooks that apply risk guardrails, learn from outcomes, and log decisions.",
+  "author": {
+    "name": "Khalid Saidi",
+    "email": "khalidsaidi66@gmail.com"
+  },
   "license": "MIT",
-  "keywords": ["cursor", "plugin", "routing", "agents", "fuzzy-logic", "cost-optimizer"],
+  "keywords": [
+    "cursor",
+    "plugin",
+    "routing",
+    "subagents",
+    "cost-optimizer",
+    "model-routing",
+    "pricing"
+  ],
   "logo": "assets/logo.svg",
   "category": "developer-tools",
-  "tags": ["routing", "agents", "cost", "fuzzy-logic"],
-  "rules": ["rules/cco-routing.mdc"],
-  "skills": [
-    "skills/cco-init/SKILL.md",
-    "skills/cco-model-config/SKILL.md",
-    "skills/cco-report/SKILL.md"
+  "tags": [
+    "routing",
+    "subagents",
+    "cost",
+    "model-selection",
+    "pricing"
   ],
-  "agents": [
-    "agents/cco-router.md",
-    "agents/cco-fast.md",
-    "agents/cco-balanced.md",
-    "agents/cco-deep.md",
-    "agents/cco-verifier.md"
-  ],
-  "commands": ["commands/cco.md", "commands/cco-models.md", "commands/cco-benchmark.md"],
-  "hooks": "hooks/hooks.json"
+  "rules": "./rules/",
+  "skills": "./skills/",
+  "agents": "./agents/",
+  "commands": "./commands/",
+  "hooks": "./hooks/hooks.json",
+  "homepage": "https://github.com/khalidsaidi/cursor-ai-cost-optimizer",
+  "repository": "https://github.com/khalidsaidi/cursor-ai-cost-optimizer",
+  "minClientVersions": {
+    "cursor": "3.13.0"
+  }
 }

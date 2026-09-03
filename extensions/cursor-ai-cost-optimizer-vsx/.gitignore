@@ -1,0 +1,16 @@
+# build outputs (regenerate with npm run compile / compile:binaries / package)
+node_modules/
+dist/
+dist-bin/
+bin/
+.cache/
+*.vsix
+
+# local test runs
+.vscode-test/
+.ai/
+test-fixtures/workspace/.cursor/
+test-fixtures/workspace/.ai/
+test-fixtures/workspace/utils/
+.vscode-test-ext-*/
+.vscode-test-user-*/

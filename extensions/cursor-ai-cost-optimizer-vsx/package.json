@@ -1,0 +1,232 @@
+{
+  "name": "cursor-ai-cost-optimizer",
+  "displayName": "AI Cost Optimizer",
+  "publisher": "khalidsaidi",
+  "version": "0.2.0",
+  "description": "Routes each Cursor request to the cheapest sufficient model tier (fast/balanced/deep) via subagents and hooks. Sets up the AI Cost Optimizer plugin in your project's .cursor/ folder; ships a self-contained hook binary for machines without Node.js.",
+  "license": "SEE LICENSE IN LICENSE",
+  "pricing": "Free",
+  "icon": "resources/icon.png",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "AI",
+    "Other"
+  ],
+  "keywords": [
+    "cursor",
+    "routing",
+    "subagents",
+    "cost-optimizer",
+    "model-routing",
+    "hooks"
+  ],
+  "homepage": "https://github.com/khalidsaidi/cursor-ai-cost-optimizer#readme",
+  "bugs": {
+    "url": "https://github.com/khalidsaidi/cursor-ai-cost-optimizer/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/khalidsaidi/cursor-ai-cost-optimizer.git",
+    "directory": "extensions/cursor-ai-cost-optimizer-vsx"
+  },
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "Writes .cursor/ files and installs hooks that execute a binary.",
+      "restrictedConfigurations": [
+        "cco.nodePath"
+      ]
+    },
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "Needs a local .cursor/ folder and a local hook runtime."
+    }
+  },
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "cco.installCursorAssets",
+        "category": "AI Cost Optimizer",
+        "title": "Install / Update in This Workspace"
+      },
+      {
+        "command": "cco.uninstallCursorAssets",
+        "category": "AI Cost Optimizer",
+        "title": "Uninstall from This Workspace"
+      },
+      {
+        "command": "cco.recommendTier",
+        "category": "AI Cost Optimizer",
+        "title": "Recommend Tier (FAST / BALANCED / DEEP)"
+      },
+      {
+        "command": "cco.insertOverrideFast",
+        "category": "AI Cost Optimizer",
+        "title": "Insert [cco:fast]"
+      },
+      {
+        "command": "cco.insertOverrideBalanced",
+        "category": "AI Cost Optimizer",
+        "title": "Insert [cco:balanced]"
+      },
+      {
+        "command": "cco.insertOverrideDeep",
+        "category": "AI Cost Optimizer",
+        "title": "Insert [cco:deep]"
+      },
+      {
+        "command": "cco.showOutputChannel",
+        "category": "AI Cost Optimizer",
+        "title": "Show Log"
+      },
+      {
+        "command": "cco.collectDiagnostics",
+        "category": "AI Cost Optimizer",
+        "title": "Collect Diagnostics (copy to clipboard)"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "cco.insertOverrideFast",
+          "when": "editorTextFocus"
+        },
+        {
+          "command": "cco.insertOverrideBalanced",
+          "when": "editorTextFocus"
+        },
+        {
+          "command": "cco.insertOverrideDeep",
+          "when": "editorTextFocus"
+        },
+        {
+          "command": "cco.collectDiagnostics"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "AI Cost Optimizer",
+      "properties": {
+        "cco.hookRuntime": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "binary",
+            "node"
+          ],
+          "enumDescriptions": [
+            "Use the bundled cco-hook binary when this build ships one for your platform, otherwise Node.js.",
+            "Always use the bundled binary (fails if this build has none for your platform).",
+            "Always run hooks with `node .cursor/cco-hook.mjs` (Node.js >= 18 must be on the PATH Cursor sees). Keeps .cursor/hooks.json portable for teammates."
+          ],
+          "default": "auto",
+          "scope": "machine",
+          "markdownDescription": "How the CCO hook entries in `.cursor/hooks.json` are executed. `auto` uses `node .cursor/cco-hook.mjs` when Node.js >= 18 is available (portable for teammates) and falls back to the bundled `cco-hook` binary, which makes the hook entries reference a machine-local path. Changing this takes effect on the next **Install / Update** or activation-time doctor run."
+        },
+        "cco.nodePath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "markdownDescription": "Absolute path of the Node.js executable used to run the plugin's setup scripts (`cco-init`, discovery). Default: `node` on PATH, then Cursor's own Node runtime. Ignored when `#cco.hookRuntime#` is `binary`."
+        },
+        "cco.suppressPrompts": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": false,
+          "properties": {
+            "doctorRepaired": {
+              "type": "boolean",
+              "default": false,
+              "markdownDescription": "Do not notify when the activation-time doctor repairs stale hook or binary paths (repairs are always written to the log)."
+            },
+            "installNotice": {
+              "type": "boolean",
+              "default": false,
+              "markdownDescription": "Do not show the one-time \"installed / what's new\" notice after an install or version change."
+            }
+          },
+          "markdownDescription": "Prompts you have dismissed with **Don't show again**. Set a key back to `false` to see that prompt again."
+        }
+      }
+    },
+    "walkthroughs": [
+      {
+        "id": "cco.gettingStarted",
+        "title": "Get started with AI Cost Optimizer",
+        "description": "Three steps: install into your project, map the tiers to real models, steer with override tokens.",
+        "steps": [
+          {
+            "id": "cco.step.install",
+            "title": "Install into this workspace",
+            "description": "Writes the routing rule, tier subagents and hooks under .cursor/ (nothing outside your project).\n[Install / Update in This Workspace](command:cco.installCursorAssets)",
+            "media": {
+              "markdown": "media/walkthrough/step-install.md"
+            },
+            "completionEvents": [
+              "onCommand:cco.installCursorAssets"
+            ]
+          },
+          {
+            "id": "cco.step.init",
+            "title": "Map tiers to real models",
+            "description": "The install already ran discovery without probing. In a new chat, run the cco-init skill (/cco-init) to probe and pin the best model per tier.",
+            "media": {
+              "markdown": "media/walkthrough/step-init.md"
+            }
+          },
+          {
+            "id": "cco.step.override",
+            "title": "Steer with override tokens",
+            "description": "Force a tier with [cco:fast], [cco:balanced] or [cco:deep] anywhere in a prompt; [cco:auto] restores routing.\n[Insert [cco:fast]](command:cco.insertOverrideFast)",
+            "media": {
+              "markdown": "media/walkthrough/step-override.md"
+            },
+            "completionEvents": [
+              "onCommand:cco.insertOverrideFast",
+              "onCommand:cco.insertOverrideBalanced",
+              "onCommand:cco.insertOverrideDeep"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "scripts": {
+    "sync:assets": "node ./scripts/sync-assets.mjs",
+    "compile": "tsc -p .",
+    "compile:binaries": "node ./scripts/compile-binaries.mjs --current-only",
+    "compile:binaries:all": "node ./scripts/compile-binaries.mjs",
+    "package": "node ./scripts/package-extension.mjs",
+    "package:all": "node ./scripts/package-extension.mjs --all",
+    "verify:vsix": "node ./scripts/verify-vsix.mjs",
+    "package:all": "node ./scripts/package-extension.mjs --all",
+    "package:universal": "node ./scripts/package-extension.mjs --no-binaries",
+    "publish:openvsx": "node ./scripts/publish-openvsx.mjs",
+    "test": "npm run test:unit && npm run test:integration",
+    "test:unit": "npm run compile && node --test test/unit/",
+    "test:integration": "npm run compile && xvfb-run -a node ./test/runTest.js",
+    "test:cursor": "npm run compile && bash ./scripts/test-cursor.sh",
+    "proof:ide-auth": "npm run compile && bash ./scripts/proof-ide-auth.sh",
+    "uat:video": "npm run compile && bash ./scripts/uat-video-runbook.sh",
+    "proof:no-stone": "bash ./scripts/proof-no-stone-unturned.sh",
+    "vscode:uninstall": "node ./scripts/uninstall.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/test-electron": "^2.5.2",
+    "esbuild": "^0.25.9",
+    "mocha": "^10.7.3",
+    "postject": "^1.0.0-alpha.6",
+    "typescript": "^5.4.0"
+  }
+}

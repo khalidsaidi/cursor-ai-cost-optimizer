@@ -1,0 +1,164 @@
+#!/usr/bin/env node
+/**
+ * postToolUse hook (matcher: Task) and subagentStop hook.
+ * Learns from outcomes (error / escalation requests) per tier and model, and nudges the
+ * cascade: when a cheaper tier asks to escalate, remind the parent to delegate one tier up.
+ * Fail-open.
+ */
+import {
+  readStdin,
+  safeJsonParse,
+  workspaceFromPayload,
+  workspacePaths,
+  readJsonSafe,
+  hookLog,
+  emit,
+  asNumber,
+  isEnabled
+} from "./lib/common.mjs";
+import { loadConfig } from "./lib/config.mjs";
+import { loadJointState, recordOutcome, saveJointState } from "./lib/state.mjs";
+import { escalateTier } from "./lib/scorer.mjs";
+import { tierFor } from "./lib/models.mjs";
+import { readWorkspaceAgentModel } from "./lib/agents.mjs";
+import { detectTestCommand } from "./lib/project.mjs";
+import { spawnSync } from "node:child_process";
+
+export function extractText(value) {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+export function analyzeOutcome({ hookEvent, payload }) {
+  const subagentType = String(payload.tool_input?.subagent_type || payload.subagent_type || "");
+  const tier = tierFor(subagentType);
+  if (!tier) {
+    return { applies: false };
+  }
+  const status = String(payload.status || "").toLowerCase();
+  const outputText = extractText(payload.tool_output ?? payload.summary ?? "");
+  const escalateMatch = outputText.match(/CCO-ESCALATE:\s*(fast|balanced|deep)/i);
+  const verifyFail = /CCO-VERIFY:\s*fail/i.test(outputText);
+  const isError =
+    (hookEvent === "subagentStop" && status && status !== "completed") ||
+    /"is_error"\s*:\s*true|\berror\b.*\b(failed|exception|traceback)\b/i.test(outputText.slice(0, 2000));
+  const requestedEscalation = escalateMatch ? escalateMatch[1].toLowerCase() : null;
+  const nextTier = requestedEscalation || (isError && tier !== "deep" ? escalateTier(tier) : null);
+  return {
+    applies: true,
+    tier,
+    subagentType,
+    status: status || null,
+    isError,
+    rework: Boolean(requestedEscalation || verifyFail),
+    requestedEscalation,
+    nextTier,
+    durationMs: asNumber(payload.duration ?? payload.duration_ms, 0)
+  };
+}
+
+async function main() {
+  const payload = safeJsonParse((await readStdin()).trim() || "{}");
+  const hookEvent = String(payload.hook_event_name || process.argv[2] || "postToolUse");
+  const workspace = workspaceFromPayload(payload);
+  const paths = workspace ? workspacePaths(workspace) : null;
+  if (!workspace || !isEnabled(workspace).enabled) {
+    emit({});
+    return;
+  }
+  try {
+    const analysis = analyzeOutcome({ hookEvent, payload });
+    if (!analysis.applies) {
+      emit({});
+      return;
+    }
+    const config = loadConfig(workspace);
+    let model = "inherit";
+    if (workspace) {
+      model = readWorkspaceAgentModel(workspace, analysis.subagentType) || readJsonSafe(paths.runtimePath)?.profiles?.[analysis.tier]?.model || "inherit";
+    }
+    if (paths && config?.learning?.enabled !== false) {
+      const state = loadJointState(paths.jointStatePath);
+      const next = recordOutcome({
+        state,
+        tier: analysis.tier,
+        model,
+        observation: { isError: analysis.isError, rework: analysis.rework, durationMs: analysis.durationMs, costUsd: NaN },
+        config
+      });
+      saveJointState(paths.jointStatePath, next);
+    }
+    hookLog(paths, {
+      event: hookEvent,
+      conversation_id: payload.conversation_id ?? null,
+      subagent: analysis.subagentType,
+      status: analysis.status,
+      isError: analysis.isError,
+      rework: analysis.rework,
+      requestedEscalation: analysis.requestedEscalation,
+      nextTier: analysis.nextTier
+    });
+
+    // Automatic acceptance check: after FAST/BALANCED work that edited files, run the project's
+    // cheapest test command here (no model tokens) and tell the chat model the result.
+    let verification = null;
+    if (hookEvent === "postToolUse" && config?.verification?.autoRunTests !== false && analysis.tier !== "deep" && !analysis.isError && !analysis.requestedEscalation) {
+      const text = extractText(payload.tool_output ?? "");
+      const edited = /\b(created|added|updated|edited|modified|wrote|changed)\b/i.test(text) || /\.(mjs|js|ts|tsx|py|go|rs|java|rb)\b/.test(text);
+      const cmd = edited ? detectTestCommand(workspace) : null;
+      if (cmd) {
+        const [bin, ...rest] = cmd.command.split(" ");
+        const env = { ...process.env };
+        delete env.NODE_TEST_CONTEXT; // a nested `node --test` under a test runner would otherwise report success silently
+        const res = spawnSync(bin, rest, { cwd: workspace, encoding: "utf8", timeout: asNumber(config?.verification?.timeoutMs, 90_000), shell: process.platform === "win32", env });
+        const ok = res.status === 0 && !res.error;
+        verification = { command: cmd.command, ok, tail: String((res.stdout || "") + (res.stderr || "")).trim().split("\n").slice(-6).join("\n") };
+        hookLog(paths, { event: "verification", subagent: analysis.subagentType, command: cmd.command, ok });
+        if (!ok) {
+          analysis.rework = true;
+          analysis.nextTier = analysis.nextTier || escalateTier(analysis.tier);
+        }
+      }
+    }
+
+    const cascade = config?.escalation?.cascade !== false;
+    if (verification && verification.ok) {
+      emit({ additional_context: `CCO-VERIFY: pass (${verification.command} exit 0). Relay the result; no further checks needed.` });
+      return;
+    }
+    if (verification && !verification.ok && cascade && analysis.nextTier) {
+      emit({ additional_context: `CCO-VERIFY: fail (${verification.command}):\n${verification.tail}\nTell the user in one line that the ${analysis.tier.toUpperCase()} attempt failed verification and you are escalating to ${analysis.nextTier.toUpperCase()}, then delegate once to cco-${analysis.nextTier} with this failure and the subagent's summary; do not retry ${analysis.subagentType} and do not fix it here.` });
+      return;
+    }
+    if (cascade && analysis.nextTier && analysis.nextTier !== analysis.tier) {
+      const message = `CCO cascade: ${analysis.subagentType} ${analysis.requestedEscalation ? "requested escalation" : "did not complete successfully"}. Tell the user in one line that you are escalating to ${analysis.nextTier.toUpperCase()}, then delegate once to cco-${analysis.nextTier} with the findings above; do not retry ${analysis.subagentType}.`;
+      if (hookEvent === "subagentStop") {
+        if (config?.escalation?.followupOnSubagentFailure !== false && analysis.status && analysis.status !== "completed") {
+          emit({ followup_message: message });
+          return;
+        }
+        emit({});
+        return;
+      }
+      emit({ additional_context: message });
+      return;
+    }
+    emit({});
+  } catch (error) {
+    hookLog(paths, { event: hookEvent, error: String(error?.message || error) });
+    emit({});
+  }
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch(() => emit({}));
+}
