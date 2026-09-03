@@ -11,7 +11,7 @@ import * as crypto from "crypto";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { binaryFileName, findNode, runPluginScript, type HookMode, type Options, type RunResult } from "./install";
+import { binaryFileName, findNode, runPluginScriptAsync, type HookMode, type Options, type RunResult } from "./install";
 
 export interface UserPaths {
   root: string;
@@ -129,7 +129,7 @@ export interface UserInstallResult {
 }
 
 /** Idempotent: cco-init merges hook entries, rewrites the agents and the runtime plugin, keeps other state. */
-export function installUser(opts: Options, stateRoot: string, workspace: string = os.homedir()): UserInstallResult {
+export async function installUser(opts: Options, stateRoot: string, workspace: string = os.homedir()): Promise<UserInstallResult> {
   const p = userPaths(stateRoot);
   fs.mkdirSync(p.root, { recursive: true });
   const hookMode = decideUserHookMode(opts);
@@ -144,7 +144,7 @@ export function installUser(opts: Options, stateRoot: string, workspace: string 
   } else {
     fs.rmSync(p.binDir, { recursive: true, force: true });
   }
-  const init = runPluginScript(workspace, "cco-init.mjs", initArgs(stateRoot, workspace, [opts.probe ? "--probe" : "--no-probe", ...(hookCommand ? ["--hook-command", hookCommand] : [])]), opts, scopeEnv(stateRoot));
+  const init = await runPluginScriptAsync(workspace, "cco-init.mjs", initArgs(stateRoot, workspace, [opts.probe ? "--probe" : "--no-probe", ...(hookCommand ? ["--hook-command", hookCommand] : [])]), opts, scopeEnv(stateRoot));
   if (!init.ran) {
     throw new Error(init.error || "setup could not run");
   }
@@ -157,7 +157,7 @@ export function installUser(opts: Options, stateRoot: string, workspace: string 
 }
 
 /** After an extension update the bundled plugin path (and binary) move: re-run the idempotent install once. */
-export function doctorUser(opts: Options, stateRoot: string): { installed: boolean; changed: boolean; actions: string[] } {
+export async function doctorUser(opts: Options, stateRoot: string): Promise<{ installed: boolean; changed: boolean; actions: string[] }> {
   const s = userStatus(stateRoot);
   if (!s.manifest) {
     return { installed: false, changed: false, actions: [] };
@@ -166,18 +166,18 @@ export function doctorUser(opts: Options, stateRoot: string): { installed: boole
   if (!stale) {
     return { installed: true, changed: false, actions: [] };
   }
-  installUser({ ...opts, probe: false }, stateRoot);
+  await installUser({ ...opts, probe: false }, stateRoot);
   return { installed: true, changed: true, actions: ["repointed_after_update"] };
 }
 
-export function pauseWorkspace(opts: Options, stateRoot: string, workspace: string, paused: boolean): RunResult {
-  return runPluginScript(workspace, "cco-init.mjs", initArgs(stateRoot, workspace, [paused ? "--disable" : "--enable"]), opts, scopeEnv(stateRoot));
+export function pauseWorkspace(opts: Options, stateRoot: string, workspace: string, paused: boolean): Promise<RunResult> {
+  return runPluginScriptAsync(workspace, "cco-init.mjs", initArgs(stateRoot, workspace, [paused ? "--disable" : "--enable"]), opts, scopeEnv(stateRoot));
 }
 
 /** Removes the hook entries, the generated agents and the whole private state root. Nothing is left behind. */
-export function uninstallUser(opts: Options, stateRoot: string): { init: RunResult; removed: string[] } {
+export async function uninstallUser(opts: Options, stateRoot: string): Promise<{ init: RunResult; removed: string[] }> {
   const p = userPaths(stateRoot);
-  const init = runPluginScript(os.homedir(), "cco-init.mjs", initArgs(stateRoot, os.homedir(), ["--uninstall"]), opts, scopeEnv(stateRoot));
+  const init = await runPluginScriptAsync(os.homedir(), "cco-init.mjs", initArgs(stateRoot, os.homedir(), ["--uninstall"]), opts, scopeEnv(stateRoot));
   // in-process fallback (same effect) if the plugin script could not run
   if (!init.ran || init.status !== 0) {
     const hooks = readJson<{ hooks?: Record<string, Array<{ command?: string }>> } | null>(p.hooksPath, null);
@@ -206,4 +206,39 @@ export function uninstallUser(opts: Options, stateRoot: string): { init: RunResu
     fs.rmSync(p.root, { recursive: true, force: true });
   }
   return { init, removed: [p.hooksPath, `${p.agentsDir}/cco-*.md`, p.root] };
+}
+
+/** Kill switch: strip CCO's entries from ~/.cursor/hooks.json only (agents, state and manifest stay; Set Up / Update restores). */
+export function stripUserHooks(stateRoot: string): boolean {
+  const p = userPaths(stateRoot);
+  const hooks = readJson<{ hooks?: Record<string, Array<{ command?: string }>> } | null>(p.hooksPath, null);
+  if (!hooks) {
+    return false;
+  }
+  const kept: Record<string, Array<{ command?: string }>> = {};
+  let dropped = 0;
+  for (const [event, list] of Object.entries(hooks.hooks || {})) {
+    const rest = (list || []).filter((e) => !String(e.command || "").includes("cco-hook"));
+    dropped += (list || []).length - rest.length;
+    if (rest.length) {
+      kept[event] = rest;
+    }
+  }
+  if (!dropped) {
+    return false;
+  }
+  if (Object.keys(kept).length) {
+    fs.writeFileSync(p.hooksPath, `${JSON.stringify({ ...hooks, hooks: kept }, null, 2)}\n`, "utf8");
+  } else {
+    fs.rmSync(p.hooksPath, { force: true });
+  }
+  return true;
+}
+
+/** The exact preToolUse command Cursor would run (first CCO entry), or null. */
+export function userHookCommand(stateRoot: string): string | null {
+  const p = userPaths(stateRoot);
+  const hooks = readJson<{ hooks?: Record<string, Array<{ command?: string }>> } | null>(p.hooksPath, null);
+  const entry = (hooks?.hooks?.preToolUse || []).find((e) => String(e.command || "").includes("cco-hook"));
+  return entry?.command ?? null;
 }

@@ -4,52 +4,52 @@
     "sessionStart": [
       {
         "command": "node \"${CURSOR_PLUGIN_ROOT}/scripts/cco-hook.mjs\" sessionStart",
-        "timeout": 45
+        "timeout": 30
       }
     ],
     "beforeSubmitPrompt": [
       {
         "command": "node \"${CURSOR_PLUGIN_ROOT}/scripts/cco-hook.mjs\" beforeSubmitPrompt",
-        "timeout": 10
+        "timeout": 5
       }
     ],
     "preToolUse": [
       {
         "command": "node \"${CURSOR_PLUGIN_ROOT}/scripts/cco-hook.mjs\" preToolUse",
         "matcher": ".*",
-        "timeout": 20
+        "timeout": 8
       }
     ],
     "postToolUse": [
       {
         "command": "node \"${CURSOR_PLUGIN_ROOT}/scripts/cco-hook.mjs\" postToolUse",
         "matcher": "Task",
-        "timeout": 15
+        "timeout": 10
       }
     ],
     "subagentStop": [
       {
         "command": "node \"${CURSOR_PLUGIN_ROOT}/scripts/cco-hook.mjs\" subagentStop",
-        "timeout": 15
+        "timeout": 10
       }
     ],
     "beforeShellExecution": [
       {
         "command": "node \"${CURSOR_PLUGIN_ROOT}/scripts/cco-hook.mjs\" beforeShellExecution",
         "matcher": ".*",
-        "timeout": 10
+        "timeout": 5
       }
     ],
     "sessionEnd": [
       {
         "command": "node \"${CURSOR_PLUGIN_ROOT}/scripts/cco-hook.mjs\" sessionEnd",
-        "timeout": 10
+        "timeout": 5
       }
     ],
     "workspaceOpen": [
       {
         "command": "node \"${CURSOR_PLUGIN_ROOT}/scripts/cco-hook.mjs\" workspaceOpen",
-        "timeout": 45
+        "timeout": 30
       }
     ]
   }

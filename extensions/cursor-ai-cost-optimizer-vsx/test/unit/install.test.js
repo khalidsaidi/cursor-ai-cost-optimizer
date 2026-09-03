@@ -42,7 +42,7 @@ function fakeBinary(dir, content = "#!/bin/sh\necho '{\"continue\":true}'\n") {
 }
 const entriesOf = (ws) => readJson(workspacePaths(ws).hooksPath).hooks;
 
-test("hook command forms and CCO entry detection", () => {
+test("hook command forms and CCO entry detection", async () => {
   assert.equal(hookCommandFor("sessionStart", "node"), "node .cursor/cco-hook.mjs sessionStart");
   assert.equal(hookCommandFor("preToolUse", "binary", "/w/.cursor/cco/bin/cco-hook"), '"/w/.cursor/cco/bin/cco-hook" preToolUse');
   assert.ok(isCcoHookCommand('"C:\\proj\\.cursor\\cco\\bin\\cco-hook.exe" preToolUse'));
@@ -53,7 +53,7 @@ test("hook command forms and CCO entry detection", () => {
   assert.throws(() => decideHookMode(base({ hookRuntime: "binary", binaryPath: null })), /no hook binary/);
 });
 
-test("buildHookEntries keeps matcher/timeout from the plugin hooks.json; mergeHooks preserves foreign entries", () => {
+test("buildHookEntries keeps matcher/timeout from the plugin hooks.json; mergeHooks preserves foreign entries", async () => {
   const plugin = readJson(path.join(PLUGIN, "hooks", "hooks.json"));
   const ours = buildHookEntries(plugin, "binary", "/x/cco-hook");
   for (const [event, entries] of Object.entries(plugin.hooks)) {
@@ -68,7 +68,7 @@ test("buildHookEntries keeps matcher/timeout from the plugin hooks.json; mergeHo
   assert.equal(stripCcoHooks({ version: 1, hooks: { a: [{ command: '"/x/cco-hook" a' }] } }), null);
 });
 
-test("installWorkspace (node runtime): plugin layout + rule, nothing outside .cursor/, no skills/commands copies", () => {
+test("installWorkspace (node runtime): plugin layout + rule, nothing outside .cursor/, no skills/commands copies", async () => {
   const ws = tmp("ws");
   try {
     fs.writeFileSync(path.join(ws, "README.md"), "# fixture\n");
@@ -78,7 +78,7 @@ test("installWorkspace (node runtime): plugin layout + rule, nothing outside .cu
     assert.ok(plan.creates.some((f) => f.startsWith(".cursor/agents/")) && plan.creates.includes(".cursor/rules/cco-routing.mdc") && plan.modifies[0].startsWith(".cursor/hooks.json"));
     assert.equal(plan.creates.some((f) => f.includes("skills") || f.includes("commands")), false);
 
-    const r = installWorkspace(ws, base());
+    const r = await installWorkspace(ws, base());
     assert.equal(r.hookMode, "node");
     assert.equal(r.init.runtime, "node");
     assert.equal(r.init.status, 0, r.init.error);
@@ -112,7 +112,7 @@ test("installWorkspace (node runtime): plugin layout + rule, nothing outside .cu
     assert.equal(entriesOf(ws).sessionStart.length, 1);
     assert.match(fs.readFileSync(path.join(p.agentsDir, "cco-fast.md"), "utf8"), /model: my-model/);
 
-    const un = uninstallWorkspace(ws, base());
+    const un = await uninstallWorkspace(ws, base());
     assert.equal(un.init.status, 0, un.init.error);
     assert.deepEqual(readJson(p.hooksPath), { version: 1, hooks: { afterFileEdit: [{ command: "other-tool-hook" }] } });
     assert.equal(fs.existsSync(p.ccoDir), false);
@@ -127,13 +127,13 @@ test("installWorkspace (node runtime): plugin layout + rule, nothing outside .cu
   }
 });
 
-test("installWorkspace (binary mode) + doctor: binary at .cursor/cco/bin, quoted absolute commands, repoint/refresh", { skip: process.platform === "win32" && "uses a shell-script stand-in for the binary; the real-binary path is covered by the compiled-binary test" }, () => {
+test("installWorkspace (binary mode) + doctor: binary at .cursor/cco/bin, quoted absolute commands, repoint/refresh", { skip: process.platform === "win32" && "uses a shell-script stand-in for the binary; the real-binary path is covered by the compiled-binary test" }, async () => {
   const ws = tmp("ws");
   const ext = tmp("ext");
   try {
     const bin = fakeBinary(ext, `#!/bin/sh\n# v1\ncase "$1" in init) shift; exec node "${PLUGIN}/scripts/cco-init.mjs" "$@";; esac\necho '{"continue":true}'\n`);
     assert.equal(findBundledBinary(ext), bin);
-    const r = installWorkspace(ws, base({ binaryPath: bin, hookRuntime: "binary" }));
+    const r = await installWorkspace(ws, base({ binaryPath: bin, hookRuntime: "binary" }));
     const p = workspacePaths(ws);
     assert.equal(r.hookMode, "binary");
     assert.equal(r.binaryPath, p.binaryPath);
@@ -172,7 +172,7 @@ test("installWorkspace (binary mode) + doctor: binary at .cursor/cco/bin, quoted
   }
 });
 
-test("pre-release files under .cursor/cco are cleaned on install", () => {
+test("pre-release files under .cursor/cco are cleaned on install", async () => {
   const ws = tmp("ws");
   try {
     fs.mkdirSync(path.join(ws, ".cursor", "cco", "scripts"), { recursive: true });
@@ -185,16 +185,16 @@ test("pre-release files under .cursor/cco are cleaned on install", () => {
   }
 });
 
-test("installWorkspace via the compiled binary (hookRuntime=binary runs cco-init through the binary: no Node needed)", { skip: !fs.existsSync(REAL_BINARY) && `binary not built: ${REAL_BINARY}` }, () => {
+test("installWorkspace via the compiled binary (hookRuntime=binary runs cco-init through the binary: no Node needed)", { skip: !fs.existsSync(REAL_BINARY) && `binary not built: ${REAL_BINARY}` }, async () => {
   const ws = tmp("ws");
   try {
-    const r = installWorkspace(ws, base({ binaryPath: REAL_BINARY, hookRuntime: "binary" }));
+    const r = await installWorkspace(ws, base({ binaryPath: REAL_BINARY, hookRuntime: "binary" }));
     assert.equal(r.init.runtime, "binary", r.init.error);
     assert.equal(r.init.status, 0, r.init.error);
     assert.equal(r.hookMode, "binary");
     assert.equal(r.agents["cco-fast"], "composer-2.5");
     assert.ok(fs.existsSync(workspacePaths(ws).shimPath));
-    const un = uninstallWorkspace(ws, base({ binaryPath: REAL_BINARY, hookRuntime: "binary" }));
+    const un = await uninstallWorkspace(ws, base({ binaryPath: REAL_BINARY, hookRuntime: "binary" }));
     assert.equal(un.init.runtime, "binary");
     assert.equal(fs.existsSync(workspacePaths(ws).ccoDir), false);
     assert.ok(un.init.ran);
@@ -203,7 +203,7 @@ test("installWorkspace via the compiled binary (hookRuntime=binary runs cco-init
   }
 });
 
-test("Windows hook command quoting (simulated with path.win32)", () => {
+test("Windows hook command quoting (simulated with path.win32)", async () => {
   const bin = path.win32.join("C:\\Users\\me\\proj", ".cursor", "cco", "bin", "cco-hook.exe");
   assert.equal(hookCommandFor("preToolUse", "binary", bin), '"C:\\Users\\me\\proj\\.cursor\\cco\\bin\\cco-hook.exe" preToolUse');
   assert.equal(hookCommandFor("sessionStart", "node"), "node .cursor/cco-hook.mjs sessionStart");
@@ -212,7 +212,7 @@ test("Windows hook command quoting (simulated with path.win32)", () => {
   assert.ok(Object.values(ours).flat().every((e) => isCcoHookCommand(e.command) && e.command.startsWith('"C:\\Users\\me\\proj\\')));
 });
 
-test("mergeHooks is idempotent with foreign entries (repeated merges never duplicate or reorder foreign entries)", () => {
+test("mergeHooks is idempotent with foreign entries (repeated merges never duplicate or reorder foreign entries)", async () => {
   const plugin = readJson(path.join(PLUGIN, "hooks", "hooks.json"));
   const ours = buildHookEntries(plugin, "node");
   let file = { version: 1, hooks: { preToolUse: [{ command: "foreign-a", matcher: "Write" }], afterFileEdit: [{ command: "foreign-b" }] }, extra: { keep: true } };

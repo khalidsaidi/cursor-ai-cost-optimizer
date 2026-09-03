@@ -91,9 +91,11 @@ Measured against the bar set by the big first-party extensions (Copilot Chat, Am
 | --- | --- | --- |
 | On install | Registers commands and a status bar item. No toast, no files, no settings changed. | same |
 | On setup (you confirm first) | CCO entries merged into `~/.cursor/hooks.json`, five subagents in `~/.cursor/agents/`, state in the extension's storage. **No project files.** | 8 files under the project's `.cursor/` plus a git-ignored state folder; they show up in git status. |
-| While you chat | One hook process per tool call: about 0.05 s (44 ms measured with Node, 37 ms with the binary). One footer line per routed task. Nothing blocked by default. | same |
+| While you chat | One hook process per tool call: about 0.05 s (44 ms measured with Node, 37 ms with the binary); a hung hook is killed after 7 s and the call proceeds. One footer line per routed task. Nothing blocked by default. | same |
 | Projects you paused / did not set up | Paused projects get no rule and inert hooks. | Untouched: no files, no messages, no hooks. |
 | On extension update | Hook entries are repointed silently. | The pinned plugin path and binary are refreshed silently. |
+| On every activation | 1.5 s after startup, off the extension host thread: a repair pass, then a self-check that runs the real hook command once. If it fails or does not answer in 6 s, the hooks are turned off and you get one message. | same |
+| If you want it off right now | Status menu → **Turn hooks off now**: hook entries removed, nothing else touched; Set Up / Update restores. | same |
 | On Remove | Hook entries, subagents and state removed. Other tools' entries kept. Nothing left. | Everything under `.cursor/` that CCO wrote is removed; other tools' hook entries and your files are kept. |
 | If you uninstall the extension | Its uninstall hook removes the hook entries, the subagents and its storage. Nothing left. | Project files stay until you run Remove; the shim retires its own hook entries after 7 days. |
 

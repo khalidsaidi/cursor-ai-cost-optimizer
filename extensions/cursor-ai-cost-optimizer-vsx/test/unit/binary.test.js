@@ -16,9 +16,9 @@ const BINARY = path.join(ROOT, "dist-bin", hostTarget(), binaryFileName());
 const available = fs.existsSync(BINARY);
 process.env.CCO_CURSOR_AGENT_BIN = require("../fixtures/fake-agent-path.js");
 
-function setup(configPatch) {
+async function setup(configPatch) {
   const ws = fs.mkdtempSync(path.join(os.tmpdir(), "cco-bin-"));
-  const r = installWorkspace(ws, { pluginRoot: PLUGIN, binaryPath: BINARY, extensionVersion: "test", hookRuntime: "binary" });
+  const r = await installWorkspace(ws, { pluginRoot: PLUGIN, binaryPath: BINARY, extensionVersion: "test", hookRuntime: "binary" });
   const p = workspacePaths(ws);
   if (configPatch) {
     fs.writeFileSync(p.configPath, JSON.stringify(configPatch(fs.existsSync(p.configPath) ? JSON.parse(fs.readFileSync(p.configPath, "utf8")) : {}), null, 2));
@@ -34,8 +34,8 @@ function setup(configPatch) {
   return { ws, p, run, install: r };
 }
 
-test("compiled binary: shell guard is opt-in (allows by default), preToolUse Read allows, unknown events fail open", { skip: !available && `binary not built: ${BINARY}` }, () => {
-  const t = setup();
+test("compiled binary: shell guard is opt-in (allows by default), preToolUse Read allows, unknown events fail open", { skip: !available && `binary not built: ${BINARY}` }, async () => {
+  const t = await setup();
   try {
     assert.equal(t.install.init.status, 0, t.install.init.error);
     const ok = t.run("beforeShellExecution", { command: "ls -la", conversation_id: "c1" });
@@ -48,8 +48,8 @@ test("compiled binary: shell guard is opt-in (allows by default), preToolUse Rea
   }
 });
 
-test("compiled binary: shell guard denies rm -rf / when enabled in .cursor/cco.json", { skip: !available && `binary not built: ${BINARY}` }, () => {
-  const t = setup((cfg) => ({ ...cfg, shellGuard: { ...(cfg.shellGuard || {}), enabled: true } }));
+test("compiled binary: shell guard denies rm -rf / when enabled in .cursor/cco.json", { skip: !available && `binary not built: ${BINARY}` }, async () => {
+  const t = await setup((cfg) => ({ ...cfg, shellGuard: { ...(cfg.shellGuard || {}), enabled: true } }));
   try {
     const deny = t.run("beforeShellExecution", { command: "rm -rf /", conversation_id: "c2" });
     assert.equal(deny.status, 0, deny.stderr);
@@ -59,8 +59,8 @@ test("compiled binary: shell guard denies rm -rf / when enabled in .cursor/cco.j
   }
 });
 
-test("compiled binary: preToolUse Task cco-fast allows with updated_input and logs a decision under .cursor/cco/state", { skip: !available && `binary not built: ${BINARY}` }, () => {
-  const t = setup();
+test("compiled binary: preToolUse Task cco-fast allows with updated_input and logs a decision under .cursor/cco/state", { skip: !available && `binary not built: ${BINARY}` }, async () => {
+  const t = await setup();
   try {
     const res = t.run("preToolUse", { conversation_id: "conv-1", tool_name: "Task", tool_input: { description: "List commits", prompt: "Show the last 3 commits", subagent_type: "cco-fast" } });
     assert.equal(res.status, 0, res.stderr);
@@ -76,8 +76,8 @@ test("compiled binary: preToolUse Task cco-fast allows with updated_input and lo
   }
 });
 
-test("compiled binary: config from .cursor/cco.json overrides plugin defaults (riskForceDeep=2 reroutes)", { skip: !available && `binary not built: ${BINARY}` }, () => {
-  const t = setup((cfg) => ({ ...cfg, guardrails: { ...(cfg.guardrails || {}), riskForceDeep: 2, riskNoFast: 2 } }));
+test("compiled binary: config from .cursor/cco.json overrides plugin defaults (riskForceDeep=2 reroutes)", { skip: !available && `binary not built: ${BINARY}` }, async () => {
+  const t = await setup((cfg) => ({ ...cfg, guardrails: { ...(cfg.guardrails || {}), riskForceDeep: 2, riskNoFast: 2 } }));
   try {
     const res = t.run("preToolUse", { conversation_id: "conv-2", tool_name: "Task", tool_input: { description: "x", prompt: "CCO-SCORES: complexity=1 risk=3 breadth=0 uncertainty=0 latency=5\nShow the last 3 commits", subagent_type: "cco-fast" } });
     assert.equal(res.out.updated_input?.subagent_type, "cco-deep", JSON.stringify(res.out));
@@ -86,8 +86,8 @@ test("compiled binary: config from .cursor/cco.json overrides plugin defaults (r
   }
 });
 
-test("compiled binary: inert when the workspace opts out or has no tier agents", { skip: !available && `binary not built: ${BINARY}` }, () => {
-  const t = setup((cfg) => ({ ...cfg, enabled: false }));
+test("compiled binary: inert when the workspace opts out or has no tier agents", { skip: !available && `binary not built: ${BINARY}` }, async () => {
+  const t = await setup((cfg) => ({ ...cfg, enabled: false }));
   try {
     assert.deepEqual(t.run("preToolUse", { conversation_id: "conv-3", tool_name: "Task", tool_input: { prompt: "x", subagent_type: "cco-fast" } }).out, { permission: "allow" });
     fs.writeFileSync(t.p.configPath, "{}");

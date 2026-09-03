@@ -3,9 +3,10 @@ import * as crypto from "crypto";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { decideHookMode, doctorWorkspace, findBundledBinary, findNode, installWorkspace, plannedFiles, runPluginScript, uninstallWorkspace, workspacePaths, workspaceStatus, type HookRuntimePreference, type Options } from "./install";
+import { decideHookMode, doctorWorkspace, findBundledBinary, findNode, installWorkspace, plannedFiles, runPluginScriptAsync, stripCcoHooks, uninstallWorkspace, workspacePaths, workspaceStatus, type HookRuntimePreference, type HooksFile, type Options } from "./install";
 import { costStatement, formatUsd, readSavings } from "./pricing";
-import { doctorUser, installUser, pauseWorkspace, uninstallUser, userStatus, workspacePaused, workspaceStateDir } from "./userScope";
+import { doctorUser, installUser, pauseWorkspace, stripUserHooks, uninstallUser, userHookCommand, userStatus, workspacePaused, workspaceStateDir } from "./userScope";
+import { runHookCommand } from "./selfcheck";
 import { decideTier, heuristicScores, overrideToken, parseOverride, DEFAULT_CONFIG } from "./scorer";
 
 const EXTENSION_ID = "khalidsaidi.cursor-ai-cost-optimizer";
@@ -159,15 +160,59 @@ export function activate(context: vscode.ExtensionContext) {
   const watcher = vscode.workspace.createFileSystemWatcher("**/.cursor/{cco.json,hooks.json,agents/cco-*.md,cco/pricing.json,cco/state/decisions.jsonl,cco/state/sessions/*.json}");
   context.subscriptions.push(watcher, watcher.onDidChange(refreshStatus), watcher.onDidCreate(refreshStatus), watcher.onDidDelete(refreshStatus));
 
-  // ---- doctor on activation ----
-  const runDoctor = () => {
+  // ---- doctor + self-check, deferred off activation and fully async (never blocks the extension host) ----
+  const SELF_CHECK_KEY = "cco.selfCheckDisabledNotified";
+  const selfCheck = async () => {
+    const u = userStatus(stateRoot);
+    const ws = firstWorkspace();
+    const command = u.installed ? userHookCommand(stateRoot) : ws && workspaceStatus(ws).installed ? "node .cursor/cco-hook.mjs preToolUse" : null;
+    if (!command) {
+      return;
+    }
+    const cwd = u.installed ? path.join(os.homedir(), ".cursor") : (ws as string);
+    const payload = { hook_event_name: "preToolUse", tool_name: "Read", conversation_id: "cco-self-check", tool_input: {}, workspace_roots: [ws ?? os.homedir()] };
+    const r = await runHookCommand(command, cwd, payload);
+    if (r.ok) {
+      log.info(`[self-check] hook answered in ${r.ms} ms`);
+      await context.globalState.update(SELF_CHECK_KEY, false);
+      return;
+    }
+    log.error(`[self-check] hook command failed (${r.ms} ms): ${r.error}\ncommand: ${command}\noutput: ${r.output}`);
+    const stripped = u.installed ? stripUserHooks(stateRoot) : ws ? stripProjectHooks(ws) : false;
+    refreshStatus();
+    if (stripped && !context.globalState.get<boolean>(SELF_CHECK_KEY)) {
+      await context.globalState.update(SELF_CHECK_KEY, true);
+      void notify("warn", `AI Cost Optimizer turned its hooks off: the hook command did not answer (${r.error}). Cursor works normally without it. Fix the cause (usually Node.js >= 18 on PATH) and run Set Up / Update.`, ["Set Up / Update"]).then((choice) => {
+        if (choice === "Set Up / Update") {
+          void vscode.commands.executeCommand("cco.installCursorAssets");
+        }
+      });
+    }
+  };
+  const stripProjectHooks = (ws: string): boolean => {
+    const p = workspacePaths(ws);
+    let data: HooksFile | null = null;
     try {
-      const u = doctorUser(options(), stateRoot);
+      data = JSON.parse(fs.readFileSync(p.hooksPath, "utf8")) as HooksFile;
+    } catch {
+      return false;
+    }
+    const stripped = stripCcoHooks(data);
+    if (stripped) {
+      fs.writeFileSync(p.hooksPath, `${JSON.stringify(stripped, null, 2)}\n`, "utf8");
+    } else {
+      fs.rmSync(p.hooksPath, { force: true });
+    }
+    return true;
+  };
+  const runDoctor = async () => {
+    try {
+      const u = await doctorUser(options(), stateRoot);
       if (u.installed) {
         log.info(`[doctor] everywhere: ${u.changed ? `repaired (${u.actions.join(", ")})` : "ok"}`);
       }
     } catch (error) {
-      void notify("error", `AI Cost Optimizer doctor failed: ${String((error as Error)?.message ?? error)}`);
+      log.error(`[doctor] everywhere: ${String((error as Error)?.message ?? error)}`);
     }
     for (const folder of vscode.workspace.workspaceFolders ?? []) {
       try {
@@ -176,13 +221,15 @@ export function activate(context: vscode.ExtensionContext) {
           log.info(`[doctor] ${folder.uri.fsPath}: mode=${result.hookMode} ${result.changed ? `repaired (${result.actions.join(", ")})` : "ok"}`);
         }
       } catch (error) {
-        void notify("error", `AI Cost Optimizer doctor failed in ${path.basename(folder.uri.fsPath)}: ${String((error as Error)?.message ?? error)}`);
+        log.error(`[doctor] ${folder.uri.fsPath}: ${String((error as Error)?.message ?? error)}`);
       }
     }
     refreshStatus();
+    await selfCheck();
   };
-  runDoctor();
-  context.subscriptions.push(vscode.workspace.onDidChangeWorkspaceFolders(runDoctor));
+  const deferred = setTimeout(() => void runDoctor(), 1500);
+  context.subscriptions.push({ dispose: () => clearTimeout(deferred) });
+  context.subscriptions.push(vscode.workspace.onDidChangeWorkspaceFolders(() => void runDoctor()));
 
   // No first-run toast: VS Code/Cursor opens the walkthrough for a newly installed extension, the status bar
   // item shows the state, and nothing is written until the user runs the install command.
@@ -294,12 +341,12 @@ export function activate(context: vscode.ExtensionContext) {
     const c = combined(ws);
     try {
       if (c.mode === "user") {
-        const res = pauseWorkspace(options(), stateRoot, ws, !c.paused);
+        const res = await pauseWorkspace(options(), stateRoot, ws, !c.paused);
         if (!res.ran || res.status !== 0) {
           throw new Error(res.error || "could not change the pause state");
         }
       } else if (c.mode === "project") {
-        const res = runPluginScript(ws, "cco-init.mjs", ["--workspace", ws, c.paused ? "--enable" : "--disable"], options());
+        const res = await runPluginScriptAsync(ws, "cco-init.mjs", ["--workspace", ws, c.paused ? "--enable" : "--disable"], options());
         if (!res.ran || res.status !== 0) {
           throw new Error(res.error || "could not change the pause state");
         }
@@ -323,7 +370,7 @@ export function activate(context: vscode.ExtensionContext) {
         }
       }
       try {
-        const result = uninstallUser(options(), stateRoot);
+        const result = await uninstallUser(options(), stateRoot);
         log.info(`[uninstall] everywhere: via ${result.init.runtime} (status ${result.init.status}); removed ${result.removed.join(", ")}`);
         refreshStatus();
         void vscode.window.showInformationMessage("AI Cost Optimizer was removed from Cursor.");
@@ -349,7 +396,7 @@ export function activate(context: vscode.ExtensionContext) {
       }
     }
     try {
-      const result = uninstallWorkspace(ws, options());
+      const result = await uninstallWorkspace(ws, options());
       log.info(`[uninstall] ${ws}: via ${result.init.runtime} (status ${result.init.status}); removed ${result.removed.join(", ")}`);
       refreshStatus();
       void vscode.window.showInformationMessage(`AI Cost Optimizer was removed from ${path.basename(ws)}.`);
@@ -362,6 +409,15 @@ export function activate(context: vscode.ExtensionContext) {
   });
 
   const showLogCmd = vscode.commands.registerCommand("cco.showOutputChannel", () => log.show(true));
+
+  // Kill switch: hooks off immediately, nothing else touched; Set Up / Update puts them back.
+  const hooksOffCmd = vscode.commands.registerCommand("cco.hooksOff", async () => {
+    const ws = firstWorkspace();
+    const c = combined(ws);
+    const stripped = c.mode === "user" ? stripUserHooks(stateRoot) : c.mode === "project" && ws ? stripProjectHooks(ws) : false;
+    refreshStatus();
+    void vscode.window.showInformationMessage(stripped ? "AI Cost Optimizer hooks are off. Run Set Up / Update to turn them back on." : "No AI Cost Optimizer hooks were active.");
+  });
 
   // Status bar click: a small menu, like the Copilot status item.
   const menuCmd = vscode.commands.registerCommand("cco.showMenu", async () => {
@@ -376,6 +432,7 @@ export function activate(context: vscode.ExtensionContext) {
         items.push({ label: c.paused ? "$(debug-start) Resume in this project" : "$(debug-pause) Pause in this project", run: () => vscode.commands.executeCommand("cco.togglePause") });
       }
       items.push({ label: "$(sync) Update setup", description: "re-run model discovery and refresh files", run: () => vscode.commands.executeCommand("cco.installCursorAssets") });
+      items.push({ label: "$(debug-stop) Turn hooks off now", description: "kill switch; Set Up / Update restores", run: () => vscode.commands.executeCommand("cco.hooksOff") });
       items.push({ label: c.mode === "user" ? "$(trash) Remove from Cursor" : "$(trash) Remove from this workspace", run: () => vscode.commands.executeCommand("cco.uninstallCursorAssets") });
     }
     items.push({ label: "$(output) Show log", run: () => log.show(true) });
@@ -458,7 +515,10 @@ export function activate(context: vscode.ExtensionContext) {
       let nodeVersion: string | null = null;
       if (node) {
         try {
-          nodeVersion = require("child_process").spawnSync(node.command, ["-v"], { encoding: "utf8", env: { ...process.env, ...node.env }, timeout: 10_000 }).stdout?.trim() || null;
+          nodeVersion = await new Promise<string | null>((resolve) => {
+            const { execFile } = require("child_process") as typeof import("child_process");
+            execFile(node.command, ["-v"], { env: { ...process.env, ...node.env }, timeout: 10_000 }, (e: Error | null, out: string) => resolve(e ? null : String(out).trim() || null));
+          });
         } catch {}
       }
       const cmode = combined(ws).mode;
@@ -483,7 +543,7 @@ export function activate(context: vscode.ExtensionContext) {
     }
   });
 
-  context.subscriptions.push(installCmd, uninstallCmd, pauseCmd, showLogCmd, menuCmd, recommendCmd, insertFast, insertBal, insertDeep, diagCmd);
+  context.subscriptions.push(installCmd, uninstallCmd, pauseCmd, showLogCmd, hooksOffCmd, menuCmd, recommendCmd, insertFast, insertBal, insertDeep, diagCmd);
 
   try {
     decideHookMode(options());

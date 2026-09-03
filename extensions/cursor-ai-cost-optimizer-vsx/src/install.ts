@@ -19,7 +19,7 @@ import * as crypto from "crypto";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { spawnSync } from "child_process";
+import { spawn, spawnSync } from "child_process";
 
 export const BINARY_NAME = "cco-hook";
 export const CCO_HOOK_COMMAND_RE = /cco-hook|\.cursor[\\/]cco[\\/]scripts[\\/]cco-/;
@@ -229,7 +229,17 @@ export interface NodeRuntime {
   label: string;
 }
 /** cco.nodePath / CCO_NODE, then `node` on PATH, then the current executable run as node (Cursor's own node). */
+const nodeCache = new Map<string, NodeRuntime | null>();
 export function findNode(nodePath?: string | null): NodeRuntime | null {
+  const key = `${nodePath ?? ""}|${process.env.CCO_NODE ?? ""}`;
+  if (nodeCache.has(key)) {
+    return nodeCache.get(key) as NodeRuntime | null;
+  }
+  const found = findNodeUncached(nodePath);
+  nodeCache.set(key, found);
+  return found;
+}
+function findNodeUncached(nodePath?: string | null): NodeRuntime | null {
   const candidates: NodeRuntime[] = [];
   for (const explicit of [nodePath, process.env.CCO_NODE]) {
     if (explicit) {
@@ -261,38 +271,69 @@ function copyBinary(src: string, dst: string): void {
  * Node >= 18 is available (and hookRuntime is not "binary"), else the bundled binary's equivalent command
  * (`cco-hook init ...`), which needs no Node.
  */
-export function runPluginScript(workspace: string, script: "cco-init.mjs" | "cco-discover-models.mjs", args: string[], opts: Options, extraEnv: Record<string, string> = {}): RunResult {
-  const env: Record<string, string> = { ...(process.env as Record<string, string>), CCO_PLUGIN_ROOT: opts.pluginRoot, ...extraEnv };
+function resolvePluginRunner(script: "cco-init.mjs" | "cco-discover-models.mjs", args: string[], opts: Options, extraEnv: Record<string, string>): { command: string; argv: string[]; env: Record<string, string>; runtime: RunResult["runtime"]; error?: string } {
+  const env: Record<string, string> = { ...(process.env as Record<string, string>), CCO_PLUGIN_ROOT: opts.pluginRoot };
   delete env.CCO_SCOPE;
   delete env.CCO_STATE_ROOT;
   Object.assign(env, extraEnv);
   // hookRuntime "binary" means "this machine may have no Node": run the setup through the binary as well.
   const hasBinary = Boolean(opts.binaryPath && fs.existsSync(opts.binaryPath));
   const node = opts.hookRuntime === "binary" && hasBinary ? null : findNode(opts.nodePath);
-  let command: string;
-  let argv: string[];
-  let runtime: RunResult["runtime"];
   if (node) {
-    command = node.command;
-    argv = [path.join(opts.pluginRoot, "scripts", script), ...args];
     Object.assign(env, node.env);
-    runtime = "node";
-  } else if (opts.binaryPath && fs.existsSync(opts.binaryPath)) {
-    command = opts.binaryPath;
-    argv = [script === "cco-init.mjs" ? "init" : "discover", ...args];
-    runtime = "binary";
-  } else {
-    return { ran: false, runtime: "none", command: null, status: null, stdout: "", error: "Neither Node.js >= 18 nor a bundled cco-hook binary is available to run the plugin's setup script." };
+    return { command: node.command, argv: [path.join(opts.pluginRoot, "scripts", script), ...args], env, runtime: "node" };
   }
-  const res = spawnSync(command, argv, { cwd: workspace, encoding: "utf8", env, timeout: opts.timeoutMs ?? 180_000, input: "" });
+  if (opts.binaryPath && fs.existsSync(opts.binaryPath)) {
+    return { command: opts.binaryPath, argv: [script === "cco-init.mjs" ? "init" : "discover", ...args], env, runtime: "binary" };
+  }
+  return { command: "", argv: [], env, runtime: "none", error: "Neither Node.js >= 18 nor a bundled cco-hook binary is available to run the plugin's setup script." };
+}
+
+export function runPluginScript(workspace: string, script: "cco-init.mjs" | "cco-discover-models.mjs", args: string[], opts: Options, extraEnv: Record<string, string> = {}): RunResult {
+  const r = resolvePluginRunner(script, args, opts, extraEnv);
+  if (r.runtime === "none") {
+    return { ran: false, runtime: "none", command: null, status: null, stdout: "", error: r.error ?? null };
+  }
+  const res = spawnSync(r.command, r.argv, { cwd: workspace, encoding: "utf8", env: r.env, timeout: opts.timeoutMs ?? 180_000, input: "" });
   return {
     ran: true,
-    runtime,
-    command: `${command} ${argv.join(" ")}`,
+    runtime: r.runtime,
+    command: `${r.command} ${r.argv.join(" ")}`,
     status: res.status,
     stdout: String(res.stdout || "").slice(-4000),
     error: res.status === 0 ? null : String(res.error?.message || res.stderr || `exit ${res.status}`).slice(0, 800),
   };
+}
+
+/** Same as runPluginScript, without blocking the extension host (Copilot rule: never block activation or the UI thread). */
+export function runPluginScriptAsync(workspace: string, script: "cco-init.mjs" | "cco-discover-models.mjs", args: string[], opts: Options, extraEnv: Record<string, string> = {}): Promise<RunResult> {
+  const r = resolvePluginRunner(script, args, opts, extraEnv);
+  if (r.runtime === "none") {
+    return Promise.resolve({ ran: false, runtime: "none", command: null, status: null, stdout: "", error: r.error ?? null });
+  }
+  return new Promise((resolve) => {
+    let stdout = "";
+    let stderr = "";
+    let done = false;
+    const child = spawn(r.command, r.argv, { cwd: workspace, env: r.env, stdio: ["ignore", "pipe", "pipe"] });
+    const timer = setTimeout(() => {
+      if (!done) {
+        child.kill();
+      }
+    }, opts.timeoutMs ?? 180_000);
+    child.stdout?.on("data", (d) => (stdout += String(d)));
+    child.stderr?.on("data", (d) => (stderr += String(d)));
+    const finish = (status: number | null, err?: Error) => {
+      if (done) {
+        return;
+      }
+      done = true;
+      clearTimeout(timer);
+      resolve({ ran: true, runtime: r.runtime, command: `${r.command} ${r.argv.join(" ")}`, status, stdout: stdout.slice(-4000), error: status === 0 ? null : String(err?.message || stderr || `exit ${status}`).slice(0, 800) });
+    };
+    child.on("error", (err) => finish(null, err));
+    child.on("close", (code) => finish(code));
+  });
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -496,12 +537,12 @@ function writeExtensionAssets(workspace: string, pluginRoot: string): string[] {
  * Set up a workspace: the plugin's cco-init (identical files to the marketplace plugin), then the extension's
  * additions (rule/skills/commands; binary + binary-form hook commands when in binary mode) and a manifest.
  */
-export function installWorkspace(workspace: string, opts: Options): InstallResult {
+export async function installWorkspace(workspace: string, opts: Options): Promise<InstallResult> {
   const p = workspacePaths(workspace);
   const hookMode = decideHookMode(opts);
   const legacyRemoved = cleanupLegacyWorkspace(workspace);
 
-  const init = runPluginScript(workspace, "cco-init.mjs", ["--workspace", workspace, opts.probe ? "--probe" : "--no-probe"], opts);
+  const init = await runPluginScriptAsync(workspace, "cco-init.mjs", ["--workspace", workspace, opts.probe ? "--probe" : "--no-probe"], opts);
   if (!init.ran) {
     throw new Error(init.error || "setup could not run");
   }
@@ -608,13 +649,13 @@ export function doctorWorkspace(workspace: string, opts: Options): DoctorResult 
  * .cursor/cco/ — foreign hook entries are preserved) plus the rule/skills/commands the extension added.
  * Falls back to an in-process removal when no runtime is available.
  */
-export function uninstallWorkspace(workspace: string, opts: Options): UninstallResult {
+export async function uninstallWorkspace(workspace: string, opts: Options): Promise<UninstallResult> {
   const p = workspacePaths(workspace);
   const manifest = readJsonOr<Manifest | null>(p.manifestPath, null);
   const removed: string[] = [];
   const hooksFileFound = fs.existsSync(p.hooksPath);
   const binaryForRun = fs.existsSync(p.binaryPath) ? p.binaryPath : opts.binaryPath;
-  const init = runPluginScript(workspace, "cco-init.mjs", ["--workspace", workspace, "--uninstall"], { ...opts, binaryPath: binaryForRun });
+  const init = await runPluginScriptAsync(workspace, "cco-init.mjs", ["--workspace", workspace, "--uninstall"], { ...opts, binaryPath: binaryForRun });
   if (!init.ran || init.status !== 0) {
     // in-process fallback: same effect as cco-init --uninstall
     const existing = readJsonOr<HooksFile | null>(p.hooksPath, null);
