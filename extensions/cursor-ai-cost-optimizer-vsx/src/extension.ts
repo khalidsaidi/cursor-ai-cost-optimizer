@@ -103,7 +103,7 @@ export function activate(context: vscode.ExtensionContext) {
   log.info(`AI Cost Optimizer v${extensionVersion} activated (${vscode.env.appName} ${vscode.version}, ${process.platform}-${process.arch}); bundled hook binary: ${bundledBinary ?? "none (node fallback)"}`);
   const options = (): Options => ({ pluginRoot, binaryPath: bundledBinary, extensionVersion, hookRuntime: settings().hookRuntime, nodePath: settings().nodePath });
 
-  // ---- status bar: "CCO: on/off" (+ $(warning) when pricing is stale or a tier is inherit) ----
+  // ---- status bar: "AI Cost" (+ $(warning) when pricing is stale or a tier is inherit); click opens the menu ----
   const status = vscode.window.createStatusBarItem("cco.status", vscode.StatusBarAlignment.Right, 100);
   status.name = "AI Cost Optimizer";
   status.command = "cco.showMenu";
@@ -361,7 +361,7 @@ export function activate(context: vscode.ExtensionContext) {
 /**
  * Intentionally a no-op: everything the extension owns is either disposed through context.subscriptions or
  * lives in the workspace (.cursor/) and must survive a reload. Removing workspace files is the explicit
- * "Uninstall from This Workspace" command; extension removal runs scripts/uninstall.js (vscode:uninstall),
+ * "Remove from This Workspace" command; extension removal runs scripts/uninstall.js (vscode:uninstall),
  * which cleans up global storage only.
  */
 export function deactivate() {}

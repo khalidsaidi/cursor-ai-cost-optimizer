@@ -8,13 +8,14 @@ the Cursor plugin marketplace, and ships a self-contained hook binary for machin
 
 ## Getting started
 
-1. **Install into your project** — Command Palette → `AI Cost Optimizer: Install / Update in This Workspace`.
-   You see the list of files first; everything is written under `.cursor/` in the open folder.
-2. **Map the tiers to real models** — the install already ran discovery without probing. In a **new chat**, run
-   the `/cco-init` skill to probe and pin the best model per tier and refresh prices.
-3. **Chat as usual** — keep your preferred chat model. Routed tasks end with a line like
-   `[cco: FAST → composer-2.5]`. Steer with override tokens: `[cco:fast]`, `[cco:balanced]`, `[cco:deep]`,
-   `[cco:auto]`, or `[cco:off]` for one request.
+1. **Set it up in your project** — Command Palette → `AI Cost Optimizer: Set Up / Update in This Workspace`
+   (or click **AI Cost** in the status bar). You see the list of files first; everything is written under
+   `.cursor/` in the open folder, and the tiers are mapped to models your account can run.
+2. **Start a new chat and work normally.** Keep your usual chat model. Each routed task ends with one line like
+   `[cco: FAST → composer-2.5 • 0.3x of your chat model • est. $0.02]`. Nothing is blocked; risky work always
+   goes to the strong tier.
+3. **Steer when you want to** — `[cco:fast]`, `[cco:balanced]`, `[cco:deep]` in a prompt force a tier,
+   `[cco:off]` bypasses routing for one request. `/cco-report` shows decisions and estimated savings.
 
 ## Features
 
@@ -33,10 +34,11 @@ the Cursor plugin marketplace, and ships a self-contained hook binary for machin
 
 | Command | What it does |
 | --- | --- |
-| AI Cost Optimizer: Install / Update in This Workspace | Sets up (or refreshes) `.cursor/` for the open folder after a confirmation. |
-| AI Cost Optimizer: Uninstall from This Workspace | Removes everything the install wrote; other tools' hook entries and your own files are kept. |
-| AI Cost Optimizer: Recommend Tier (FAST / BALANCED / DEEP) | Cost statement for this project — each tier's model and its rate relative to your chat model (`FAST → composer-2.5 • 0.1x of claude-opus-5 (Rate is counted at 0.1x.)`) — and, for selected text, the recommended tier with its override token. |
+| AI Cost Optimizer: Set Up / Update in This Workspace | Sets up (or refreshes) `.cursor/` for the open folder after a confirmation. |
+| AI Cost Optimizer: Remove from This Workspace | Removes everything the install wrote; other tools' hook entries and your own files are kept. |
+| AI Cost Optimizer: Show Tier Rates / Recommend a Tier | Cost statement for this project — each tier's model and its rate relative to your chat model (`FAST → composer-2.5 • 0.1x of claude-opus-5 (Rate is counted at 0.1x.)`) — and, for selected text, the recommended tier with its override token. |
 | AI Cost Optimizer: Insert [cco:fast] / [cco:balanced] / [cco:deep] | Inserts an override token at the cursor (editor commands). |
+| AI Cost Optimizer: Open Status Menu | The same menu as clicking **AI Cost** in the status bar. |
 | AI Cost Optimizer: Show Log | Opens the "AI Cost Optimizer" log output. |
 | AI Cost Optimizer: Collect Diagnostics | Copies a bug-report summary (runtime mapping, hook mode, binary hash, Node and Cursor versions) to the clipboard. |
 
@@ -95,7 +97,7 @@ See **Uninstall** below before removing the extension.
 ## Network access and data
 
 The extension itself has no telemetry and opens no connections. Two network activities happen during
-**Install / Update** and later hook runs, both performed by the bundled plugin scripts:
+**Set Up / Update** and later hook runs, both performed by the bundled plugin scripts:
 
 1. **Pricing**: `https://cursor.com/docs/models-and-pricing.md` is fetched (setup, and again by the
    `workspaceOpen`/`sessionStart` hooks when the cache is older than `pricing.refreshHours`, default 24 h). A
@@ -114,7 +116,7 @@ This Workspace** to remove everything; add `.cursor/cco/` to `.gitignore` to kee
 
 ## Uninstall
 
-1. Run **AI Cost Optimizer: Uninstall from This Workspace** in every project where you installed it. It removes
+1. Run **AI Cost Optimizer: Remove from This Workspace** in every project where you installed it. It removes
    the CCO entries from `.cursor/hooks.json` (other entries stay), `.cursor/agents/cco-{fast,balanced,deep,verifier}.md`
    (only files carrying the generated marker), `.cursor/cco.json`, `.cursor/cco/` (shim, binary, runtime,
    pricing, state), `.cursor/rules/cco-routing.mdc`, `.cursor/skills/cco-*` and `.cursor/commands/cco*.md`.

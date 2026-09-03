@@ -135,7 +135,7 @@
           ],
           "default": "auto",
           "scope": "machine",
-          "markdownDescription": "How the CCO hook entries in `.cursor/hooks.json` are executed. `auto` uses `node .cursor/cco-hook.mjs` when Node.js >= 18 is available (portable for teammates) and falls back to the bundled `cco-hook` binary, which makes the hook entries reference a machine-local path. Changing this takes effect on the next **Install / Update** or activation-time doctor run."
+          "markdownDescription": "How the CCO hook entries in `.cursor/hooks.json` are executed. `auto` uses `node .cursor/cco-hook.mjs` when Node.js >= 18 is available (portable for teammates) and falls back to the bundled `cco-hook` binary, which makes the hook entries reference a machine-local path. Changing this takes effect on the next **Set Up / Update** or activation-time doctor run."
         },
         "cco.nodePath": {
           "type": "string",
