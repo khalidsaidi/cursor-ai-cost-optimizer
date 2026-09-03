@@ -226,6 +226,11 @@ export function isEnabled(workspace) {
     return { enabled: false, reason: "no_workspace" };
   }
   const paths = workspacePaths(workspace);
+  // A project-level setup (files in <ws>/.cursor) takes precedence over the user-level one, like Cursor's own
+  // project-over-user rule: the user-scope hooks go inert there so nothing runs twice.
+  if (paths.scope === "user" && fs.existsSync(path.join(workspace, ".cursor", "agents", "cco-fast.md")) && fs.existsSync(path.join(workspace, ".cursor", "hooks.json"))) {
+    return { enabled: false, reason: "project_scope_active" };
+  }
   const cfg = readJsonSafe(paths.configPath);
   if (cfg && cfg.enabled === false) {
     return { enabled: false, reason: "workspace_opt_out" };

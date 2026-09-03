@@ -398,6 +398,12 @@ test("user scope: nothing in the repo; ~/.cursor hooks + agents, private state r
   assert.equal(task.updated_input.subagent_type, "cco-deep", "guard reroutes in user scope");
   assert.ok(fs.existsSync(path.join(root, "workspaces")), "state lives under the private root");
   assert.equal(fs.existsSync(path.join(ws, ".cursor")), false, "still nothing in the repo after hooks ran");
+  // precedence: a project-level setup in the workspace makes the user-scope hooks inert there
+  fs.mkdirSync(path.join(ws, ".cursor", "agents"), { recursive: true });
+  fs.writeFileSync(path.join(ws, ".cursor", "agents", "cco-fast.md"), "---\nname: cco-fast\nmodel: composer-2.5\n---\nx\n");
+  fs.writeFileSync(path.join(ws, ".cursor", "hooks.json"), JSON.stringify({ version: 1, hooks: { preToolUse: [{ command: "node .cursor/cco-hook.mjs preToolUse" }] } }));
+  assert.deepEqual(run("workspaceOpen", { hook_event_name: "workspaceOpen", workspace_roots: [ws] }), {}, "project scope wins: no plugin path from the user scope");
+  fs.rmSync(path.join(ws, ".cursor"), { recursive: true, force: true });
   const pause = spawnSync(process.execPath, [path.join(scripts, "cco-init.mjs"), "--workspace", ws, "--scope", "user", "--state-root", root, "--disable"], { encoding: "utf8", env, timeout: 60_000 });
   assert.equal(pause.status, 0, pause.stderr);
   assert.deepEqual(run("workspaceOpen", { hook_event_name: "workspaceOpen", workspace_roots: [ws] }), {}, "paused project gets no plugin path");

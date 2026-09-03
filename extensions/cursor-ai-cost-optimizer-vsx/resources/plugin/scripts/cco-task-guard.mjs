@@ -263,6 +263,9 @@ async function main() {
       updateSession(workspace, payload.conversation_id, (s) => ({ delegations: [...(s.delegations || []), { ts: record.ts, agent: result.targetAgent, model: result.model, rewritten: result.rewritten }] }));
     }
     const footer = `[cco: ${result.targetTier.toUpperCase()} → ${result.model}${multiplier !== null ? ` • ${multiplier}x of ${sessionModel === "auto" ? "Auto" : "chat model"}` : ""}${estimateUsd !== null ? ` • est. ${formatUsd(estimateUsd)}` : ""}]`;
+    if (workspace && payload.conversation_id) {
+      updateSession(workspace, payload.conversation_id, { lastFooter: footer }); // repeated when the delegation returns (postToolUse)
+    }
     // Per-chat budget (Copilot quota / Kilo maxCost pattern): warn, and optionally force FAST when far over.
     let budgetNote = "";
     if (workspace && payload.conversation_id && Number(config?.budget?.sessionUsd) > 0 && estimateUsd !== null) {

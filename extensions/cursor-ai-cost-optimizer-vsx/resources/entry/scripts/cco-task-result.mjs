@@ -6,6 +6,7 @@
  * cascade: when a cheaper tier asks to escalate, remind the parent to delegate one tier up.
  * Fail-open.
  */
+import { loadSession } from "./lib/session.mjs";
 import {
   readStdin,
   safeJsonParse,
@@ -132,8 +133,11 @@ async function main() {
     }
 
     const cascade = config?.escalation?.cascade !== false;
+    // The cost line is the one thing the user should always see: repeat it right when the delegation returns.
+    const sess = hookEvent === "postToolUse" && workspace && payload.conversation_id ? loadSession(workspace, payload.conversation_id) : null;
+    const footerReminder = sess?.lastFooter ? ` Relay the subagent's final message verbatim and end your reply with exactly this line: ${sess.lastFooter}` : "";
     if (verification && verification.ok) {
-      emit({ additional_context: `CCO-VERIFY: pass (${verification.command} exit 0). Relay the result; no further checks needed.` });
+      emit({ additional_context: `CCO-VERIFY: pass (${verification.command} exit 0). Relay the result; no further checks needed.${footerReminder}` });
       return;
     }
     if (verification && !verification.ok && cascade && analysis.nextTier) {
@@ -151,6 +155,10 @@ async function main() {
         return;
       }
       emit({ additional_context: message });
+      return;
+    }
+    if (footerReminder) {
+      emit({ additional_context: `CCO:${footerReminder}` });
       return;
     }
     emit({});
