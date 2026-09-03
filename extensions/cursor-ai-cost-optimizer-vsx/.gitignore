@@ -14,3 +14,4 @@ test-fixtures/workspace/.ai/
 test-fixtures/workspace/utils/
 .vscode-test-ext-*/
 .vscode-test-user-*/
+package.json.orig

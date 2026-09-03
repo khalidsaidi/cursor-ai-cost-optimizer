@@ -128,6 +128,9 @@ jobs:
         run: node ./test/runTest.js
       - name: Package VSIX for ${{ matrix.target }}
         run: node scripts/package-extension.mjs --target ${{ matrix.target }}
+      - name: Manifest unchanged by packaging (the lean manifest must never leak into the repo)
+        shell: bash
+        run: git diff --exit-code -- package.json
       - name: Install the packaged VSIX into VS Code and list it (proves the package is installable on this platform)
         shell: bash
         run: node scripts/verify-vsix.mjs --target ${{ matrix.target }}

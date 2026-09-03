@@ -19,3 +19,4 @@ CONTRIBUTING.md
 !scripts/uninstall.js
 .vscode-test-ext-*/
 .vscode-test-user-*/
+package.json.orig

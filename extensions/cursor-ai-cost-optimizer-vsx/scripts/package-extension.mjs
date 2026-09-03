@@ -14,7 +14,7 @@
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { TARGETS, hostTarget } from "./compile-binaries.mjs";
@@ -32,6 +32,15 @@ function run(cmd, args, cwd = root) {
 }
 
 const argv = process.argv.slice(2);
+// A previous run that crashed mid-packaging leaves package.json.orig behind: put the real manifest back first.
+{
+  const orig = path.join(root, "package.json.orig");
+  if (existsSync(orig)) {
+    writeFileSync(path.join(root, "package.json"), readFileSync(orig, "utf8"), "utf8");
+    unlinkSync(orig);
+    console.log("restored package.json from package.json.orig (previous packaging run did not finish)");
+  }
+}
 const all = argv.includes("--all");
 const skipCompile = argv.includes("--skip-compile");
 const noBinaries = argv.includes("--no-binaries");
@@ -64,9 +73,19 @@ for (const target of targets) {
     vsceArgs.push("--target", target);
   }
   // Ship a lean manifest (Copilot's applyPackageJsonPatch pattern): no dev scripts, no devDependencies.
-  // The original package.json is restored afterwards.
+  // The original is kept in package.json.orig and restored on every exit path (finally, process exit, and at
+  // the start of the next run if a previous one crashed), so the repository manifest can never be left lean.
   const manifestPath = path.join(root, "package.json");
+  const backupPath = path.join(root, "package.json.orig");
   const original = await fs.readFile(manifestPath, "utf8");
+  await fs.writeFile(backupPath, original, "utf8");
+  const restore = () => {
+    try {
+      writeFileSync(manifestPath, readFileSync(backupPath, "utf8"), "utf8");
+      unlinkSync(backupPath);
+    } catch {}
+  };
+  process.on("exit", restore);
   const shipped = JSON.parse(original);
   shipped.scripts = shipped.scripts && shipped.scripts["vscode:uninstall"] ? { "vscode:uninstall": shipped.scripts["vscode:uninstall"] } : undefined;
   delete shipped.devDependencies;
@@ -74,7 +93,8 @@ for (const target of targets) {
   try {
     run("npx", vsceArgs);
   } finally {
-    await fs.writeFile(manifestPath, original, "utf8");
+    restore();
+    process.off("exit", restore);
   }
   const size = (await fs.stat(path.join(root, out))).size;
   produced.push({ target, out, size });
