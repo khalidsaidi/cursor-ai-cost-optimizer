@@ -108,7 +108,7 @@ test("installWorkspace (node runtime): plugin layout + rule, nothing outside .cu
 
     // idempotent; user-authored agent never overwritten
     fs.writeFileSync(path.join(p.agentsDir, "cco-fast.md"), "---\nname: cco-fast\nmodel: my-model\n---\nmine\n");
-    installWorkspace(ws, base());
+    await installWorkspace(ws, base());
     assert.equal(entriesOf(ws).sessionStart.length, 1);
     assert.match(fs.readFileSync(path.join(p.agentsDir, "cco-fast.md"), "utf8"), /model: my-model/);
 
