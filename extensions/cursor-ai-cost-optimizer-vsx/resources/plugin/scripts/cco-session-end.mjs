@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /** sessionEnd hook: append a session record for the report. Fire-and-forget. */
-import { readStdin, safeJsonParse, workspaceFromPayload, workspacePaths, appendJsonl, emit, nowIso, isEnabled } from "./lib/common.mjs";
+import { readStdin, safeJsonParse, workspaceFromPayload, workspacePaths, appendJsonl, emit, nowIso, isEnabled, applyScopeArgs } from "./lib/common.mjs";
+applyScopeArgs();
 
 async function main() {
   const payload = safeJsonParse((await readStdin()).trim() || "{}");

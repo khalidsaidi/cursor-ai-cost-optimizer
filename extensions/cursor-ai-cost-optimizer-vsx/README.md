@@ -8,9 +8,12 @@ the Cursor plugin marketplace, and ships a self-contained hook binary for machin
 
 ## Getting started
 
-1. **Set it up in your project** — Command Palette → `AI Cost Optimizer: Set Up / Update in This Workspace`
-   (or click **AI Cost** in the status bar). You see the list of files first; everything is written under
-   `.cursor/` in the open folder, and the tiers are mapped to models your account can run.
+1. **Set it up** — click **AI Cost** in the status bar (or Command Palette → `AI Cost Optimizer: Set Up / Update`) and choose:
+   - **Everywhere** (recommended): nothing is written into any project. CCO registers in Cursor's own user-level
+     config (`~/.cursor/hooks.json` entries, `~/.cursor/agents/cco-*.md`) and keeps its state in the extension's
+     storage, the way Copilot keeps its state in the editor. Pause it per project from the same menu.
+   - **This project only**: 8 files under the project's `.cursor/`, shareable with teammates through git.
+   You see exactly what will be written before anything happens.
 2. **Start a new chat and work normally.** Keep your usual chat model. Each routed task ends with one line like
    `[cco: FAST → composer-2.5 • 0.3x of your chat model • est. $0.02]`. Nothing is blocked; risky work always
    goes to the strong tier.
@@ -34,8 +37,9 @@ the Cursor plugin marketplace, and ships a self-contained hook binary for machin
 
 | Command | What it does |
 | --- | --- |
-| AI Cost Optimizer: Set Up / Update in This Workspace | Sets up (or refreshes) `.cursor/` for the open folder after a confirmation. |
-| AI Cost Optimizer: Remove from This Workspace | Removes everything the install wrote; other tools' hook entries and your own files are kept. |
+| AI Cost Optimizer: Set Up / Update | Sets up (or refreshes) CCO everywhere or for the open folder, after showing what will be written. |
+| AI Cost Optimizer: Remove | Removes everything the setup wrote (everywhere, or from the open folder); other tools' hook entries and your own files are kept. |
+| AI Cost Optimizer: Pause / Resume in This Project | Turns routing off or on for the open folder without removing anything. |
 | AI Cost Optimizer: Show Tier Rates / Recommend a Tier | Cost statement for this project — each tier's model and its rate relative to your chat model (`FAST → composer-2.5 • 0.1x of claude-opus-5 (Rate is counted at 0.1x.)`) — and, for selected text, the recommended tier with its override token. |
 | AI Cost Optimizer: Insert [cco:fast] / [cco:balanced] / [cco:deep] | Inserts an override token at the cursor (editor commands). |
 | AI Cost Optimizer: Open Status Menu | The same menu as clicking **AI Cost** in the status bar. |
@@ -81,17 +85,17 @@ uninstalls it (`npm run verify:vsix`). A release publishes all six under the sam
 
 ## What it does to your Cursor
 
-Measured against the bar set by the big first-party extensions:
+Measured against the bar set by the big first-party extensions (Copilot Chat, Amazon Q, Gemini Code Assist):
 
-| | This extension |
-| --- | --- |
-| On install | Registers commands and a status bar item. No toast, no files, no settings changed. |
-| On setup (you confirm first) | 8 files under the project's `.cursor/`: hooks.json (merged), the shim, the rule, five subagents. Plus a git-ignored state folder. They show up in git status; commit them or ignore `.cursor/`. |
-| While you chat | One hook process per tool call: about 0.05 s (44 ms measured with Node, 37 ms with the binary). One footer line per routed task. Nothing blocked by default. |
-| Projects you did not set up | Untouched. No files, no messages, no hooks. |
-| On extension update | The pinned plugin path and binary are refreshed silently. |
-| On Remove from This Workspace | Everything above is removed; other tools' hook entries and your files are kept. |
-| If you uninstall the extension without removing | Project files stay; the shim retires its own hook entries after 7 days. Run Remove first to leave nothing. |
+| | Everywhere (default) | This project only |
+| --- | --- | --- |
+| On install | Registers commands and a status bar item. No toast, no files, no settings changed. | same |
+| On setup (you confirm first) | CCO entries merged into `~/.cursor/hooks.json`, five subagents in `~/.cursor/agents/`, state in the extension's storage. **No project files.** | 8 files under the project's `.cursor/` plus a git-ignored state folder; they show up in git status. |
+| While you chat | One hook process per tool call: about 0.05 s (44 ms measured with Node, 37 ms with the binary). One footer line per routed task. Nothing blocked by default. | same |
+| Projects you paused / did not set up | Paused projects get no rule and inert hooks. | Untouched: no files, no messages, no hooks. |
+| On extension update | Hook entries are repointed silently. | The pinned plugin path and binary are refreshed silently. |
+| On Remove | Hook entries, subagents and state removed. Other tools' entries kept. Nothing left. | Everything under `.cursor/` that CCO wrote is removed; other tools' hook entries and your files are kept. |
+| If you uninstall the extension | Its uninstall hook removes the hook entries, the subagents and its storage. Nothing left. | Project files stay until you run Remove; the shim retires its own hook entries after 7 days. |
 
 ## What is written to your workspace
 

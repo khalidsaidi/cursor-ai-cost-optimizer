@@ -7,6 +7,7 @@ All notable changes to this extension are documented here. The format is based o
 ## [0.2.0] - 2026-09-02
 
 ### Added
+- "Everywhere" setup (default): nothing written into any project. CCO registers in Cursor's user-level config (`~/.cursor/hooks.json` entries, `~/.cursor/agents/cco-*.md`) and keeps its state in the extension's storage; the routing rule is handed to Cursor per workspace through `workspaceOpen.pluginPaths`. Pause per project from the status menu; Remove and the extension's uninstall hook leave nothing behind.
 - Minimal footprint: setup writes only what routing needs (hooks, shim, rule, five subagents; 8 files) and states the count, the per-call cost and the commit-or-ignore choice in the consent dialog. Skills and chat commands are no longer copied into the workspace.
 - Six platform-targeted builds (Linux x64/ARM64, Windows x64/ARM64, macOS Intel/Apple Silicon), each compiled,
   tested, packaged and install-verified on a native runner in CI; `npm run verify:vsix` installs the packaged VSIX

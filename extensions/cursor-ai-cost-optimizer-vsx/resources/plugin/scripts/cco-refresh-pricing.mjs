@@ -7,7 +7,8 @@
  *   node scripts/cco-refresh-pricing.mjs --from <file.md>     # parse a local markdown copy
  */
 import path from "node:path";
-import { readTextSafe, writeJson, nowIso, parseArgs, workspacePaths, PLUGIN_ROOT, isMain } from "./lib/common.mjs";
+import { readTextSafe, writeJson, nowIso, parseArgs, workspacePaths, PLUGIN_ROOT, isMain, applyScopeArgs } from "./lib/common.mjs";
+applyScopeArgs();
 import { parsePricingMarkdown, PRICING_SOURCE_URL, BUNDLED_PRICING_PATH } from "./lib/pricing.mjs";
 
 export async function fetchText(url, timeoutMs = 20_000) {

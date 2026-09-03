@@ -6,7 +6,8 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { parseArgs, workspacePaths, readJsonSafe, readJsonl, ageHours, TIERS, CCO_AGENT_NAMES, isEnabled, isMain } from "./lib/common.mjs";
+import { parseArgs, workspacePaths, readJsonSafe, readJsonl, ageHours, TIERS, CCO_AGENT_NAMES, isEnabled, isMain, applyScopeArgs } from "./lib/common.mjs";
+applyScopeArgs();
 import { readWorkspaceAgentModel } from "./lib/agents.mjs";
 import { run, cursorAgentBinary } from "./lib/common.mjs";
 

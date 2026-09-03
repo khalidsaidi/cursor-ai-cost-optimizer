@@ -366,3 +366,46 @@ test("cco-init installs the agents from a CRLF checkout of the plugin (Windows a
   fs.rmSync(pluginCopy, { recursive: true, force: true });
   fs.rmSync(ws, { recursive: true, force: true });
 });
+
+test("user scope: nothing in the repo; ~/.cursor hooks + agents, private state root, pluginPaths on workspaceOpen, pause and uninstall", () => {
+  const { spawnSync } = require("node:child_process");
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "cco-home-"));
+  const root = path.join(home, "ext-storage", "cco");
+  const ws = fs.mkdtempSync(path.join(os.tmpdir(), "cco-user-ws-"));
+  const env = { ...process.env, HOME: home, USERPROFILE: home, CCO_CURSOR_AGENT_BIN: "cco-nonexistent-binary" };
+  delete env.CCO_SCOPE;
+  delete env.CCO_STATE_ROOT;
+  const init = spawnSync(process.execPath, [path.join(scripts, "cco-init.mjs"), "--workspace", ws, "--scope", "user", "--state-root", root, "--json"], { encoding: "utf8", env, timeout: 60_000 });
+  assert.equal(init.status, 0, init.stderr);
+  const summary = JSON.parse(init.stdout);
+  assert.equal(summary.scope, "user");
+  assert.equal(fs.existsSync(path.join(ws, ".cursor")), false, "nothing written into the repo");
+  const hooks = JSON.parse(fs.readFileSync(path.join(home, ".cursor", "hooks.json"), "utf8"));
+  const cmd = hooks.hooks.preToolUse[0].command;
+  assert.match(cmd, /cco-hook\.mjs" preToolUse --scope user --state-root "/);
+  assert.match(fs.readFileSync(path.join(home, ".cursor", "agents", "cco-fast.md"), "utf8"), /^model: composer-2\.5$/m);
+  assert.ok(fs.existsSync(path.join(root, "plugin", ".cursor-plugin", "plugin.json")), "runtime plugin for pluginPaths");
+  assert.ok(fs.existsSync(path.join(root, "plugin", "rules", "cco-routing.mdc")));
+  assert.equal(fs.existsSync(path.join(root, "plugin", "agents")), false, "runtime plugin carries no agents (user agents win)");
+  const run = (event, payload) => {
+    const res = spawnSync(process.execPath, [path.join(scripts, "cco-hook.mjs"), event, "--scope", "user", "--state-root", root], { input: JSON.stringify(payload), encoding: "utf8", env, cwd: path.join(home, ".cursor"), timeout: 40_000 });
+    assert.equal(res.status, 0, res.stderr);
+    return JSON.parse(res.stdout.trim().split(/\r?\n/).filter(Boolean).pop());
+  };
+  const open = run("workspaceOpen", { hook_event_name: "workspaceOpen", workspace_roots: [ws] });
+  assert.deepEqual(open.pluginPaths, [path.join(root, "plugin")]);
+  const task = run("preToolUse", { hook_event_name: "preToolUse", tool_name: "Task", conversation_id: "u1", tool_input: { description: "d", prompt: "CCO-SCORES: complexity=2 risk=9 breadth=1 uncertainty=0 latency=0\nrefund flow", subagent_type: "cco-fast" }, workspace_roots: [ws] });
+  assert.equal(task.updated_input.subagent_type, "cco-deep", "guard reroutes in user scope");
+  assert.ok(fs.existsSync(path.join(root, "workspaces")), "state lives under the private root");
+  assert.equal(fs.existsSync(path.join(ws, ".cursor")), false, "still nothing in the repo after hooks ran");
+  const pause = spawnSync(process.execPath, [path.join(scripts, "cco-init.mjs"), "--workspace", ws, "--scope", "user", "--state-root", root, "--disable"], { encoding: "utf8", env, timeout: 60_000 });
+  assert.equal(pause.status, 0, pause.stderr);
+  assert.deepEqual(run("workspaceOpen", { hook_event_name: "workspaceOpen", workspace_roots: [ws] }), {}, "paused project gets no plugin path");
+  const un = spawnSync(process.execPath, [path.join(scripts, "cco-init.mjs"), "--workspace", ws, "--scope", "user", "--state-root", root, "--uninstall"], { encoding: "utf8", env, timeout: 60_000 });
+  assert.equal(un.status, 0, un.stderr);
+  assert.equal(fs.existsSync(path.join(home, ".cursor", "hooks.json")), false, "hooks file removed when only CCO entries were in it");
+  assert.equal(fs.existsSync(path.join(home, ".cursor", "agents", "cco-fast.md")), false);
+  assert.equal(fs.existsSync(root), false, "private state root removed");
+  fs.rmSync(home, { recursive: true, force: true });
+  fs.rmSync(ws, { recursive: true, force: true });
+});

@@ -20,7 +20,8 @@ import {
   hookLog,
   emit,
   nowIso,
-  asNumber, isMain } from "./lib/common.mjs";
+  asNumber, isMain, applyScopeArgs } from "./lib/common.mjs";
+applyScopeArgs();
 import { loadConfig } from "./lib/config.mjs";
 import { refreshPricing } from "./cco-refresh-pricing.mjs";
 import { discover } from "./cco-discover-models.mjs";

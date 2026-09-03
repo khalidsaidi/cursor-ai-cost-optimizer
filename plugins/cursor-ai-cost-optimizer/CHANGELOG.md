@@ -4,6 +4,7 @@
 Rebuilt around what the Cursor platform actually supports today (verified against `cursor-agent` 2026.08.31).
 
 ### Added
+- User scope: `cco-init --scope user --state-root <dir>` (user-level hooks and subagents, private state root, runtime plugin via `workspaceOpen.pluginPaths`); hook commands carry `--scope/--state-root`.
 - Install-impact pass to the Copilot bar: advise-first by default (cost routing is advice attached to tool calls; only explicit `[cco:<tier>]` overrides and quality escalations are enforced; `enforcement.mode: strict` enforces everything), no unsolicited chat messages in projects that are not enabled, a self-removing shim when the plugin is gone, and no settings file until a setting is changed.
 - Second UX pass: `/cco-init` and `/cco-uninstall` are real slash commands; the hook shim sits next to `hooks.json` so committing hooks is safe for teammates (no-op without the plugin); tiny one-file edits stay in the chat; interactive CLI sessions detect new user turns from the transcript so per-turn state resets.
 - UX friction pass: setup finishes in seconds (probing is opt-in via `--probe`) and prints a plain summary; works without the Cursor CLI (bundled catalogue, doctor explains how to install it); the state folder ignores itself in git; logs are bounded; the first routing notice of a session says how to force a tier; the not-enabled nudge is silent once a `.cursor/cco.json` exists.

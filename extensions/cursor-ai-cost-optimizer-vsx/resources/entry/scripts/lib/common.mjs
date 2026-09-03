@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import crypto from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -151,18 +152,61 @@ export function workspaceFromPayload(payload) {
  *   .cursor/cco.json              your settings for this project (optional; created only when you change a setting)
  *   .cursor/cco/                  shim, runtime mapping, price cache, state and logs (gitignore it if you like)
  */
+/** "project" (files under <ws>/.cursor/) or "user" (Cursor's user-level config + a private state root, nothing in the repo). */
+export function scope() {
+  return process.env.CCO_SCOPE === "user" ? "user" : "project";
+}
+export function userCursorDir() {
+  return path.join(os.homedir(), ".cursor");
+}
+export function stateRoot() {
+  return process.env.CCO_STATE_ROOT ? path.resolve(process.env.CCO_STATE_ROOT) : path.join(userCursorDir(), "cco");
+}
+export function workspaceSlug(workspace) {
+  const hash = crypto.createHash("sha1").update(String(workspace)).digest("hex").slice(0, 10);
+  return `${path.basename(workspace).replace(/[^A-Za-z0-9._-]+/g, "-").slice(0, 40) || "ws"}-${hash}`;
+}
 export function workspacePaths(workspace) {
   const cursorDir = path.join(workspace, ".cursor");
+  if (scope() === "user") {
+    const root = stateRoot();
+    const ccoDir = path.join(root, "workspaces", workspaceSlug(workspace));
+    const stateDir = path.join(ccoDir, "state");
+    return {
+      workspace,
+      scope: "user",
+      root,
+      cursorDir,
+      ccoDir,
+      agentsDir: path.join(userCursorDir(), "agents"),
+      hooksPath: path.join(userCursorDir(), "hooks.json"),
+      configPath: path.join(ccoDir, "cco.json"),
+      shimPath: null,
+      pluginDir: path.join(root, "plugin"),
+      runtimePath: path.join(root, "runtime.json"),
+      pricingPath: path.join(root, "pricing.json"),
+      stateDir,
+      sessionsDir: path.join(stateDir, "sessions"),
+      dedupeDir: path.join(stateDir, "dedupe"),
+      jointStatePath: path.join(stateDir, "joint-state.json"),
+      lastPromptPath: path.join(stateDir, "last-prompt.json"),
+      decisionsPath: path.join(stateDir, "decisions.jsonl"),
+      hooksLogPath: path.join(stateDir, "hooks.jsonl")
+    };
+  }
   const ccoDir = path.join(cursorDir, "cco");
   const stateDir = path.join(ccoDir, "state");
   return {
     workspace,
+    scope: "project",
+    root: ccoDir,
     cursorDir,
     ccoDir,
     agentsDir: path.join(cursorDir, "agents"),
     hooksPath: path.join(cursorDir, "hooks.json"),
     configPath: path.join(cursorDir, "cco.json"),
     shimPath: path.join(cursorDir, "cco-hook.mjs"),
+    pluginDir: null,
     runtimePath: path.join(ccoDir, "runtime.json"),
     pricingPath: path.join(ccoDir, "pricing.json"),
     stateDir,
@@ -174,8 +218,6 @@ export function workspacePaths(workspace) {
     hooksLogPath: path.join(stateDir, "hooks.jsonl")
   };
 }
-
-/** CCO acts only in projects where it was set up (tier agents present) and not opted out. */
 export function isEnabled(workspace) {
   if (process.env.CCO_DISABLED && process.env.CCO_DISABLED !== "0") {
     return { enabled: false, reason: "env_disabled" };
@@ -183,12 +225,13 @@ export function isEnabled(workspace) {
   if (!workspace) {
     return { enabled: false, reason: "no_workspace" };
   }
-  const cfg = readJsonSafe(path.join(workspace, ".cursor", "cco.json"));
+  const paths = workspacePaths(workspace);
+  const cfg = readJsonSafe(paths.configPath);
   if (cfg && cfg.enabled === false) {
     return { enabled: false, reason: "workspace_opt_out" };
   }
-  if (!fs.existsSync(path.join(workspace, ".cursor", "agents", "cco-fast.md"))) {
-    return { enabled: false, reason: "workspace_not_set_up" };
+  if (!fs.existsSync(path.join(paths.agentsDir, "cco-fast.md"))) {
+    return { enabled: false, reason: paths.scope === "user" ? "user_not_set_up" : "workspace_not_set_up" };
   }
   return { enabled: true, reason: null };
 }
@@ -266,5 +309,13 @@ export function isMain(url) {
     return process.platform === "win32" ? argv1.toLowerCase() === self.toLowerCase() : argv1 === self;
   } catch {
     return false;
+  }
+}
+
+/** Hook commands carry the scope on the command line (hooks.json cannot set env). Apply before any path is computed. */
+export function applyScopeArgs(argv = process.argv.slice(2)) {
+  for (let i = 0; i < argv.length; i += 1) {
+    if (argv[i] === "--scope" && argv[i + 1]) process.env.CCO_SCOPE = argv[i + 1];
+    if (argv[i] === "--state-root" && argv[i + 1]) process.env.CCO_STATE_ROOT = argv[i + 1];
   }
 }

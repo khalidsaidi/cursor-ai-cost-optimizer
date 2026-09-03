@@ -4,18 +4,38 @@
  * Set up CCO for a project. Everything goes under <project>/.cursor/ (Cursor's own convention):
  *   .cursor/hooks.json (merge-preserving), .cursor/agents/cco-*.md, .cursor/cco.json, .cursor/cco/
  *
- *   node scripts/cco-init.mjs --workspace . [--no-probe]
+ *   node scripts/cco-init.mjs --workspace . [--probe]
  *   node scripts/cco-init.mjs --workspace . --disable | --enable | --uninstall
+ * User scope (nothing in any repo: ~/.cursor/hooks.json entries, ~/.cursor/agents/cco-*.md, private state root):
+ *   node scripts/cco-init.mjs --scope user --state-root <dir> [--hook-command <abs path to a compiled cco-hook>]
  */
 import fs from "node:fs";
 import path from "node:path";
-import { parseArgs, workspacePaths, writeJson, readJsonSafe, TIERS, CCO_AGENT_NAMES, isMain } from "./lib/common.mjs";
+import { parseArgs, workspacePaths, writeJson, readJsonSafe, TIERS, CCO_AGENT_NAMES, isMain, applyScopeArgs, PLUGIN_ROOT, ensureDir } from "./lib/common.mjs";
+applyScopeArgs();
 import { loadConfig } from "./lib/config.mjs";
 import { refreshPricing } from "./cco-refresh-pricing.mjs";
 import { discover } from "./cco-discover-models.mjs";
 import { installHooks, uninstallHooks } from "./cco-install-hooks.mjs";
 import { resolveModelPrice, loadPricing } from "./lib/pricing.mjs";
 import { GENERATED_MARKER } from "./lib/agents.mjs";
+
+/** User scope: a plugin directory (rule, commands, skills; no agents, no hooks) that workspaceOpen hands to Cursor. */
+function writeRuntimePlugin(dir) {
+  fs.rmSync(dir, { recursive: true, force: true });
+  for (const sub of [".cursor-plugin", "rules", "commands", "skills"]) {
+    const from = path.join(PLUGIN_ROOT, sub);
+    if (fs.existsSync(from)) {
+      fs.cpSync(from, path.join(dir, sub), { recursive: true });
+    }
+  }
+  const manifest = path.join(dir, ".cursor-plugin", "plugin.json");
+  const data = readJsonSafe(manifest) || {};
+  delete data.agents;
+  delete data.hooks;
+  ensureDir(path.dirname(manifest));
+  writeJson(manifest, data);
+}
 
 function setEnabled(workspace, on) {
   const paths = workspacePaths(workspace);
@@ -24,9 +44,10 @@ function setEnabled(workspace, on) {
 }
 
 async function main() {
-  const args = parseArgs(process.argv.slice(2), { workspace: process.cwd(), probe: false, json: false, disable: false, enable: false, uninstall: false });
+  const args = parseArgs(process.argv.slice(2), { workspace: process.cwd(), probe: false, json: false, disable: false, enable: false, uninstall: false, scope: "", "state-root": "", "hook-command": "" });
   const workspace = path.resolve(String(args.workspace));
   const paths = workspacePaths(workspace);
+  const user = paths.scope === "user";
 
   if (args.uninstall) {
     const hooks = uninstallHooks({ workspace });
@@ -41,13 +62,17 @@ async function main() {
       } catch {}
     }
     fs.rmSync(paths.ccoDir, { recursive: true, force: true });
-    for (const file of [paths.configPath, paths.shimPath]) {
+    if (user) {
+      fs.rmSync(paths.root, { recursive: true, force: true }); // the whole private state root (all workspaces, runtime plugin)
+      removed.push(paths.root);
+    }
+    for (const file of [paths.configPath, paths.shimPath].filter(Boolean)) {
       try {
         fs.unlinkSync(file);
         removed.push(file);
       } catch {}
     }
-    console.log(JSON.stringify({ ok: true, uninstalled: true, workspace, hooks: hooks.file, removed: [...removed, paths.ccoDir] }, null, 2));
+    console.log(JSON.stringify({ ok: true, uninstalled: true, scope: paths.scope, workspace, hooks: hooks.file, removed: [...removed, paths.ccoDir] }, null, 2));
     return;
   }
   if (args.disable || args.enable) {
@@ -64,12 +89,16 @@ async function main() {
   } catch (error) {
     pricing = { action: "bundled_fallback", error: String(error?.message || error).slice(0, 120) };
   }
-  const hooks = installHooks({ workspace });
+  const hooks = installHooks({ workspace, hookCommand: String(args["hook-command"] || "") || null });
   const runtime = discover({ workspace, probe: Boolean(args.probe), writeAgents: true, config: loadConfig(workspace) });
-  // The state folder ignores itself so nothing new shows up in git status (no edit to the user's .gitignore).
-  try {
-    fs.writeFileSync(path.join(paths.ccoDir, ".gitignore"), "*\n", "utf8");
-  } catch {}
+  if (user) {
+    writeRuntimePlugin(paths.pluginDir); // rule + commands + skills, handed to Cursor per workspace via workspaceOpen.pluginPaths
+  } else {
+    // The state folder ignores itself so nothing new shows up in git status (no edit to the user's .gitignore).
+    try {
+      fs.writeFileSync(path.join(paths.ccoDir, ".gitignore"), "*\n", "utf8");
+    } catch {}
+  }
   const table = loadPricing(paths.pricingPath);
   const tiers = Object.fromEntries(
     TIERS.map((tier) => {
@@ -81,7 +110,8 @@ async function main() {
   const summary = {
     ok: true,
     workspace,
-    wrote: { hooks: hooks.file, shim: paths.shimPath, agents: paths.agentsDir, state: paths.ccoDir },
+    scope: paths.scope,
+    wrote: user ? { hooks: hooks.file, agents: paths.agentsDir, state: paths.root, plugin: paths.pluginDir } : { hooks: hooks.file, shim: paths.shimPath, agents: paths.agentsDir, state: paths.ccoDir },
     pricing: pricing.action,
     tiers,
     degraded: runtime.health.degraded,
@@ -94,13 +124,15 @@ async function main() {
   }
   const rel = (p) => path.relative(workspace, p) || ".";
   const lines = [
-    "AI Cost Optimizer is set up for this project.",
+    user ? "AI Cost Optimizer is set up for your Cursor (nothing written into projects)." : "AI Cost Optimizer is set up for this project.",
     "",
     `  FAST      → ${tiers.fast.model}  (${tiers.fast.pricePerMillion})`,
     `  BALANCED  → ${tiers.balanced.model}  (${tiers.balanced.pricePerMillion})`,
     `  DEEP      → ${tiers.deep.model}  (${tiers.deep.pricePerMillion})`,
     "",
-    `Files (all inside ${rel(paths.cursorDir)}/): hooks.json + cco-hook.mjs (commit together; a no-op for teammates without the plugin), agents/cco-*.md, cco/ (state; ignores itself in git). Settings live in cco.json only if you create one (/cco-models writes it).`
+    user
+      ? `Files: ${hooks.file} (CCO entries merged), ${paths.agentsDir}/cco-*.md, and a private state folder at ${paths.root}. No project files.`
+      : `Files (all inside ${rel(paths.cursorDir)}/): hooks.json + cco-hook.mjs (commit together; a no-op for teammates without the plugin), agents/cco-*.md, cco/ (state; ignores itself in git). Settings live in cco.json only if you create one (/cco-models writes it).`
   ];
   if (runtime.health.notes.length) {
     lines.push("", `Notes: ${runtime.health.notes.join("; ")}`);

@@ -11,7 +11,8 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { PLUGIN_ROOT, parseArgs, readJsonSafe, writeJson, workspacePaths, ensureDir, isMain } from "./lib/common.mjs";
+import { PLUGIN_ROOT, parseArgs, readJsonSafe, writeJson, workspacePaths, ensureDir, isMain, scope, stateRoot, applyScopeArgs } from "./lib/common.mjs";
+applyScopeArgs();
 
 const MARKER = "cco-hook";
 
@@ -101,12 +102,22 @@ export function writeShim(workspace, pluginRoot = PLUGIN_ROOT) {
   return paths.shimPath;
 }
 
-/** Hook commands are relative to the project root (Cursor runs project hooks with cwd = workspace). */
-export function buildEntries(pluginRoot = PLUGIN_ROOT) {
+const q = (p) => `"${String(p).replace(/"/g, '\\"')}"`;
+
+/**
+ * Project scope: commands are relative to the project root (Cursor runs project hooks with cwd = workspace).
+ * User scope: ~/.cursor/hooks.json runs with cwd ~/.cursor, so commands are absolute and carry the scope:
+ *   node "<plugin>/scripts/cco-hook.mjs" <event> --scope user --state-root "<root>"   (or a compiled binary)
+ */
+export function buildEntries(pluginRoot = PLUGIN_ROOT, { scope: which = scope(), stateRoot: root = stateRoot(), hookCommand = null } = {}) {
   const template = readJsonSafe(path.join(pluginRoot, "hooks", "hooks.json")) || { hooks: {} };
   const out = {};
   for (const [event, entries] of Object.entries(template.hooks || {})) {
-    out[event] = (entries || []).map((entry) => ({ ...entry, command: `node .cursor/cco-hook.mjs ${event}` }));
+    const command =
+      which === "user"
+        ? `${hookCommand ? q(hookCommand) : `node ${q(path.join(pluginRoot, "scripts", "cco-hook.mjs"))}`} ${event} --scope user --state-root ${q(root)}`
+        : `node .cursor/cco-hook.mjs ${event}`;
+    out[event] = (entries || []).map((entry) => ({ ...entry, command }));
   }
   return out;
 }
@@ -132,12 +143,13 @@ export function mergeHooks(existing, ours) {
   return { ...base, version: base.version || 1, hooks };
 }
 
-export function installHooks({ workspace, pluginRoot = PLUGIN_ROOT }) {
-  const shim = writeShim(workspace, pluginRoot);
+export function installHooks({ workspace, pluginRoot = PLUGIN_ROOT, hookCommand = null }) {
+  const user = scope() === "user";
+  const shim = user ? null : writeShim(workspace, pluginRoot);
   const file = targetPath({ workspace });
-  const entries = buildEntries(pluginRoot);
+  const entries = buildEntries(pluginRoot, { hookCommand });
   writeJson(file, mergeHooks(readJsonSafe(file), entries));
-  return { file, shim, events: Object.keys(entries) };
+  return { file, shim, events: Object.keys(entries), scope: user ? "user" : "project" };
 }
 
 export function uninstallHooks({ workspace }) {

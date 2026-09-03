@@ -4,7 +4,8 @@
  * override tokens even when the parent drops them from the delegated prompt, and pre-score
  * the request for the report. Never blocks; always {continue:true}.
  */
-import { readStdin, safeJsonParse, workspaceFromPayload, workspacePaths, writeJson, appendJsonl, emit, nowIso, isEnabled } from "./lib/common.mjs";
+import { readStdin, safeJsonParse, workspaceFromPayload, workspacePaths, writeJson, appendJsonl, emit, nowIso, isEnabled, applyScopeArgs } from "./lib/common.mjs";
+applyScopeArgs();
 import { loadConfig } from "./lib/config.mjs";
 import { parseOverride, heuristicScores, decideTier, isQuestionLike, isTinyTask } from "./lib/scorer.mjs";
 import { updateSession, loadSession, createSession, normalizeModelId } from "./lib/session.mjs";

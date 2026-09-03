@@ -261,8 +261,11 @@ function copyBinary(src: string, dst: string): void {
  * Node >= 18 is available (and hookRuntime is not "binary"), else the bundled binary's equivalent command
  * (`cco-hook init ...`), which needs no Node.
  */
-export function runPluginScript(workspace: string, script: "cco-init.mjs" | "cco-discover-models.mjs", args: string[], opts: Options): RunResult {
-  const env: Record<string, string> = { ...(process.env as Record<string, string>), CCO_PLUGIN_ROOT: opts.pluginRoot };
+export function runPluginScript(workspace: string, script: "cco-init.mjs" | "cco-discover-models.mjs", args: string[], opts: Options, extraEnv: Record<string, string> = {}): RunResult {
+  const env: Record<string, string> = { ...(process.env as Record<string, string>), CCO_PLUGIN_ROOT: opts.pluginRoot, ...extraEnv };
+  delete env.CCO_SCOPE;
+  delete env.CCO_STATE_ROOT;
+  Object.assign(env, extraEnv);
   // hookRuntime "binary" means "this machine may have no Node": run the setup through the binary as well.
   const hasBinary = Boolean(opts.binaryPath && fs.existsSync(opts.binaryPath));
   const node = opts.hookRuntime === "binary" && hasBinary ? null : findNode(opts.nodePath);

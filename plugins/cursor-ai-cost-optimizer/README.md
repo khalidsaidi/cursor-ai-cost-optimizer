@@ -59,6 +59,10 @@ Then, in a project, run `/cco-init` once. It takes a few seconds, writes only in
 - `shellGuard.enabled`: opt-in blocker for a short list of destructive shell commands.
 - Overrides per request: `[cco:fast]`, `[cco:balanced]`, `[cco:deep]`, `[cco:auto]`, `[cco:off]`.
 
+## User scope (nothing in any repo)
+
+`cco-init --scope user --state-root <dir>` registers CCO in Cursor's user-level config instead of a project: CCO entries in `~/.cursor/hooks.json`, `~/.cursor/agents/cco-*.md`, and a private state root with the runtime plugin (rule, commands, skills) that the `workspaceOpen` hook hands to Cursor per workspace. This is what the VS Code extension's "Everywhere" setup uses. In the Cursor CLI, project scope is the one to use (the CLI does not load user-level subagents).
+
 ## What CCO writes on your machine
 
 Only inside the project where you ran `/cco-init`:

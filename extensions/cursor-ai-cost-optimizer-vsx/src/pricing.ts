@@ -6,6 +6,7 @@
  * No vscode imports.
  */
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 
 export interface PriceRow {
@@ -189,11 +190,11 @@ export function pricingIsStale(pricing: PricingTable, maxDays = PRICING_STALE_DA
 export const TIERS = ["fast", "balanced", "deep"] as const;
 export type Tier = (typeof TIERS)[number];
 
-export function readTierModels(workspace: string): Record<Tier, string | null> {
+export function readTierModels(workspace: string, agentsDir?: string): Record<Tier, string | null> {
   const out = { fast: null, balanced: null, deep: null } as Record<Tier, string | null>;
   for (const tier of TIERS) {
     try {
-      const text = fs.readFileSync(path.join(workspace, ".cursor", "agents", `cco-${tier}.md`), "utf8");
+      const text = fs.readFileSync(path.join(agentsDir ?? path.join(workspace, ".cursor", "agents"), `cco-${tier}.md`), "utf8");
       const m = text.match(/^model:\s*(.+)$/m);
       out[tier] = m ? m[1].trim() : null;
     } catch {
@@ -204,8 +205,8 @@ export function readTierModels(workspace: string): Record<Tier, string | null> {
 }
 
 /** The chat model of the most recently updated session in <ws>/.cursor/cco/state/sessions (null when unknown). */
-export function readLatestChatModel(workspace: string): string | null {
-  const dir = path.join(workspace, ".cursor", "cco", "state", "sessions");
+export function readLatestChatModel(workspace: string, stateDir?: string): string | null {
+  const dir = path.join(stateDir ?? path.join(workspace, ".cursor", "cco", "state"), "sessions");
   let best: { model: string; ts: number } | null = null;
   try {
     for (const name of fs.readdirSync(dir)) {
@@ -226,11 +227,11 @@ export interface Savings {
   estimatedUsd: number;
 }
 /** Σ max(0, chatEstimateUsd - estimateUsd) over <ws>/.cursor/cco/state/decisions.jsonl. */
-export function readSavings(workspace: string): Savings {
+export function readSavings(workspace: string, stateDir?: string): Savings {
   const out: Savings = { decisions: 0, savedUsd: 0, estimatedUsd: 0 };
   let text = "";
   try {
-    text = fs.readFileSync(path.join(workspace, ".cursor", "cco", "state", "decisions.jsonl"), "utf8");
+    text = fs.readFileSync(path.join(stateDir ?? path.join(workspace, ".cursor", "cco", "state"), "decisions.jsonl"), "utf8");
   } catch {
     return out;
   }
@@ -268,10 +269,17 @@ export interface CostStatement {
   warnings: string[];
 }
 /** Copilot-style per-tier cost lines: `FAST → composer-2.5 • 0.1x of <chat model>` or absolute $/M when the chat model is unknown. */
-export function costStatement(workspace: string, bundledPricingPath: string, chatModelOverride?: string | null): CostStatement {
-  const pricing = loadPricing(path.join(workspace, ".cursor", "cco", "pricing.json"), bundledPricingPath);
-  const models = readTierModels(workspace);
-  const chatModel = chatModelOverride === undefined ? readLatestChatModel(workspace) : chatModelOverride;
+export interface CostStatementOptions {
+  chatModelOverride?: string | null;
+  /** User scope: the extension's private state root (pricing.json, workspaces/<slug>/state) and ~/.cursor/agents. */
+  stateRoot?: string;
+  workspaceStateDir?: string;
+}
+export function costStatement(workspace: string, bundledPricingPath: string, optionsOrChatModel?: CostStatementOptions | string | null): CostStatement {
+  const o: CostStatementOptions = typeof optionsOrChatModel === "object" && optionsOrChatModel !== null ? optionsOrChatModel : { chatModelOverride: optionsOrChatModel };
+  const pricing = loadPricing(o.stateRoot ? path.join(o.stateRoot, "pricing.json") : path.join(workspace, ".cursor", "cco", "pricing.json"), bundledPricingPath);
+  const models = readTierModels(workspace, o.stateRoot ? path.join(os.homedir(), ".cursor", "agents") : undefined);
+  const chatModel = o.chatModelOverride === undefined ? readLatestChatModel(workspace, o.workspaceStateDir) : o.chatModelOverride;
   const chatModelLabel = !chatModel ? "" : chatModel === "auto" ? "Auto" : chatModel;
   const stale = pricingIsStale(pricing);
   const warnings: string[] = [];

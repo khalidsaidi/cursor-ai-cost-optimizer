@@ -5,7 +5,8 @@
  * per-platform binaries shipped with the VS Code extension (`cco-hook-<platform> sessionStart`).
  * Unknown events are fail-open.
  */
-import { isMain } from "./lib/common.mjs";
+import { isMain, applyScopeArgs, workspacePaths } from "./lib/common.mjs";
+applyScopeArgs();
 import { pathToFileURL } from "node:url";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -58,7 +59,7 @@ function dedupeKeyFor(eventName, raw) {
 }
 
 function dedupeDir(workspace) {
-  return workspace ? path.join(workspace, ".cursor", "cco", "state", "dedupe") : path.join(os.tmpdir(), "cco-dedupe");
+  return workspace ? workspacePaths(workspace).dedupeDir : path.join(os.tmpdir(), "cco-dedupe");
 }
 
 function sleepMs(ms) {

@@ -4,7 +4,7 @@ const path = require('path');
 const vscode = require('vscode');
 
 // runTest.js points CCO_CURSOR_AGENT_BIN at a fake CLI; everything the extension writes is under the fixture's .cursor/.
-const COMMANDS = ['cco.installCursorAssets', 'cco.uninstallCursorAssets', 'cco.showMenu', 'cco.recommendTier', 'cco.insertOverrideFast', 'cco.insertOverrideBalanced', 'cco.insertOverrideDeep', 'cco.showOutputChannel', 'cco.collectDiagnostics'];
+const COMMANDS = ['cco.installCursorAssets', 'cco.uninstallCursorAssets', 'cco.togglePause', 'cco.showMenu', 'cco.recommendTier', 'cco.insertOverrideFast', 'cco.insertOverrideBalanced', 'cco.insertOverrideDeep', 'cco.showOutputChannel', 'cco.collectDiagnostics'];
 const CCO_RE = /cco-hook|\.cursor[\\/]cco[\\/]scripts[\\/]cco-/;
 const BINARY_FORM = /^"[^"]+[\\/]\.cursor[\\/]cco[\\/]bin[\\/]cco-hook(\.exe)?" \w+$/;
 const NODE_FORM = /^node \.cursor\/cco-hook\.mjs [A-Za-z]+$/;
@@ -51,7 +51,7 @@ describe('AI Cost Optimizer extension', () => {
     fs.writeFileSync(hooksPath, JSON.stringify({ version: 1, hooks: { afterFileEdit: [{ command: 'other-tool-hook' }] } }, null, 2));
     const before = fs.readdirSync(root).sort();
 
-    await vscode.commands.executeCommand('cco.installCursorAssets', { confirm: false });
+    await vscode.commands.executeCommand('cco.installCursorAssets', { confirm: false, scope: 'project' });
 
     const files = ['.cursor/hooks.json', '.cursor/cco-hook.mjs', '.cursor/cco/plugin-path.txt', '.cursor/cco/runtime.json', '.cursor/cco/extension-manifest.json', '.cursor/agents/cco-fast.md', '.cursor/agents/cco-balanced.md', '.cursor/agents/cco-deep.md', '.cursor/agents/cco-verifier.md', '.cursor/agents/cco-explore.md', '.cursor/rules/cco-routing.mdc'];
     for (const rel of files) {
@@ -103,7 +103,7 @@ describe('AI Cost Optimizer extension', () => {
     for (const [k, v] of Object.entries(proof.uninstallChecks)) assert.ok(v, k);
     // leave an installed state (without the foreign test hook) for the proof scripts
     fs.rmSync(hooksPath, { force: true });
-    await vscode.commands.executeCommand('cco.installCursorAssets', { confirm: false });
+    await vscode.commands.executeCommand('cco.installCursorAssets', { confirm: false, scope: 'project' });
     assert.ok(fs.existsSync(path.join(root, '.cursor', 'agents', 'cco-fast.md')));
   });
 

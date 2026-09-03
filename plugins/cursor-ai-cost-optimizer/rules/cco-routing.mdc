@@ -8,7 +8,7 @@ alwaysApply: true
 Goal: spend the least while meeting the quality this request needs. Savings come from delegation: each `cco-*` subagent runs on its own model (mapped once per account by `cco-init`; the CLI session context lists the mapping and prices).
 
 ## 0. Not set up in this project?
-If the workspace has no `.cursor/agents/cco-fast.md`, CCO is not enabled here: work normally, say nothing about CCO, and never run the setup yourself. (`/cco` explains how to enable it.)
+If the Task tool has no `cco-fast` subagent available, CCO is not enabled here: work normally, say nothing about CCO, and never run the setup yourself. (`/cco` explains how to enable it.)
 
 ## 1. Overrides
 `[cco:fast]`, `[cco:balanced]`, `[cco:deep]` force a tier; `[cco:auto]` restores default routing. Copy any override token into the delegated prompt verbatim.

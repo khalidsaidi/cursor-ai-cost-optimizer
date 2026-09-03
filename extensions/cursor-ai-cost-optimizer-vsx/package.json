@@ -3,7 +3,7 @@
   "displayName": "AI Cost Optimizer",
   "publisher": "khalidsaidi",
   "version": "0.2.0",
-  "description": "Routes each Cursor request to the cheapest sufficient model tier (fast/balanced/deep) via subagents and hooks. Sets up the AI Cost Optimizer plugin in your project's .cursor/ folder; ships a self-contained hook binary for machines without Node.js.",
+  "description": "Cuts your Cursor AI bill: routes each request to the cheapest model tier that can do it well, with quality guardrails. Sets up in Cursor's user-level config (nothing written into projects) or per project.",
   "license": "SEE LICENSE IN LICENSE",
   "pricing": "Free",
   "icon": "resources/icon.png",
@@ -56,12 +56,12 @@
       {
         "command": "cco.installCursorAssets",
         "category": "AI Cost Optimizer",
-        "title": "Set Up / Update in This Workspace"
+        "title": "Set Up / Update"
       },
       {
         "command": "cco.uninstallCursorAssets",
         "category": "AI Cost Optimizer",
-        "title": "Remove from This Workspace"
+        "title": "Remove"
       },
       {
         "command": "cco.recommendTier",
@@ -96,6 +96,11 @@
       {
         "command": "cco.showMenu",
         "title": "Open Status Menu",
+        "category": "AI Cost Optimizer"
+      },
+      {
+        "command": "cco.togglePause",
+        "title": "Pause / Resume in This Project",
         "category": "AI Cost Optimizer"
       }
     ],
@@ -165,7 +170,7 @@
           {
             "id": "cco.step.chat",
             "title": "Start a new chat and work normally",
-            "description": "Keep your usual chat model. Each routed task ends with one line like `[cco: FAST → composer-2.5 • 0.3x of your chat model • est. $0.02]`. Risky work is always sent to the strong tier.",
+            "description": "Keep your usual chat model. Each routed task ends with one line like `[cco: FAST \u2192 composer-2.5 \u2022 0.3x of your chat model \u2022 est. $0.02]`. Risky work is always sent to the strong tier.",
             "media": {
               "markdown": "media/walkthrough/step-init.md"
             }
@@ -198,7 +203,7 @@
     "package:universal": "node ./scripts/package-extension.mjs --no-binaries",
     "publish:openvsx": "node ./scripts/publish-openvsx.mjs",
     "test": "npm run test:unit && npm run test:integration",
-    "test:unit": "npm run compile && node --test test/unit/binary.test.js test/unit/install.test.js test/unit/pricing.test.js test/unit/scorer.test.js",
+    "test:unit": "npm run compile && node --test test/unit/binary.test.js test/unit/install.test.js test/unit/pricing.test.js test/unit/scorer.test.js test/unit/userScope.test.js",
     "test:integration": "npm run compile && xvfb-run -a node ./test/runTest.js",
     "test:cursor": "npm run compile && bash ./scripts/test-cursor.sh",
     "proof:ide-auth": "npm run compile && bash ./scripts/proof-ide-auth.sh",
