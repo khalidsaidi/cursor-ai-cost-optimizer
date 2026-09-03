@@ -15,7 +15,7 @@
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -193,7 +193,17 @@ async function main() {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+function isMain() {
+  // Windows-safe: argv[1] and import.meta.url differ in drive-letter case / separators there.
+  try {
+    const a = realpathSync.native(path.resolve(process.argv[1] || ""));
+    const b = realpathSync.native(fileURLToPath(import.meta.url));
+    return process.platform === "win32" ? a.toLowerCase() === b.toLowerCase() : a === b;
+  } catch {
+    return false;
+  }
+}
+if (isMain()) {
   main().catch((error) => {
     console.error(error);
     process.exit(1);
