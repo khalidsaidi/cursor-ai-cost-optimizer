@@ -79,6 +79,7 @@ jobs:
           bun-version: latest
       - run: npm ci
       - run: npm run sync:assets
+      - run: npm run lint
       - run: npm run compile
       - name: Compile the hook binary for ${{ matrix.target }} (native)
         run: node scripts/compile-binaries.mjs --target ${{ matrix.target }}

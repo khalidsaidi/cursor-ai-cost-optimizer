@@ -61,7 +61,8 @@
       {
         "command": "cco.uninstallCursorAssets",
         "category": "AI Cost Optimizer",
-        "title": "Remove"
+        "title": "Remove",
+        "enablement": "cco.mode != 'none'"
       },
       {
         "command": "cco.recommendTier",
@@ -101,12 +102,14 @@
       {
         "command": "cco.togglePause",
         "title": "Pause / Resume in This Project",
-        "category": "AI Cost Optimizer"
+        "category": "AI Cost Optimizer",
+        "enablement": "cco.mode != 'none'"
       },
       {
         "command": "cco.hooksOff",
         "title": "Turn Hooks Off Now",
-        "category": "AI Cost Optimizer"
+        "category": "AI Cost Optimizer",
+        "enablement": "cco.mode != 'none'"
       }
     ],
     "menus": {
@@ -214,15 +217,22 @@
     "proof:ide-auth": "npm run compile && bash ./scripts/proof-ide-auth.sh",
     "uat:video": "npm run compile && bash ./scripts/uat-video-runbook.sh",
     "proof:no-stone": "bash ./scripts/proof-no-stone-unturned.sh",
-    "vscode:uninstall": "node ./scripts/uninstall.js"
+    "vscode:uninstall": "node ./scripts/uninstall.js",
+    "lint": "eslint src",
+    "vscode:prepublish": "npm run lint && npm run compile"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.85.0",
+    "@vscode/l10n-dev": "^0.0.35",
     "@vscode/test-electron": "^3.1.0",
     "esbuild": "^0.25.9",
+    "eslint": "^9.39.5",
     "mocha": "^10.7.3",
     "postject": "^1.0.0-alpha.6",
-    "typescript": "^5.4.0"
-  }
+    "typescript": "^5.4.0",
+    "typescript-eslint": "^8.69.0"
+  },
+  "l10n": "./l10n"
 }

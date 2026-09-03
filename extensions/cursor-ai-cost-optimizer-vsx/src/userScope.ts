@@ -129,7 +129,7 @@ export interface UserInstallResult {
 }
 
 /** Idempotent: cco-init merges hook entries, rewrites the agents and the runtime plugin, keeps other state. */
-export async function installUser(opts: Options, stateRoot: string, workspace: string = os.homedir()): Promise<UserInstallResult> {
+export async function installUser(opts: Options, stateRoot: string, workspace: string = os.homedir(), signal?: AbortSignal): Promise<UserInstallResult> {
   const p = userPaths(stateRoot);
   fs.mkdirSync(p.root, { recursive: true });
   const hookMode = decideUserHookMode(opts);
@@ -144,7 +144,7 @@ export async function installUser(opts: Options, stateRoot: string, workspace: s
   } else {
     fs.rmSync(p.binDir, { recursive: true, force: true });
   }
-  const init = await runPluginScriptAsync(workspace, "cco-init.mjs", initArgs(stateRoot, workspace, [opts.probe ? "--probe" : "--no-probe", ...(hookCommand ? ["--hook-command", hookCommand] : [])]), opts, scopeEnv(stateRoot));
+  const init = await runPluginScriptAsync(workspace, "cco-init.mjs", initArgs(stateRoot, workspace, [opts.probe ? "--probe" : "--no-probe", ...(hookCommand ? ["--hook-command", hookCommand] : [])]), opts, scopeEnv(stateRoot), signal);
   if (!init.ran) {
     throw new Error(init.error || "setup could not run");
   }

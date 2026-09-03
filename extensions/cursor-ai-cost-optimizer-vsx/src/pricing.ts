@@ -9,6 +9,11 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 
+/** Text of an unknown value: strings pass through, everything else becomes "". */
+function asText(value: unknown): string {
+  return typeof value === "string" ? value : typeof value === "number" ? String(value) : "";
+}
+
 export interface PriceRow {
   name: string;
   provider?: string | null;
@@ -54,7 +59,7 @@ function readJsonOr<T>(filePath: string, fallback: T): T {
 }
 
 export function normalizeName(text: unknown): string {
-  return String(text ?? "")
+  return asText(text)
     .toLowerCase()
     .replace(/\(fast mode\)|\(fast\)/g, " fast ")
     .replace(/[^a-z0-9.]+/g, " ")
@@ -71,14 +76,14 @@ function tokenKey(tokens: string[]): string {
   return [...tokens].sort().join(" ");
 }
 export function modelIdTokens(modelId: unknown): { tokens: string[]; fast: boolean } {
-  const id = String(modelId ?? "").toLowerCase().replace(/\[.*$/, "");
+  const id = asText(modelId).toLowerCase().replace(/\[.*$/, "");
   const parts = id.split(/[-_\s]+/).filter(Boolean);
   const fast = parts.includes("fast");
   const tokens = parts.filter((t) => !PARAM_TOKENS.has(t) && !VENDOR_TOKENS.has(t));
   return { tokens, fast };
 }
 function labelTokens(label: unknown): { tokens: string[]; fast: boolean } {
-  return { tokens: tokenSet(label), fast: /\bfast\b/i.test(String(label ?? "")) };
+  return { tokens: tokenSet(label), fast: /\bfast\b/i.test(asText(label)) };
 }
 function findRow(rows: PriceRow[], tokens: string[], wantFast: boolean): { row: PriceRow; fastRowUsed: boolean } | null {
   const key = tokenKey(tokens);
@@ -112,8 +117,8 @@ export function loadPricing(workspacePricingPath: string | null, bundledPricingP
 }
 
 export function resolveModelPrice(modelId: unknown, pricing: PricingTable | null, options: { overrides?: Record<string, Partial<PriceRow>>; label?: string } = {}): ResolvedPrice {
-  const id = String(modelId ?? "").trim();
-  const rows = Array.isArray(pricing?.models) ? pricing!.models : [];
+  const id = asText(modelId).trim();
+  const rows = Array.isArray(pricing?.models) ? pricing.models : [];
   const overrides = options.overrides || {};
   if (overrides[id]) {
     const o = overrides[id];
@@ -143,7 +148,7 @@ export function resolveModelPrice(modelId: unknown, pricing: PricingTable | null
 
 /** Same blend the plugin uses to compare models (mostly cached input, a little output). */
 export function blendedRatePerMillion(price: ResolvedPrice | null): number | null {
-  if (!price || !Number.isFinite(price.input as number)) {
+  if (!price || !Number.isFinite(price.input)) {
     return null;
   }
   const inputShare = 25 / 26;
@@ -242,9 +247,9 @@ export function readSavings(workspace: string, stateDir?: string): Savings {
     try {
       const d = JSON.parse(line) as { estimateUsd?: number | null; chatEstimateUsd?: number | null };
       out.decisions += 1;
-      if (Number.isFinite(d.estimateUsd as number)) {
+      if (Number.isFinite(d.estimateUsd)) {
         out.estimatedUsd += d.estimateUsd as number;
-        if (Number.isFinite(d.chatEstimateUsd as number)) {
+        if (Number.isFinite(d.chatEstimateUsd)) {
           out.savedUsd += Math.max(0, (d.chatEstimateUsd as number) - (d.estimateUsd as number));
         }
       }
@@ -302,7 +307,7 @@ export function costStatement(workspace: string, bundledPricingPath: string, opt
       const m = rateMultiplier(model, chatModel, pricing);
       return { tier, model, multiplier: m, price, text: m === null ? `${label} → ${model} • rate unknown` : `${label} → ${model} • ${formatMultiplier(m)} of ${chatModelLabel} (Rate is counted at ${formatMultiplier(m)}.)` };
     }
-    return { tier, model, multiplier: null, price, text: Number.isFinite(price.input as number) ? `${label} → ${model} • $${price.input}/M in, $${price.output}/M out` : `${label} → ${model} • price unknown` };
+    return { tier, model, multiplier: null, price, text: Number.isFinite(price.input) ? `${label} → ${model} • $${price.input}/M in, $${price.output}/M out` : `${label} → ${model} • price unknown` };
   });
   return { chatModel, chatModelLabel, pricing, stale, lines, warnings: [...new Set(warnings)] };
 }

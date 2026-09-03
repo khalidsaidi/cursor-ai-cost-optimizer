@@ -306,7 +306,7 @@ export function runPluginScript(workspace: string, script: "cco-init.mjs" | "cco
 }
 
 /** Same as runPluginScript, without blocking the extension host (Copilot rule: never block activation or the UI thread). */
-export function runPluginScriptAsync(workspace: string, script: "cco-init.mjs" | "cco-discover-models.mjs", args: string[], opts: Options, extraEnv: Record<string, string> = {}): Promise<RunResult> {
+export function runPluginScriptAsync(workspace: string, script: "cco-init.mjs" | "cco-discover-models.mjs", args: string[], opts: Options, extraEnv: Record<string, string> = {}, signal?: AbortSignal): Promise<RunResult> {
   const r = resolvePluginRunner(script, args, opts, extraEnv);
   if (r.runtime === "none") {
     return Promise.resolve({ ran: false, runtime: "none", command: null, status: null, stdout: "", error: r.error ?? null });
@@ -321,6 +321,14 @@ export function runPluginScriptAsync(workspace: string, script: "cco-init.mjs" |
         child.kill();
       }
     }, opts.timeoutMs ?? 180_000);
+    if (signal) {
+      const onAbort = () => child.kill();
+      if (signal.aborted) {
+        onAbort();
+      } else {
+        signal.addEventListener("abort", onAbort, { once: true });
+      }
+    }
     child.stdout?.on("data", (d) => (stdout += String(d)));
     child.stderr?.on("data", (d) => (stderr += String(d)));
     const finish = (status: number | null, err?: Error) => {
@@ -329,7 +337,7 @@ export function runPluginScriptAsync(workspace: string, script: "cco-init.mjs" |
       }
       done = true;
       clearTimeout(timer);
-      resolve({ ran: true, runtime: r.runtime, command: `${r.command} ${r.argv.join(" ")}`, status, stdout: stdout.slice(-4000), error: status === 0 ? null : String(err?.message || stderr || `exit ${status}`).slice(0, 800) });
+      resolve({ ran: true, runtime: r.runtime, command: `${r.command} ${r.argv.join(" ")}`, status, stdout: stdout.slice(-4000), error: status === 0 ? null : signal?.aborted ? "cancelled" : String(err?.message || stderr || `exit ${status}`).slice(0, 800) });
     };
     child.on("error", (err) => finish(null, err));
     child.on("close", (code) => finish(code));
@@ -537,12 +545,12 @@ function writeExtensionAssets(workspace: string, pluginRoot: string): string[] {
  * Set up a workspace: the plugin's cco-init (identical files to the marketplace plugin), then the extension's
  * additions (rule/skills/commands; binary + binary-form hook commands when in binary mode) and a manifest.
  */
-export async function installWorkspace(workspace: string, opts: Options): Promise<InstallResult> {
+export async function installWorkspace(workspace: string, opts: Options, signal?: AbortSignal): Promise<InstallResult> {
   const p = workspacePaths(workspace);
   const hookMode = decideHookMode(opts);
   const legacyRemoved = cleanupLegacyWorkspace(workspace);
 
-  const init = await runPluginScriptAsync(workspace, "cco-init.mjs", ["--workspace", workspace, opts.probe ? "--probe" : "--no-probe"], opts);
+  const init = await runPluginScriptAsync(workspace, "cco-init.mjs", ["--workspace", workspace, opts.probe ? "--probe" : "--no-probe"], opts, {}, signal);
   if (!init.ran) {
     throw new Error(init.error || "setup could not run");
   }
