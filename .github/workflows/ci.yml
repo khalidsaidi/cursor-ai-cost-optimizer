@@ -29,7 +29,8 @@ jobs:
       - name: Validate marketplace layout
         run: node scripts/validate-template.mjs
       - name: Unit tests (no network, no Cursor account)
-        run: node --test plugins/cursor-ai-cost-optimizer/test/
+        shell: bash
+        run: node --test plugins/cursor-ai-cost-optimizer/test/*.test.mjs
       - name: Project-local install + hook smoke through the committed shim (the exact files a user gets)
         shell: bash
         run: |

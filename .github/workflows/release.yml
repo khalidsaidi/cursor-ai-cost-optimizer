@@ -12,7 +12,8 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 20 }
       - run: node scripts/validate-template.mjs
-      - run: node --test plugins/cursor-ai-cost-optimizer/test/
+      - run: node --test plugins/cursor-ai-cost-optimizer/test/*.test.mjs
+        shell: bash
       - name: Version consistency
         run: |
           set -euo pipefail

@@ -18,7 +18,8 @@ export function pluginAgentPath(name) {
 }
 
 export function renderWorkspaceAgent(name, modelId) {
-  const source = readTextSafe(pluginAgentPath(name));
+  // Templates may be checked out with CRLF on Windows (git autocrlf); normalize before parsing the frontmatter.
+  const source = (readTextSafe(pluginAgentPath(name)) || "").replace(/\r\n/g, "\n");
   if (!source) {
     return null;
   }

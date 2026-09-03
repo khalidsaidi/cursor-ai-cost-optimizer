@@ -55,7 +55,7 @@ Reports: `.ai/cco/e2e-real-report.md`, `.ai/cco/benchmark-report.md`.
 
 ```bash
 node scripts/validate-template.mjs
-node --test plugins/cursor-ai-cost-optimizer/test/
+node --test plugins/cursor-ai-cost-optimizer/test/*.test.mjs
 ```
 
 ## Platform coverage
