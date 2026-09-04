@@ -73,8 +73,8 @@ The extension ships one VSIX per target: Linux x64, Linux ARM64, Windows x64, Wi
 ## Live runs on real Cursor
 
 - **macOS**: the `Live Cursor on macOS` workflow (label a PR `live-macos`, or dispatch it) installs the real Cursor CLI on a macOS runner with a `CURSOR_API_KEY` secret, runs the six usage-priced end-to-end scenarios and a user-scope session (hooks in `~/.cursor`, nothing in the repo). Last run: 6/6 passed, hooks fired.
-- **Windows**: native Windows Cursor, installed from the Windows x64 VSIX into a throwaway profile and driven through the real command palette (`scripts` in the extension's proof runbook). Verified setup, hooks, plugin path after reload, and delegation.
-- **Older Cursor versions**: extracted Linux builds run under WSLg with the same flow.
+- **Windows**: native Windows Cursor, installed from the Windows x64 VSIX into a throwaway profile and driven through the real command palette by a PowerShell harness. Verified setup, hooks, plugin path after reload, and delegation.
+- **Older Cursor versions**: `extensions/cursor-ai-cost-optimizer-vsx/scripts/proof-cursor-linux.sh <version> <AppImage url>` runs an extracted Linux build under WSLg or any X11 display with the Everywhere setup, submits an edit task through Cursor's own `prompt` deeplink, and reads Cursor's hooks log. Verified on 3.13.25 and 3.15.19 (the oldest supported build and the one before the current line): the routing rule loaded through `workspaceOpen` plugin paths, the chat model's first action was a `Task` call to `cco-fast`, the subagent ran on composer-2.5, `subagentStop` reported completed, and the footer read `[cco: FAST → composer-2.5 …]`. 3.16.29 and 3.17.x passed the same flow earlier.
 
 ## Marketplace readiness
 
