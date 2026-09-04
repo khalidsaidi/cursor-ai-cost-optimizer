@@ -137,7 +137,19 @@ async function main() {
   const workspace = workspaceFromPayload(payload);
   const paths = workspace ? workspacePaths(workspace) : null;
   try {
-    if (String(payload.tool_name || "") !== "Task" || !workspace || !isEnabled(workspace).enabled) {
+    const enabled = workspace ? isEnabled(workspace) : { enabled: false, reason: "no_workspace" };
+    if (String(payload.tool_name || "") !== "Task" || !workspace || !enabled.enabled) {
+      // Paused in this project: the routing rule and the cco-* subagents are still loaded (they are Cursor's,
+      // not per-project), so a delegation must be turned back into plain in-chat work here.
+      const requested = String(payload.tool_input?.subagent_type || "");
+      if (enabled.reason === "workspace_opt_out" && /^cco-/.test(requested)) {
+        emit({
+          permission: "deny",
+          agent_message: "AI Cost Optimizer is paused in this project: do this task directly in this chat (no cco-* delegation) and do not add a [cco: …] footer.",
+          user_message: "CCO: paused in this project; running in chat."
+        });
+        return;
+      }
       emit({ permission: "allow" });
       return;
     }

@@ -154,7 +154,7 @@ export function activate(context: vscode.ExtensionContext) {
     } else {
       md.appendMarkdown(`Not set up yet. [Set up](command:cco.installCursorAssets)\n`);
     }
-    status.text = warn ? "$(warning) AI Cost" : c.mode === "none" ? "$(zap) AI Cost" : c.enabled ? "$(zap) AI Cost" : `$(zap) ${vscode.l10n.t("AI Cost: paused")}`;
+    status.text = warn ? "$(warning) AI Cost" : c.mode === "none" ? `$(zap) ${vscode.l10n.t("AI Cost: set up")}` : c.enabled ? "$(zap) AI Cost" : `$(zap) ${vscode.l10n.t("AI Cost: paused")}`;
     status.tooltip = md;
     status.show();
     // context keys drive command enablement (package.json "enablement"), like the first-party extensions

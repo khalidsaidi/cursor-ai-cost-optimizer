@@ -506,3 +506,20 @@ test("discovery stops probing on an account-level failure and keeps the best can
     assert.notEqual(runtime.profiles[tier].model, "inherit", `${tier} must get a real model`);
   }
 });
+
+test("paused project: a cco-* delegation is turned back into in-chat work and the session is told so", () => {
+  const ws = readyWorkspace();
+  fs.mkdirSync(path.join(ws, ".cursor"), { recursive: true });
+  fs.writeFileSync(path.join(ws, ".cursor", "cco.json"), JSON.stringify({ enabled: false }));
+  const guard = runHook("cco-task-guard.mjs", {
+    hook_event_name: "preToolUse", conversation_id: "p1", tool_name: "Task",
+    tool_input: { subagent_type: "cco-fast", prompt: "CCO-SCORES: complexity=1 risk=1 breadth=1 uncertainty=0 latency=0\nAdd x" }, workspace_roots: [ws]
+  });
+  assert.equal(guard.permission, "deny");
+  assert.match(guard.agent_message, /paused/);
+  const other = runHook("cco-task-guard.mjs", { hook_event_name: "preToolUse", conversation_id: "p2", tool_name: "Task", tool_input: { subagent_type: "explore", prompt: "look" }, workspace_roots: [ws] });
+  assert.equal(other.permission, "allow", "non-CCO subagents are not CCO's business while paused");
+  const start = runHook("cco-session-start.mjs", { hook_event_name: "sessionStart", conversation_id: "p3", workspace_roots: [ws] });
+  assert.equal(start.cco, "workspace_opt_out");
+  assert.match(start.additional_context, /paused/);
+});

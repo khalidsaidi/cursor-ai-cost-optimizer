@@ -44,5 +44,6 @@
   "$(book) Getting started": "$(book) Getting started",
   "AI Cost Optimizer: recommend failed: {0}": "AI Cost Optimizer: recommend failed: {0}",
   "AI Cost Optimizer diagnostics copied to the clipboard.": "AI Cost Optimizer diagnostics copied to the clipboard.",
-  "AI Cost Optimizer: diagnostics failed: {0}": "AI Cost Optimizer: diagnostics failed: {0}"
-}
+  "AI Cost Optimizer: diagnostics failed: {0}": "AI Cost Optimizer: diagnostics failed: {0}",
+  "AI Cost: set up": "AI Cost: set up"
+}\n

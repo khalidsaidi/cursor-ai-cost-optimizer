@@ -149,7 +149,12 @@ async function main() {
   }
   const enabled = isEnabled(workspace);
   if (!enabled.enabled) {
-    emit({ continue: true, cco: enabled.reason });
+    const output = { continue: true, cco: enabled.reason };
+    if (enabled.reason === "workspace_opt_out") {
+      // The rule and cco-* subagents are still loaded; tell the session to work as if CCO were not there.
+      output.additional_context = "AI Cost Optimizer is paused in this project: work normally in this chat, do not delegate to cco-* subagents, and do not add a [cco: …] footer.";
+    }
+    emit(output);
     return;
   }
   const paths = workspacePaths(workspace);
