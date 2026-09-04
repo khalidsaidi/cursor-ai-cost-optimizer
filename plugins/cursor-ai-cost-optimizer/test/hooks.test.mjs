@@ -474,3 +474,35 @@ test("cli version is cached per binary identity (no CLI startup on every chat)",
     if (prev === undefined) delete process.env.CCO_CURSOR_AGENT_BIN; else process.env.CCO_CURSOR_AGENT_BIN = prev;
   }
 });
+
+test("discovery without a usable CLI still maps real tier models (never all-inherit for IDE-only users)", () => {
+  const ws = tmpWorkspace();
+  let probes = 0;
+  const probeFn = () => {
+    probes += 1;
+    return { runnable: false, reason: "auth_required" };
+  };
+  // CLI listing failed (not installed / not logged in) and the extension asked for probing.
+  const runtime = discover({ workspace: ws, probe: true, writeAgents: false, config, models: { ok: false, error: "exit 1: Authentication required" }, probeFn });
+  assert.equal(probes, 0, "no probe can succeed without a CLI; none should run");
+  for (const tier of ["fast", "balanced", "deep"]) {
+    assert.notEqual(runtime.profiles[tier].model, "inherit", `${tier} must get a real model`);
+    assert.equal(runtime.profiles[tier].source, "ranked_unprobed");
+  }
+  assert.match(JSON.stringify(runtime), /not verified/);
+});
+
+test("discovery stops probing on an account-level failure and keeps the best candidates unverified", () => {
+  const ws = tmpWorkspace();
+  const models = ["composer-2.5", "claude-sonnet-5-thinking-high", "claude-opus-5-thinking-high", "gpt-5.6-sol-high"].map((id) => ({ id, label: id }));
+  let probes = 0;
+  const probeFn = () => {
+    probes += 1;
+    return { runnable: false, reason: "auth_required" };
+  };
+  const runtime = discover({ workspace: ws, probe: true, writeAgents: false, config, models: { ok: true, models, current: "auto", defaultModel: "auto" }, probeFn });
+  assert.equal(probes, 1, "the first account-level failure ends probing");
+  for (const tier of ["fast", "balanced", "deep"]) {
+    assert.notEqual(runtime.profiles[tier].model, "inherit", `${tier} must get a real model`);
+  }
+});

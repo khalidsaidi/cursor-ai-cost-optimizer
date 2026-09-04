@@ -50,6 +50,12 @@ export function discover({ workspace, probe, writeAgents, config: configOverride
     notes.push(`Cursor CLI unavailable (${listing.error}); using the bundled model catalogue. Install the CLI (https://cursor.com/install) and re-run /cco-init to map from your account's real model list.`);
     listing = { ok: true, models: fallback, current: null, defaultModel: null, fallback: true };
   }
+  // Probing runs through the CLI: with no usable CLI every probe would fail for reasons that have nothing to do
+  // with the model, and the tiers would end up on "inherit" (no savings at all). Map unverified instead.
+  if (probe && listing.fallback) {
+    probe = false;
+    notes.push("tier models were not verified on this account (no usable Cursor CLI); Cursor applies the account's own access rules when a subagent runs");
+  }
   const available = listing.models || [];
   const availableSet = new Set(available.map((m) => m.id));
   const overrides = normalizeOverrides(config);
@@ -58,7 +64,12 @@ export function discover({ workspace, probe, writeAgents, config: configOverride
 
   const probes = {};
   const snapshot = probe ? snapshotCliModel() : null;
+  // A failure that is about the CLI or the account, not the model: no further probe can succeed either.
+  const CLI_LEVEL = new Set(["auth_required", "workspace_trust"]);
   const probeOnce = (id) => {
+    if (!probe) {
+      return { runnable: true, reason: "unprobed" };
+    }
     if (!probes[id]) {
       let result = probeFn(id, workspace);
       // Transient failures (timeouts, execution errors during CLI updates or load) get one retry.
@@ -67,6 +78,10 @@ export function discover({ workspace, probe, writeAgents, config: configOverride
         result = retry.runnable ? retry : { ...retry, retried: true };
       }
       probes[id] = result;
+      if (!result.runnable && CLI_LEVEL.has(result.reason)) {
+        probe = false;
+        notes.push(`probing stopped (${result.reason}): tier models were not verified on this account; Cursor applies the account's own access rules when a subagent runs`);
+      }
     }
     return probes[id];
   };
@@ -87,7 +102,7 @@ export function discover({ workspace, probe, writeAgents, config: configOverride
         }
       } else {
         const result = probe ? probeOnce(requested) : null;
-        if (result && result.runnable === false) {
+        if (result && result.runnable === false && !CLI_LEVEL.has(result.reason)) {
           notes.push(`override ${tier}=${requested} ignored: probe failed (${result.reason})`);
           if (policy === "strict") {
             source = "override_strict_probe_failed";
@@ -108,7 +123,8 @@ export function discover({ workspace, probe, writeAgents, config: configOverride
           }
           tried += 1;
           const result = probeOnce(candidate.id);
-          if (!result.runnable) {
+          // A CLI/account-level failure says nothing about this model: keep it, unverified.
+          if (!result.runnable && !CLI_LEVEL.has(result.reason)) {
             continue;
           }
         }
