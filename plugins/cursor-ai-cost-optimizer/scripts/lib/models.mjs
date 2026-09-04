@@ -49,9 +49,46 @@ export function listModels() {
   return { ok: parsed.models.length > 0, error: parsed.models.length ? null : "no models parsed", ...parsed };
 }
 
+/** Where the CLI binary lives (first PATH hit), so its version can be cached by file identity. */
+function cliBinaryStat() {
+  const bin = cursorAgentBinary();
+  const candidates = path.isAbsolute(bin)
+    ? [bin]
+    : String(process.env.PATH || "").split(path.delimiter).filter(Boolean).flatMap((dir) =>
+        process.platform === "win32" ? [path.join(dir, `${bin}.cmd`), path.join(dir, `${bin}.exe`), path.join(dir, bin)] : [path.join(dir, bin)]
+      );
+  for (const candidate of candidates) {
+    try {
+      const st = fs.statSync(candidate);
+      return { file: candidate, key: `${candidate}|${st.size}|${Math.floor(st.mtimeMs)}` };
+    } catch {}
+  }
+  return null;
+}
+
+const CLI_VERSION_CACHE = path.join(os.tmpdir(), `cco-cli-version-${os.userInfo().uid ?? os.userInfo().username}.json`);
+
+/**
+ * `cursor-agent --version` costs ~0.6 s of CLI startup; hooks call this on every chat, so the answer is cached
+ * per binary identity (path + size + mtime) and only re-run when the binary changes.
+ */
 export function cliVersion() {
+  const stat = cliBinaryStat();
+  if (!stat) {
+    return null;
+  }
+  const cached = readJsonSafe(CLI_VERSION_CACHE);
+  if (cached && cached.key === stat.key && cached.version) {
+    return cached.version;
+  }
   const res = run(cursorAgentBinary(), ["--version"], { timeout: 15_000 });
-  return String(res.stdout || "").trim() || null;
+  const version = String(res.stdout || "").trim() || null;
+  if (version) {
+    try {
+      fs.writeFileSync(CLI_VERSION_CACHE, JSON.stringify({ key: stat.key, version }), "utf8");
+    } catch {}
+  }
+  return version;
 }
 
 /** Classify a model id by naming conventions into effort/speed attributes. */

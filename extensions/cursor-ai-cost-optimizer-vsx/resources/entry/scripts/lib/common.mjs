@@ -133,7 +133,18 @@ export function workspaceFromPayload(payload) {
   if (Array.isArray(roots) && typeof roots[0] === "string" && roots[0]) {
     return roots[0];
   }
+  if (process.env.CCO_WORKSPACE) {
+    return path.resolve(process.env.CCO_WORKSPACE);
+  }
+  // Cursor sent the roots and there are none (empty window): nothing to route for.
+  if (Array.isArray(roots)) {
+    return null;
+  }
   const cwd = process.cwd();
+  // User-level hooks run with cwd ~/.cursor; that is never a workspace either.
+  if (cwd === userCursorDir() || cwd.startsWith(userCursorDir() + path.sep)) {
+    return null;
+  }
   // When Cursor runs plugin hooks, cwd is the plugin directory; never treat it as a workspace.
   if (cwd.startsWith(PLUGIN_ROOT)) {
     return null;
@@ -322,5 +333,14 @@ export function applyScopeArgs(argv = process.argv.slice(2)) {
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === "--scope" && argv[i + 1]) process.env.CCO_SCOPE = argv[i + 1];
     if (argv[i] === "--state-root" && argv[i + 1]) process.env.CCO_STATE_ROOT = argv[i + 1];
+    if (argv[i] === "--workspace" && argv[i + 1]) process.env.CCO_WORKSPACE = argv[i + 1];
   }
+}
+
+/** The scope arguments to hand to a child hook process so it resolves the same state as this one. */
+export function scopeArgs() {
+  const out = [];
+  if (process.env.CCO_SCOPE) out.push("--scope", process.env.CCO_SCOPE);
+  if (process.env.CCO_STATE_ROOT) out.push("--state-root", process.env.CCO_STATE_ROOT);
+  return out;
 }

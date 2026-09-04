@@ -23,7 +23,8 @@ const SCRIPTS = {
   postToolUse: "cco-task-result.mjs",
   subagentStop: "cco-task-result.mjs",
   beforeShellExecution: "cco-shell-guard.mjs",
-  sessionEnd: "cco-session-end.mjs"
+  sessionEnd: "cco-session-end.mjs",
+  refresh: "cco-refresh-background.mjs" // internal: detached price/model refresh scheduled by sessionStart/workspaceOpen
 };
 
 async function readStdin() {
@@ -166,7 +167,8 @@ async function dispatchWith(eventName, raw) {
 }
 
 async function main() {
-  const raw = await readStdin();
+  // The internal refresh worker is argv-driven (--workspace) and is started with no stdin.
+  const raw = event === "refresh" ? "" : await readStdin();
   process.stdout.write(await dispatchWith(event, raw));
 }
 

@@ -111,7 +111,8 @@ for (const line of mapMatch[1].split("\n")) {
 const [taskScript, gateScript] = [taskMatch[1], taskMatch[2]];
 // Setup commands the binary exposes besides hook events (machines without Node run these):
 //   cco-hook init --workspace <ws> [--no-probe|--uninstall|--disable|--enable] | discover ... | install-hooks ...
-const COMMANDS = { init: "cco-init.mjs", discover: "cco-discover-models.mjs", "install-hooks": "cco-install-hooks.mjs" };
+// `refresh` is the argv-driven background worker sessionStart/workspaceOpen start (no stdin).
+const COMMANDS = { init: "cco-init.mjs", discover: "cco-discover-models.mjs", "install-hooks": "cco-install-hooks.mjs", refresh: "cco-refresh-background.mjs" };
 const scriptFiles = [...new Set([...Object.values(scriptsMap).filter(Boolean), taskScript, gateScript, ...Object.values(COMMANDS)])].sort();
 for (const f of scriptFiles) {
   if (!fs.existsSync(path.join(pluginCopy, "scripts", f))) {

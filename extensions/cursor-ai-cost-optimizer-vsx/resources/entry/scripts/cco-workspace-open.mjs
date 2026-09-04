@@ -30,8 +30,9 @@ async function main() {
   try {
     ensureDir(paths.stateDir);
     const config = loadConfig(workspace);
-    const pricing = await refreshPricingIfStale({ paths, config });
-    const discovery = refreshDiscoveryIfStale({ workspace, paths, config });
+    // Cursor waits for pluginPaths before the rule is registered: hand them back at once and refresh in the background.
+    const pricing = await refreshPricingIfStale({ paths, config, background: true, workspace });
+    const discovery = refreshDiscoveryIfStale({ workspace, paths, config, background: true });
     hookLog(paths, { event: "workspaceOpen", pricing, discovery, pluginPaths: output.pluginPaths || null });
   } catch (error) {
     hookLog(paths, { event: "workspaceOpen", error: String(error?.message || error) });

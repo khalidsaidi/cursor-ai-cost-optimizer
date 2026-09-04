@@ -19,8 +19,12 @@ import {
   hookLog,
   emit,
   nowIso,
-  asNumber, isMain, applyScopeArgs } from "./lib/common.mjs";
+  asNumber, isMain, applyScopeArgs, scopeArgs } from "./lib/common.mjs";
 applyScopeArgs();
+import fs from "node:fs";
+import path from "node:path";
+import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { loadConfig } from "./lib/config.mjs";
 import { refreshPricing } from "./cco-refresh-pricing.mjs";
 import { discover } from "./cco-discover-models.mjs";
@@ -30,7 +34,42 @@ import { createSession, pruneSessions, normalizeModelId } from "./lib/session.mj
 import { writeWorkspaceAgents, workspaceHasAgents } from "./lib/agents.mjs";
 import { TIERS } from "./lib/common.mjs";
 
-export async function refreshPricingIfStale({ paths, config }) {
+const REFRESH_LOCK_MINUTES = 10;
+
+function refreshLockPath(paths) {
+  return path.join(path.dirname(paths.pricingPath), "refresh.lock");
+}
+
+/**
+ * Chat-start hooks must never wait on the network or on CLI startup: when the price table or the model map is
+ * stale, a detached `cco-hook refresh` process (same runtime: node + dispatcher, or the compiled binary) does
+ * the work and the current session keeps the cached data. A lock file keeps concurrent sessions from starting
+ * more than one refresh per REFRESH_LOCK_MINUTES.
+ */
+export function scheduleBackgroundRefresh({ workspace, paths }) {
+  const lock = refreshLockPath(paths);
+  try {
+    const st = fs.statSync(lock);
+    if (Date.now() - st.mtimeMs < REFRESH_LOCK_MINUTES * 60_000) {
+      return { action: "scheduled", already: true };
+    }
+  } catch {}
+  try {
+    ensureDir(path.dirname(lock));
+    fs.writeFileSync(lock, nowIso(), "utf8");
+    const bundled = Boolean(process.env.CCO_HOOK_MAIN);
+    const argv = bundled ? [] : [path.join(path.dirname(fileURLToPath(import.meta.url)), "cco-hook.mjs")];
+    argv.push("refresh", ...scopeArgs(), "--workspace", workspace);
+    const child = spawn(process.execPath, argv, { detached: true, stdio: "ignore", windowsHide: true, env: process.env });
+    child.on("error", () => {});
+    child.unref();
+    return { action: "scheduled", pid: child.pid ?? null };
+  } catch (error) {
+    return { action: "failed", error: String(error?.message || error).slice(0, 200) };
+  }
+}
+
+export async function refreshPricingIfStale({ paths, config, background = false, workspace = null }) {
   const pricingCfg = config?.pricing || {};
   if (pricingCfg.enabled === false) {
     return { action: "disabled" };
@@ -41,6 +80,9 @@ export async function refreshPricingIfStale({ paths, config }) {
   if (existing && Array.isArray(existing.models) && existing.models.length >= 10 && age < refreshHours) {
     return { action: "cached", ageHours: Number(age.toFixed(2)) };
   }
+  if (background) {
+    return { ...scheduleBackgroundRefresh({ workspace, paths }), ageHours: Number.isFinite(age) ? Number(age.toFixed(2)) : null };
+  }
   try {
     const payload = await refreshPricing({ sourceUrl: pricingCfg.sourceUrl });
     writeJson(paths.pricingPath, payload);
@@ -50,7 +92,7 @@ export async function refreshPricingIfStale({ paths, config }) {
   }
 }
 
-export function refreshDiscoveryIfStale({ workspace, paths, config }) {
+export function refreshDiscoveryIfStale({ workspace, paths, config, background = false }) {
   const discoveryCfg = config?.discovery || {};
   if (discoveryCfg.auto === false) {
     return { action: "disabled" };
@@ -74,6 +116,10 @@ export function refreshDiscoveryIfStale({ workspace, paths, config }) {
       }).filter((a) => a.action === "written").map((a) => a.name);
     }
     return { action: "cached", ageHours: Number(age.toFixed(2)), agentsWritten: agents };
+  }
+  if (background && existing && existing.schemaVersion === 2) {
+    // A stale-but-usable map serves this session; the detached refresh replaces it for the next one.
+    return scheduleBackgroundRefresh({ workspace, paths });
   }
   try {
     const runtime = discover({
@@ -110,8 +156,8 @@ async function main() {
   ensureDir(paths.stateDir);
   const config = loadConfig(workspace);
 
-  const pricing = await refreshPricingIfStale({ paths, config });
-  const discovery = refreshDiscoveryIfStale({ workspace, paths, config });
+  const pricing = await refreshPricingIfStale({ paths, config, background: true, workspace });
+  const discovery = refreshDiscoveryIfStale({ workspace, paths, config, background: true });
   const sessionModel = payload.model ? normalizeModelId(payload.model) : null;
   let sessionState = { created: false };
   try {

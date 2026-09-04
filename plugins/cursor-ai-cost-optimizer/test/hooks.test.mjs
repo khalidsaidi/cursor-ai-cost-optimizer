@@ -415,3 +415,62 @@ test("user scope: nothing in the repo; ~/.cursor hooks + agents, private state r
   fs.rmSync(home, { recursive: true, force: true });
   fs.rmSync(ws, { recursive: true, force: true });
 });
+
+test("session start never waits on the network: a stale price table is refreshed by a detached worker", () => {
+  const ws = readyWorkspace();
+  const paths = workspacePaths(ws);
+  fs.mkdirSync(path.dirname(paths.pricingPath), { recursive: true });
+  const bundled = JSON.parse(fs.readFileSync(path.join(here, "..", "config", "pricing.json"), "utf8"));
+  fs.writeFileSync(paths.pricingPath, JSON.stringify({ ...bundled, fetchedAt: "2020-01-01T00:00:00.000Z" }));
+  fs.mkdirSync(path.join(ws, ".cursor"), { recursive: true });
+  // Connection refused locally: the worker fails fast, so the test can watch it finish.
+  fs.writeFileSync(path.join(ws, ".cursor", "cco.json"), JSON.stringify({ pricing: { sourceUrl: "http://127.0.0.1:9/pricing.md" }, discovery: { auto: false } }));
+  const started = Date.now();
+  const out = runHook("cco-session-start.mjs", { hook_event_name: "sessionStart", conversation_id: "bg-1", workspace_roots: [ws] });
+  const elapsed = Date.now() - started;
+  assert.equal(out.continue, true);
+  assert.equal(out.cco.pricing, "scheduled");
+  assert.ok(elapsed < 3000, `sessionStart took ${elapsed} ms with a stale price table`);
+  const lock = path.join(path.dirname(paths.pricingPath), "refresh.lock");
+  const again = runHook("cco-session-start.mjs", { hook_event_name: "sessionStart", conversation_id: "bg-2", workspace_roots: [ws] });
+  assert.equal(again.cco.pricing, "scheduled");
+  // The detached worker runs, logs its outcome, and clears the lock.
+  const deadline = Date.now() + 15_000;
+  while (fs.existsSync(lock) && Date.now() < deadline) {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 200);
+  }
+  assert.equal(fs.existsSync(lock), false, "refresh worker should clear the lock");
+  const log = fs.readFileSync(paths.hooksLogPath, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
+  const refresh = log.find((r) => r.event === "refresh");
+  assert.ok(refresh, "refresh worker should log its run");
+  assert.equal(refresh.pricing.action, "failed");
+  assert.equal(refresh.pricing.keptExisting, true);
+});
+
+test("session start ignores an empty window (workspace_roots present but empty)", () => {
+  const out = runHook("cco-session-start.mjs", { hook_event_name: "sessionStart", conversation_id: "empty-1", workspace_roots: [] });
+  assert.equal(out.continue, true);
+  assert.equal(out.cco, "no workspace root in payload");
+  assert.equal(out.additional_context, undefined);
+});
+
+test("cli version is cached per binary identity (no CLI startup on every chat)", async () => {
+  const { cliVersion } = await import("../scripts/lib/models.mjs");
+  const dir = tmpWorkspace();
+  const counter = path.join(dir, "calls");
+  const bin = path.join(dir, process.platform === "win32" ? "fake-agent.cmd" : "fake-agent");
+  if (process.platform === "win32") {
+    fs.writeFileSync(bin, `@echo off\r\necho x>>"${counter}"\r\necho 2026.01.01-test\r\n`);
+  } else {
+    fs.writeFileSync(bin, `#!/bin/sh\necho x >> "${counter}"\necho 2026.01.01-test\n`, { mode: 0o755 });
+  }
+  const prev = process.env.CCO_CURSOR_AGENT_BIN;
+  process.env.CCO_CURSOR_AGENT_BIN = bin;
+  try {
+    assert.equal(cliVersion(), "2026.01.01-test");
+    assert.equal(cliVersion(), "2026.01.01-test");
+    assert.equal(fs.readFileSync(counter, "utf8").trim().split(/\s+/).length, 1, "second call must come from the cache");
+  } finally {
+    if (prev === undefined) delete process.env.CCO_CURSOR_AGENT_BIN; else process.env.CCO_CURSOR_AGENT_BIN = prev;
+  }
+});

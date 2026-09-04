@@ -58,12 +58,14 @@ const SCRIPTS = {
   "postToolUse": "cco-task-result.mjs",
   "subagentStop": "cco-task-result.mjs",
   "beforeShellExecution": "cco-shell-guard.mjs",
-  "sessionEnd": "cco-session-end.mjs"
+  "sessionEnd": "cco-session-end.mjs",
+  "refresh": "cco-refresh-background.mjs"
 };
 const COMMANDS = {
   "init": "cco-init.mjs",
   "discover": "cco-discover-models.mjs",
-  "install-hooks": "cco-install-hooks.mjs"
+  "install-hooks": "cco-install-hooks.mjs",
+  "refresh": "cco-refresh-background.mjs"
 };
 const TASK_SCRIPT = "cco-task-guard.mjs";
 const GATE_SCRIPT = "cco-tool-gate.mjs";
@@ -74,6 +76,7 @@ const LOADERS = {
   "cco-init.mjs": () => import("./scripts/cco-init.mjs"),
   "cco-install-hooks.mjs": () => import("./scripts/cco-install-hooks.mjs"),
   "cco-prompt-capture.mjs": () => import("./scripts/cco-prompt-capture.mjs"),
+  "cco-refresh-background.mjs": () => import("./scripts/cco-refresh-background.mjs"),
   "cco-session-end.mjs": () => import("./scripts/cco-session-end.mjs"),
   "cco-session-start.mjs": () => import("./scripts/cco-session-start.mjs"),
   "cco-shell-guard.mjs": () => import("./scripts/cco-shell-guard.mjs"),
