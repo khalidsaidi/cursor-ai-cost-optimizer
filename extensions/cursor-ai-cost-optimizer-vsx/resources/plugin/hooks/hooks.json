@@ -33,13 +33,6 @@
         "timeout": 8
       }
     ],
-    "beforeShellExecution": [
-      {
-        "command": "node \"${CURSOR_PLUGIN_ROOT}/scripts/cco-hook.mjs\" beforeShellExecution",
-        "matcher": ".*",
-        "timeout": 5
-      }
-    ],
     "sessionEnd": [
       {
         "command": "node \"${CURSOR_PLUGIN_ROOT}/scripts/cco-hook.mjs\" sessionEnd",

@@ -102,7 +102,7 @@ describe('AI Cost Optimizer extension', () => {
     if (manifest.hookMode === 'binary') {
       assert.ok(fs.existsSync(path.join(root, '.cursor', 'cco', 'bin')), 'binary copied into .cursor/cco/bin');
     }
-    for (const event of ['sessionStart', 'workspaceOpen', 'beforeSubmitPrompt', 'preToolUse', 'postToolUse', 'subagentStop', 'beforeShellExecution', 'sessionEnd']) {
+    for (const event of ['sessionStart', 'workspaceOpen', 'beforeSubmitPrompt', 'preToolUse', 'postToolUse', 'subagentStop', 'sessionEnd']) {
       assert.ok(Array.isArray(hooks.hooks[event]) && hooks.hooks[event].length > 0, `hook event present: ${event}`);
     }
     const gate = hooks.hooks.preToolUse.find((e) => CCO_RE.test(e.command));

@@ -177,6 +177,19 @@ export async function doctorUser(opts: Options, stateRoot: string): Promise<{ in
   if (s.manifest.hookMode === "binary" && opts.binaryPath && fs.existsSync(opts.binaryPath) && !sameFile(opts.binaryPath, p.binaryPath)) {
     actions.push("binary_refreshed");
   }
+  // The set of hooked events changed between builds (an event dropped or added): the entries are rewritten.
+  try {
+    const template = JSON.parse(fs.readFileSync(path.join(opts.pluginRoot, "hooks", "hooks.json"), "utf8")) as { hooks?: Record<string, unknown[]> };
+    const expected = new Set(Object.keys(template.hooks || {}));
+    const installed = JSON.parse(fs.readFileSync(p.hooksPath, "utf8")) as { hooks?: Record<string, Array<{ command?: string }>> };
+    const ours = new Set(Object.entries(installed.hooks || {}).filter(([, list]) => (list || []).some((e) => String(e?.command || "").includes("cco-hook"))).map(([event]) => event));
+    const extra = [...ours].filter((e) => !expected.has(e) && e !== "beforeShellExecution");
+    const missing = [...expected].filter((e) => !ours.has(e));
+    const shellGuardOn = (() => { try { return (JSON.parse(fs.readFileSync(path.join(stateRoot, "cco.json"), "utf8")) as { shellGuard?: { enabled?: boolean } }).shellGuard?.enabled === true; } catch { return false; } })();
+    if (extra.length || missing.length || (ours.has("beforeShellExecution") !== shellGuardOn)) {
+      actions.push("hooks_events_changed");
+    }
+  } catch {}
   // Pre-0.3 tier subagents (cco-fast, cco-deep, …) still present: the model-named ones replace them.
   if (fs.existsSync(p.agentsDir) && fs.readdirSync(p.agentsDir).some((f) => /^cco-(fast|balanced|deep|explore|verifier)\.md$/.test(f))) {
     actions.push("legacy_agents_replaced");

@@ -10,6 +10,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { loadConfig } from "./lib/config.mjs";
 import { PLUGIN_ROOT, parseArgs, readJsonSafe, writeJson, workspacePaths, ensureDir, isMain, scope, stateRoot, applyScopeArgs } from "./lib/common.mjs";
 applyScopeArgs();
 
@@ -107,10 +108,16 @@ const q = (p) => `"${String(p).replace(/"/g, '\\"')}"`;
  * User scope: ~/.cursor/hooks.json runs with cwd ~/.cursor, so commands are absolute and carry the scope:
  *   node "<plugin>/scripts/cco-hook.mjs" <event> --scope user --state-root "<root>"   (or a compiled binary)
  */
-export function buildEntries(pluginRoot = PLUGIN_ROOT, { scope: which = scope(), stateRoot: root = stateRoot(), hookCommand = null } = {}) {
+export function buildEntries(pluginRoot = PLUGIN_ROOT, { scope: which = scope(), stateRoot: root = stateRoot(), hookCommand = null, shellGuard = false } = {}) {
   const template = readJsonSafe(path.join(pluginRoot, "hooks", "hooks.json")) || { hooks: {} };
+  const hooks = { ...(template.hooks || {}) };
+  // The shell guard is opt-in (`shellGuard.enabled`): every shell command would otherwise pay a hook spawn for
+  // nothing (Cursor charges ~330 ms per spawn on Windows), and the routing gate already sees shell commands.
+  if (shellGuard) {
+    hooks.beforeShellExecution = [{ matcher: ".*", timeout: 5 }];
+  }
   const out = {};
-  for (const [event, entries] of Object.entries(template.hooks || {})) {
+  for (const [event, entries] of Object.entries(hooks)) {
     const command =
       which === "user"
         ? `${hookCommand ? q(hookCommand) : `node ${q(path.join(pluginRoot, "scripts", "cco-hook.mjs"))}`} ${event} --scope user --state-root ${q(root)}`
@@ -145,7 +152,7 @@ export function installHooks({ workspace, pluginRoot = PLUGIN_ROOT, hookCommand 
   const user = scope() === "user";
   const shim = user ? null : writeShim(workspace, pluginRoot);
   const file = targetPath({ workspace });
-  const entries = buildEntries(pluginRoot, { hookCommand });
+  const entries = buildEntries(pluginRoot, { hookCommand, shellGuard: loadConfig(workspace)?.shellGuard?.enabled === true });
   let existing = readJsonSafe(file);
   let brokenBackup = null;
   if (!existing && fs.existsSync(file)) {

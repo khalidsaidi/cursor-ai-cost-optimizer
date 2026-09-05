@@ -56,7 +56,7 @@ Then, in a project, run `/cco-init` once. It takes a few seconds, writes only in
 - `enforcement.requireDelegation`: `auto` (router mode when the chat model costs ≥ `minSavingsFactor`× the FAST tier; otherwise only high-risk work is redirected), `always`, or `never`. `relayOnly: false` lets the chat model keep using tools after a delegation.
 - `discovery.tierPreferences` (see `config/defaults.json`): ordered regex lists per tier; the first available, runnable match wins, price breaks ties.
 - `pricing.plan`: `teams`/`enterprise` adds the $0.25/M Cursor Token Rate for third-party models to estimates.
-- `shellGuard.enabled`: opt-in blocker for a short list of destructive shell commands.
+- `shellGuard.enabled`: opt-in blocker for a short list of destructive shell commands (its `beforeShellExecution` hook is only registered when this is on; re-run setup after changing it).
 - Overrides per request: `[cco:fast]`, `[cco:balanced]`, `[cco:deep]`, `[cco:auto]`, `[cco:off]`.
 
 ## User scope (nothing in any repo)
