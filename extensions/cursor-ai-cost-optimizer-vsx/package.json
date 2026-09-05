@@ -297,7 +297,7 @@
           {
             "id": "cco.step.steer",
             "title": "Steer when you want to",
-            "description": "Say it in the prompt (\"use the best model\", \"don't route this\") or use `[cco:deep]` / `[cco:fast]`. Pause a project, set a per-chat budget, or enforce routing from the status menu or [Settings](command:workbench.action.openSettings?%5B%22cco%22%5D).",
+            "description": "Say it in the prompt (\"use the best model\", \"don't route this\") or use `[cco:deep]` / `[cco:fast]`. Pause a project, set a per-chat budget, or enforce routing from the status menu or [Settings](command:workbench.action.openSettings?%5B%22cost%20optimizer%22%5D).",
             "media": {
               "markdown": "media/walkthrough/step-override.md"
             },
