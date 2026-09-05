@@ -38,7 +38,7 @@ export function windowAgentName(dir, role, current) {
 export function windowLacksAgents(workspace) {
   try {
     const p = workspacePaths(workspace);
-    const win = readJsonSafe(path.join(p.scope === "user" ? p.root : p.ccoDir, "window-agents.json"));
+    const win = readJsonSafe(path.join(p.stateDir, "window-agents.json"));
     return Boolean(win && win.noneOfOurs);
   } catch {
     return false;
@@ -65,10 +65,10 @@ export function agentForTier(tier, workspace = null) {
   if (!workspace) return role;
   try {
     const p = workspacePaths(workspace);
-    const dir = p.scope === "user" ? p.root : p.ccoDir;
-    const stored = readJsonSafe(path.join(dir, "agent-names.json"));
+    const stored = readJsonSafe(path.join(p.scope === "user" ? p.root : p.ccoDir, "agent-names.json"));
     const current = typeof stored?.[role] === "string" && stored[role] ? stored[role] : role;
-    return windowAgentName(dir, role, current);
+    // the window record is per workspace (one window per folder in practice), under its state dir
+    return windowAgentName(p.stateDir, role, current);
   } catch {
     return role;
   }

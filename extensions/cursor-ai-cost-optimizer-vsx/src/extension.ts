@@ -364,7 +364,7 @@ export function activate(context: vscode.ExtensionContext) {
       if (u.installed) {
         log.info(`[doctor] everywhere: ${u.changed ? `repaired (${u.actions.join(", ")})` : "ok"}`);
         if (u.changed && u.actions.some((a) => a === "legacy_agents_replaced" || a === "repointed_after_update")) {
-          const rec = recordAgentsWrittenAfterOpen(stateRoot, namesBeforeDoctor, activationStarted, Boolean(vscode.env.remoteName));
+          const rec = recordAgentsWrittenAfterOpen(stateRoot, namesBeforeDoctor, activationStarted, Boolean(vscode.env.remoteName), firstWorkspace());
           if (rec.written) {
             noteReload(rec.noneOfOurs ? "finish" : "names");
             log.info(`[doctor] remote window: subagents rewritten after it opened; this window keeps the previous mapping until a reload`);
@@ -490,7 +490,7 @@ export function activate(context: vscode.ExtensionContext) {
         const tiers = (["fast-tier", "balanced-tier", "deep-tier"] as const).map((a) => `${a === "fast-tier" ? "Fast" : a === "balanced-tier" ? "Balanced" : "Deep"} → ${modelDisplayName(result.agents[a] ?? "inherit", loadPricing(null, bundledPricing))}`).join(" · ");
         flash(args?.firstRun ? vscode.l10n.t("AI Cost Optimizer is on") : vscode.l10n.t("AI Cost Optimizer: {0}", tiers));
         // A remote window lists subagents only when it opens: tell the hooks what this window can still use.
-        const rec = recordAgentsWrittenAfterOpen(stateRoot, namesBefore, activationStarted, Boolean(vscode.env.remoteName));
+        const rec = recordAgentsWrittenAfterOpen(stateRoot, namesBefore, activationStarted, Boolean(vscode.env.remoteName), firstWorkspace());
         if (rec.written) {
           noteReload(rec.noneOfOurs ? "finish" : "names");
           log.info(`[install] remote window: subagents written after it opened; ${rec.noneOfOurs ? "work stays in the chat until a reload" : "this window keeps the previous mapping until a reload"}`);

@@ -174,7 +174,7 @@ export function listGeneratedAgents(workspace) {
 
 function windowAgentsPath(workspace) {
   const paths = workspacePaths(workspace);
-  return path.join(paths.scope === "user" ? paths.root : paths.ccoDir, "window-agents.json");
+  return path.join(paths.stateDir, "window-agents.json");
 }
 
 /** What the Task tool of the current window accepts: recorded at workspaceOpen or learned from its own error. */
@@ -182,7 +182,7 @@ export function recordWindowAgents(workspace, names, source) {
   const list = [...new Set((names || []).map((n) => String(n)))].sort();
   const noneOfOurs = !list.some((n) => roleOf(n));
   const record = { ts: nowIso(), source, names: list, noneOfOurs };
-  try { writeJson(windowAgentsPath(workspace), record); } catch {}
+  try { fs.mkdirSync(path.dirname(windowAgentsPath(workspace)), { recursive: true }); writeJson(windowAgentsPath(workspace), record); } catch {}
   return record;
 }
 

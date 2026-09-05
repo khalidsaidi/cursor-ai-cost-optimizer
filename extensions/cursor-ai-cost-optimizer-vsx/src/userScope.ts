@@ -352,8 +352,10 @@ export function retirePluginCopies(stateRoot: string, copies: PluginCopy[]): { r
  * chat, instead of sending the model a name the Task tool will reject. workspaceOpen rewrites the record when a
  * window opens with the files in place.
  */
-export function recordAgentsWrittenAfterOpen(stateRoot: string, namesBefore: string[], windowStartedAt: number, remote: boolean): { written: boolean; noneOfOurs: boolean } {
-  const file = path.join(stateRoot, "window-agents.json");
+export function recordAgentsWrittenAfterOpen(stateRoot: string, namesBefore: string[], windowStartedAt: number, remote: boolean, workspace: string | null = null): { written: boolean; noneOfOurs: boolean } {
+  // per workspace (one window per folder in practice), where the hooks keep that workspace's state
+  const dir = workspace ? path.join(workspaceStateDir(stateRoot, workspace), "state") : stateRoot;
+  const file = path.join(dir, "window-agents.json");
   if (!remote) {
     // a local window picks up new subagent files itself: the names written now are the ones to hand out
     try {
@@ -369,7 +371,7 @@ export function recordAgentsWrittenAfterOpen(stateRoot: string, namesBefore: str
   } catch {}
   const names = [...new Set(namesBefore)].sort();
   const noneOfOurs = !names.some((n) => /^cco-(fast|balanced|deep|explore|verifier)$|-(fast|balanced|deep|research|verifier)$|-tier$|^fast-research$|^tier-verifier$/.test(n));
-  fs.mkdirSync(stateRoot, { recursive: true });
+  fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(file, `${JSON.stringify({ ts: new Date().toISOString(), source: "written_after_open", names, noneOfOurs }, null, 2)}\n`, "utf8");
   return { written: true, noneOfOurs };
 }

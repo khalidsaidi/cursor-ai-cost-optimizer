@@ -96,6 +96,11 @@ test("remote window: subagents written after it opened are recorded as unknown t
   const first = recordAgentsWrittenAfterOpen(root, [], started, true);
   assert.deepEqual(first, { written: true, noneOfOurs: true });
   let rec = JSON.parse(fs.readFileSync(path.join(root, "window-agents.json"), "utf8"));
+  const { workspaceStateDir } = require("../../dist/userScope.js");
+  const ws = path.join(root, "proj");
+  const perWs = recordAgentsWrittenAfterOpen(root, ["composer-2.5-fast"], started, true, ws);
+  assert.equal(perWs.written, true);
+  assert.equal(fs.existsSync(path.join(workspaceStateDir(root, ws), "state", "window-agents.json")), true, "one record per workspace, where that workspace's hooks read it");
   assert.equal(rec.noneOfOurs, true);
   const remap = recordAgentsWrittenAfterOpen(root, ["composer-2.5-fast", "claude-opus-5-deep"], started, true);
   assert.deepEqual(remap, { written: true, noneOfOurs: false });
