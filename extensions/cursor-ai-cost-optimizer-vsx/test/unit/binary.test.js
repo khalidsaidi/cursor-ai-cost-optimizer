@@ -62,7 +62,8 @@ test("compiled binary: shell guard denies rm -rf / when enabled in .cursor/cco.j
 test("compiled binary: preToolUse Task fast-tier allows with updated_input and logs a decision under .cursor/cco/state", { skip: !available && `binary not built: ${BINARY}` }, async () => {
   const t = await setup();
   try {
-    const res = t.run("preToolUse", { conversation_id: "conv-1", tool_name: "Task", tool_input: { description: "List commits", prompt: "Show the last 3 commits", subagent_type: "fast-tier" } });
+    // An Opus-thinking chat: the one kind of chat model whose Fast work is cheaper delegated (calibrated on the bill).
+    const res = t.run("preToolUse", { conversation_id: "conv-1", model: "claude-opus-5-thinking-high", tool_name: "Task", tool_input: { description: "List commits", prompt: "Show the last 3 commits", subagent_type: "fast-tier" } });
     assert.equal(res.status, 0, res.stderr);
     assert.equal(res.out.permission, "allow");
     assert.equal(res.out.updated_input?.subagent_type, "composer-2.5-fast", JSON.stringify(res.out));
