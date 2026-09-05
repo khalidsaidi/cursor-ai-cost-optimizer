@@ -26,6 +26,7 @@ export interface UserManifest {
   version: number;
   extensionVersion?: string;
   installedAt: string;
+  templatesHash?: string;
   hookMode: HookMode;
   pluginRoot: string;
   binary: string | null;
@@ -124,6 +125,18 @@ export function decideUserHookMode(opts: Options): HookMode {
   return hasBinary ? "binary" : findNode(opts.nodePath) ? "node" : "node";
 }
 
+/** One hash over the plugin's subagent templates, so a rebuilt plugin re-renders the generated subagents. */
+export function templatesHash(pluginRoot: string): string {
+  const h = crypto.createHash("sha256");
+  try {
+    const dir = path.join(pluginRoot, "agents");
+    for (const f of fs.readdirSync(dir).sort()) {
+      h.update(f).update(fs.readFileSync(path.join(dir, f)));
+    }
+  } catch {}
+  return h.digest("hex").slice(0, 16);
+}
+
 export interface UserInstallResult {
   hookMode: HookMode;
   init: RunResult;
@@ -157,7 +170,7 @@ export async function installUser(opts: Options, stateRoot: string, workspace: s
   if (init.status !== 0) {
     throw new Error(`cco-init failed (${init.runtime}): ${init.error}\n${init.stdout}`);
   }
-  const manifest: UserManifest = { version: 1, extensionVersion: opts.extensionVersion, installedAt: new Date().toISOString(), hookMode, pluginRoot: opts.pluginRoot, binary: hookCommand };
+  const manifest: UserManifest = { version: 1, extensionVersion: opts.extensionVersion, installedAt: new Date().toISOString(), hookMode, pluginRoot: opts.pluginRoot, binary: hookCommand, templatesHash: templatesHash(opts.pluginRoot) };
   fs.writeFileSync(p.manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
   return { hookMode, init, agents: readUserAgents(stateRoot), paths: p };
 }
@@ -190,6 +203,10 @@ export async function doctorUser(opts: Options, stateRoot: string): Promise<{ in
       actions.push("hooks_events_changed");
     }
   } catch {}
+  // The subagent templates changed (a rebuilt plugin): the generated subagent files are re-rendered.
+  if ((s.manifest.templatesHash ?? "") !== templatesHash(opts.pluginRoot)) {
+    actions.push("agent_templates_changed");
+  }
   // A runtime plugin dir from an earlier build (slash commands in every chat): setup removes it.
   if (fs.existsSync(p.pluginDir)) {
     actions.push("runtime_plugin_removed");

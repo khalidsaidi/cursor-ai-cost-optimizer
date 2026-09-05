@@ -236,7 +236,7 @@ export function denyMessage({ toolName, verdict, sessionModel, workspace = null 
   if (verdict.phase === "post") {
     return [
       `CCO: ${toolName} is not allowed here after delegation. The subagent already did the work; do not re-read files or re-run its checks on ${sessionModel || "the chat model"}.`,
-      "Reply to the user now by relaying the subagent's final message verbatim (it is written for them), with no cost or tier line of your own. If the subagent returned CCO-ESCALATE or CCO-VERIFY: fail, make exactly one more Task call to the next tier up; otherwise no more tool calls."
+      "Reply to the user now by relaying the subagent's final message verbatim, its diff code blocks included (it is written for them), with no cost or tier line of your own. If the subagent returned CCO-ESCALATE or CCO-VERIFY: fail, make exactly one more Task call to the next tier up; otherwise no more tool calls."
     ].join("\n");
   }
   const scores = verdict.decision?.scores

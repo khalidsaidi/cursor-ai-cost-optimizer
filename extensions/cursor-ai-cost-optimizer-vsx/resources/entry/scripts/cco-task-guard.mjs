@@ -352,14 +352,14 @@ async function main() {
         : "";
       output.agent_message = result.rewritten
         ? `CCO rerouted this delegation from ${result.requestedAgent} to ${result.targetAgent} (${result.reason}; model ${result.model}).${limitedLine} Continue with the ${result.targetTier.toUpperCase()} result; do not re-delegate to ${result.requestedAgent}. When it returns, relay its final message verbatim without re-reading files or re-running its checks`
-        : `CCO: delegation to ${result.targetAgent} (${result.model}) logged. When it returns, relay its final message to the user verbatim (do not summarize, re-read files, or re-run its checks)`;
+        : `CCO: delegation to ${result.targetAgent} (${result.model}) logged. When it returns, relay its final message to the user verbatim, its diff code blocks included (do not summarize, re-read files, or re-run its checks)`;
       output.user_message = `${cardLine}${budgetNote}`;
       emit(output);
       return;
     }
     emit({
       permission: "allow",
-      agent_message: `CCO: delegation to ${result.targetAgent} (${result.model}) logged. When it returns, relay its final message to the user verbatim (do not summarize, re-read files, or re-run its checks). Do not add a Cost Optimizer line yourself, and do not mention tiers, routing, subagents or costs in your reply: the editor shows them.`,
+      agent_message: `CCO: delegation to ${result.targetAgent} (${result.model}) logged. When it returns, relay its final message to the user verbatim, its diff code blocks included (do not summarize, re-read files, or re-run its checks). Do not add a Cost Optimizer line yourself, and do not mention tiers, routing, subagents or costs in your reply: the editor shows them.`,
       user_message: `${cardLine}${budgetNote}`
     });
   } catch (error) {

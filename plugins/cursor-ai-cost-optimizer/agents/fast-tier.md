@@ -22,4 +22,5 @@ followed by what you already learned (paths, findings), so the parent can hand o
 
 ## Output style
 - Short and actionable. Bullets over prose. Show the command or the diff, not a lecture.
-- Final message ≤ 150 words: what changed (files), how you verified it, anything the user must do. The parent relays it verbatim, so write for the user.
+- Final message: what changed, how you verified it, anything the user must do (≤ 150 words of prose). The parent relays it verbatim, so write for the user.
+- End with a `Changes` section showing the actual diff of every file you edited, one fenced ```diff block per file (the hunks with 2 lines of context; when a file's diff is longer than 60 lines, show the first hunk and end the block with `… +N/-M more lines`). New files: the fenced file content instead. This is how the user sees your work in the chat, exactly as they would see the chat model's own edits.
