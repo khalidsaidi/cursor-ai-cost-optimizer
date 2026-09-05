@@ -362,7 +362,7 @@ export function readLastDecision(workspace: string, stateDir?: string): LastDeci
   for (let i = lines.length - 1; i >= 0; i -= 1) {
     try {
       const d = JSON.parse(lines[i]) as { ts?: string; final?: string; model?: string; estimateUsd?: number | null; chatEstimateUsd?: number | null };
-      if (d.final === "chat") {
+      if (!d.final || d.final === "chat") {
         continue;
       }
       // model-named subagents (composer-2.5-fast), role names (fast-tier) and pre-0.3 names (cco-fast) all end in the tier
