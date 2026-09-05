@@ -180,7 +180,15 @@ export function activate(context: vscode.ExtensionContext) {
   refreshStatus();
   const watcher = vscode.workspace.createFileSystemWatcher("**/.cursor/{cco.json,hooks.json,agents/*-tier.md,cco/pricing.json,cco/state/decisions.jsonl,cco/state/sessions/*.json}");
   context.subscriptions.push(watcher, watcher.onDidChange(refreshStatus), watcher.onDidCreate(refreshStatus), watcher.onDidDelete(refreshStatus));
-  // "Everywhere" keeps its state in the extension's storage, outside the workspace watcher: poll cheaply for the savings figure.
+  // "Everywhere" keeps its state in the extension's storage, outside the workspace watcher: watch it too, so the
+  // savings figure changes the moment a routed task ends (plus a slow poll as a safety net).
+  try {
+    fs.mkdirSync(stateRoot, { recursive: true });
+    const stateWatcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(vscode.Uri.file(stateRoot), "**/{decisions.jsonl,runtime.json,cco.json,model-limits.json}"));
+    context.subscriptions.push(stateWatcher, stateWatcher.onDidChange(refreshStatus), stateWatcher.onDidCreate(refreshStatus), stateWatcher.onDidDelete(refreshStatus));
+  } catch (error) {
+    log.warn(`[status] state watcher: ${String((error as Error)?.message ?? error)}`);
+  }
   const ticker = setInterval(() => { try { refreshStatus(); } catch {} }, 30_000);
   context.subscriptions.push({ dispose: () => clearInterval(ticker) });
 

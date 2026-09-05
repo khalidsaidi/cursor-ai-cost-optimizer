@@ -135,6 +135,9 @@ export async function installUser(opts: Options, stateRoot: string, workspace: s
   const p = userPaths(stateRoot);
   fs.mkdirSync(p.root, { recursive: true });
   const hookMode = decideUserHookMode(opts);
+  // The compiled hook finds the full plugin (config defaults, agent templates, rule) through this pointer,
+  // next to its bin/ folder; the doctor rewrites it whenever the extension folder moves (updates).
+  fs.writeFileSync(path.join(p.root, "plugin-path.txt"), `${opts.pluginRoot}\n`, "utf8");
   let hookCommand: string | null = null;
   if (hookMode === "binary") {
     fs.mkdirSync(p.binDir, { recursive: true });
