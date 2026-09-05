@@ -738,3 +738,18 @@ test("the chat model is re-read on every prompt: after a switch to the Fast tier
   const task = runHook("cco-task-guard.mjs", { hook_event_name: "preToolUse", conversation_id: "sw1", model: "composer-2.5", tool_name: "Task", tool_input: { subagent_type: "composer-2.5-fast", prompt: "CCO-SCORES: complexity=1 risk=0 breadth=0 uncertainty=0 latency=0\nadd another helper" }, workspace_roots: [ws] });
   assert.equal(task.permission, "deny", "a delegation to the very same model is turned back into in-chat work");
 });
+
+test("a hooks.json that is not valid JSON is backed up next to itself before CCO writes its entries", () => {
+  const ws = fs.mkdtempSync(path.join(os.tmpdir(), "cco-broken-"));
+  const file = path.join(ws, ".cursor", "hooks.json");
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, '{"version": 1, "hooks": {"beforeSubmitPrompt": [{"command": "echo other-tool"}],}\n');
+  const init = spawnSync(process.execPath, [path.join(scripts, "cco-init.mjs"), "--workspace", ws, "--no-probe"], { encoding: "utf8" });
+  const text = `${init.stdout}${init.stderr}`;
+  const written = JSON.parse(fs.readFileSync(file, "utf8"));
+  assert.ok(Object.keys(written.hooks).length > 0, "CCO entries written");
+  const backups = fs.readdirSync(path.dirname(file)).filter((f) => f.startsWith("hooks.json.broken-"));
+  assert.equal(backups.length, 1, "the unreadable file is kept next to itself");
+  assert.match(fs.readFileSync(path.join(path.dirname(file), backups[0]), "utf8"), /other-tool/);
+  assert.match(text, /not valid JSON/);
+});

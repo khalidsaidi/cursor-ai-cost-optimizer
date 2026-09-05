@@ -96,6 +96,9 @@ async function main() {
   }
   const hooks = installHooks({ workspace, hookCommand: String(args["hook-command"] || "") || null });
   const runtime = discover({ workspace, probe: Boolean(args.probe), writeAgents: true, config: loadConfig(workspace) });
+  if (hooks.brokenBackup) {
+    runtime.health.notes.push(`${hooks.file} was not valid JSON (Cursor could not load any hooks from it); its previous content is kept at ${hooks.brokenBackup}`);
+  }
   if (user) {
     writeRuntimePlugin(paths.pluginDir); // rule + commands + skills, handed to Cursor per workspace via workspaceOpen.pluginPaths
   } else {

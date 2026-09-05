@@ -437,10 +437,30 @@ function sameEntries(a: Record<string, HookEntry[]>, b: Record<string, HookEntry
   return norm(a) === norm(b);
 }
 /** Rewrite our entries in <ws>/.cursor/hooks.json to the given form; returns the events written. */
+
+/** An existing hooks.json that is not valid JSON is copied next to itself before CCO writes its entries (Cursor was not loading it either). */
+function backupUnreadableHooks(file: string): string | null {
+  if (!fs.existsSync(file)) {
+    return null;
+  }
+  try {
+    JSON.parse(fs.readFileSync(file, "utf8"));
+    return null;
+  } catch {}
+  const backup = `${file}.broken-${new Date().toISOString().replace(/[:.]/g, "-")}`;
+  try {
+    fs.copyFileSync(file, backup);
+    return backup;
+  } catch {
+    return null;
+  }
+}
+
 function writeHookEntries(workspace: string, opts: Options, mode: HookMode, binaryPath: string | null): string[] {
   const p = workspacePaths(workspace);
   const pluginHooks = readJsonOr<HooksFile>(path.join(opts.pluginRoot, "hooks", "hooks.json"), { version: 1, hooks: {} });
   const ours = buildHookEntries(pluginHooks, mode, binaryPath);
+  backupUnreadableHooks(p.hooksPath);
   writeJson(p.hooksPath, mergeHooks(readJsonOr<HooksFile | null>(p.hooksPath, null), ours));
   return Object.keys(ours);
 }
@@ -652,10 +672,11 @@ export function doctorWorkspace(workspace: string, opts: Options): DoctorResult 
   const hookMode: HookMode = useBinary ? "binary" : "node";
   const pluginHooks = readJsonOr<HooksFile>(path.join(opts.pluginRoot, "hooks", "hooks.json"), { version: 1, hooks: {} });
   const ours = buildHookEntries(pluginHooks, hookMode, useBinary ? p.binaryPath : null);
+  const unreadable = backupUnreadableHooks(p.hooksPath);
   const existing = readJsonOr<HooksFile | null>(p.hooksPath, null);
   if (!existing) {
     writeJson(p.hooksPath, mergeHooks(null, ours));
-    actions.push("hooks_recreated");
+    actions.push(unreadable ? `hooks_recreated_unreadable_backup:${path.basename(unreadable)}` : "hooks_recreated");
   } else if (!sameEntries(ccoHookEntries(existing), ours)) {
     writeJson(p.hooksPath, mergeHooks(existing, ours));
     actions.push("hooks_repointed");

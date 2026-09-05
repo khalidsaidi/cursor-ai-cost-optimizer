@@ -461,6 +461,9 @@ export function activate(context: vscode.ExtensionContext) {
         });
         log.info(`[install] everywhere: hooks=${result.hookMode} via ${result.init.runtime}; agents=${JSON.stringify(result.agents)}`);
         log.info(`[install] cco-init output: ${result.init.stdout.trim()}`);
+        if (/was not valid JSON/.test(result.init.stdout)) {
+          flash(vscode.l10n.t("Your ~/.cursor/hooks.json was not valid JSON; its previous content is kept next to it (hooks.json.broken-…)"));
+        }
         refreshStatus();
         // Project-scope files an earlier version left in the open folders are cleaned up now that Everywhere covers them.
         void runDoctor();

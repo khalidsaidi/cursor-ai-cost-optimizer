@@ -242,3 +242,19 @@ test("hasProjectLeftovers: our hook entries, the project shim, or the state fold
   assert.equal(hasProjectLeftovers(ws), true);
   fs.rmSync(ws, { recursive: true, force: true });
 });
+
+test("doctorWorkspace: an unreadable project hooks.json is backed up next to itself before it is recreated", () => {
+  const ws = fs.mkdtempSync(path.join(os.tmpdir(), "cco-broken-"));
+  const opts = base({ binaryPath: null, extensionVersion: "9.9.9", hookRuntime: "node" });
+  return installWorkspace(ws, opts).then(() => {
+    const file = path.join(ws, ".cursor", "hooks.json");
+    fs.writeFileSync(file, '{"hooks": {"x": [{"command": "echo mine"}],}');
+    const r = doctorWorkspace(ws, opts);
+    assert.ok(r.actions.some((a) => a.startsWith("hooks_recreated_unreadable_backup:")), r.actions.join(","));
+    const backups = fs.readdirSync(path.join(ws, ".cursor")).filter((f) => f.startsWith("hooks.json.broken-"));
+    assert.equal(backups.length, 1);
+    assert.match(fs.readFileSync(path.join(ws, ".cursor", backups[0]), "utf8"), /echo mine/);
+    JSON.parse(fs.readFileSync(file, "utf8"));
+    fs.rmSync(ws, { recursive: true, force: true });
+  });
+});
