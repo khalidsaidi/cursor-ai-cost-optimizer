@@ -323,7 +323,15 @@ async function main() {
           : String(verdict.reason).startsWith("override_")
           ? `Routing to ${tierLabel(verdict.tier)} (${modelLabel(verdict.model, pricing)}) as requested.`
           : String(verdict.reason).startsWith("quality_")
-          ? `Risky or complex change: routing to ${tierLabel(verdict.tier)} (${modelLabel(verdict.model, pricing)}).`
+          ? (() => {
+              // the tier's own model may be on cooldown (usage limit): the model named is the substitute's
+              const configured = workspace ? readWorkspaceAgentModel(workspace, agentForTier(verdict.tier, workspace)) : null;
+              if (configured && verdict.model && configured !== verdict.model) {
+                const subTier = ["balanced", "fast"].find((t) => workspace && readWorkspaceAgentModel(workspace, agentForTier(t, workspace)) === verdict.model) || verdict.tier;
+                return `Risky or complex change; ${tierLabel(verdict.tier)} model at its usage limit: routing to ${tierLabel(subTier)} (${modelLabel(verdict.model, pricing)}).`;
+              }
+              return `Risky or complex change: routing to ${tierLabel(verdict.tier)} (${modelLabel(verdict.model, pricing)}).`;
+            })()
           : verdict.reason === "retry_pending"
           ? `${tierLabel(verdict.pendingRetry?.failed ? tierFor(verdict.pendingRetry.failed) : "deep")} model at its usage limit: retrying on ${tierLabel(verdict.tier)} (${modelLabel(readWorkspaceAgentModel(workspace, verdict.pendingRetry?.agent) || "inherit", pricing)}).`
           : `Routing to ${tierLabel(verdict.tier)} (${modelLabel(verdict.model, pricing)}).`;

@@ -608,6 +608,7 @@ test("gate messages name the model that will actually run while a tier model is 
   assert.equal(out.permission, "deny");
   assert.match(out.agent_message, /runs on claude-sonnet-5-thinking-high/, "DEEP is limited: the message names BALANCED's model");
   assert.doesNotMatch(String(out.user_message), /claude-opus/);
+  assert.match(String(out.user_message), /Deep model at its usage limit: routing to Balanced \(Claude Sonnet 5\)/, "the card says why Balanced runs a Deep-scored task");
 });
 
 test("legacy cco-* names: old rules still route, and generated cco-*.md files are replaced on setup", async () => {
