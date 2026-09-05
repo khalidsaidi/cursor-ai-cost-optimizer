@@ -1,6 +1,6 @@
 # Work as usual
 
-Keep whatever chat model you like. Each task goes to the cheapest tier that can do it well, and that tier runs on its own model. On **Composer** routine work stays in the chat and only risky work is routed; on **Auto** and on a pricier chat model you picked (Claude, GPT, Grok) routine work is delegated and the savings add up (measured on Cursor's bill, same task, tests passing in every run):
+Keep whatever chat model you like. Each task goes to the cheapest tier that can do it well, and that tier runs on its own model. On **Auto, Composer, Grok, Sonnet and GPT** routine work stays in the chat, because on Cursor's bill a delegation costs about what the work does (measured on Auto: 6.4¢ in the chat, 7.5¢ delegated); risky or complex work goes to the Deep tier for quality, and from Opus-class chat models routine work is delegated too:
 
 | Tier | Typical work | Model (without a CLI login) |
 |---|---|---|

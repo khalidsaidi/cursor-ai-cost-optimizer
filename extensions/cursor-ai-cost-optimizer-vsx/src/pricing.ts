@@ -407,6 +407,43 @@ export function readLastDecision(workspace: string, stateDir?: string): LastDeci
   return null;
 }
 
+export interface LastRun {
+  ts: string;
+  where: "chat" | "subagent";
+  tier: string | null;
+  model: string;
+}
+
+/**
+ * Where the most recent task ran: in the chat (on the chat model) or on a tier subagent (on its model). The chat's
+ * own picker keeps showing the chat model, so this is what the status bar names.
+ */
+export function readLastRun(workspace: string, stateDir?: string): LastRun | null {
+  let text = "";
+  try {
+    text = fs.readFileSync(path.join(stateDir ?? path.join(workspace, ".cursor", "cco", "state"), "decisions.jsonl"), "utf8");
+  } catch {
+    return null;
+  }
+  const lines = text.trim().split("\n").filter(Boolean);
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    try {
+      const d = JSON.parse(lines[i]) as { ts?: string; final?: string; model?: string; chatModel?: string | null };
+      if (!d.final) {
+        continue;
+      }
+      if (d.final === "chat") {
+        return { ts: String(d.ts ?? ""), where: "chat", tier: null, model: String(d.chatModel || d.model || "") };
+      }
+      const m = /(fast|balanced|deep)(?:-tier)?$/.exec(String(d.final));
+      return { ts: String(d.ts ?? ""), where: "subagent", tier: m ? m[1] : null, model: String(d.model ?? "") };
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
 /**
  * One row per model for the pickers. An account lists every effort level and fast variant as its own id
  * (a real account: 250 ids, eight of them "GPT-5.3 Codex"); the picker shows each model once, on its plain

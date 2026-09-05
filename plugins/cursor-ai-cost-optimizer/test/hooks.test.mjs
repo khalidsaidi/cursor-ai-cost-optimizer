@@ -179,7 +179,8 @@ test("task result hook process: records EMA state and injects cascade context", 
     { hook_event_name: "subagentStop", subagent_type: "balanced-tier", status: "completed", summary: "all good", workspace_roots: [ws] },
     ["subagentStop"]
   );
-  assert.deepEqual(completed, {});
+  assert.match(completed.additional_context, /Relay balanced-tier's final message to the user verbatim/, "a completed subagent: the parent is told to relay its message as is");
+  assert.doesNotMatch(completed.additional_context, /cascade|escalat/i);
 });
 
 test("hooks are inert until enabled and respect a workspace opt-out", () => {
@@ -291,7 +292,8 @@ test("a chat that opened on Composer and was switched to Auto in the picker is p
   assert.equal(loadSession(ws, "sw-auto").model, "auto", "the prompt's model is the one this turn runs on; Auto is not a placeholder");
   assert.match(String(first.additional_context || ""), /Session model: auto \(/, "briefed again with Auto's price");
   const gate = runHook("cco-tool-gate.mjs", { hook_event_name: "preToolUse", conversation_id: "sw-auto", model: "default", cursor_version: "3.17.21", tool_name: "Write", tool_input: { file_path: "units.mjs", content: "x" }, workspace_roots: [ws] });
-  assert.match(String(gate.agent_message || ""), /composer-2\.5-fast/, "IDE on Auto: routine work is routed to the Composer subagent");
+  assert.equal(gate.permission, "allow");
+  assert.equal(gate.agent_message, undefined, "on Auto routine work stays in the chat (measured: a delegation costs more than the work)");
   const empty = runHook("cco-prompt-capture.mjs", { hook_event_name: "beforeSubmitPrompt", conversation_id: "sw-auto", model: "", cursor_version: "3.17.21", prompt: "now add a fourth converter and its tests", workspace_roots: [ws] });
   assert.equal(loadSession(ws, "sw-auto").model, "auto", "an empty model keeps the known one");
   assert.equal(empty.additional_context, undefined, "no re-briefing without a switch");
@@ -303,7 +305,7 @@ test("an Auto chat is briefed differently per client: the IDE routes routine wor
   fs.writeFileSync(path.join(ws, ".cursor", "cco.json"), JSON.stringify({ pricing: { enabled: false }, discovery: { auto: false } }));
   const ide = runHook("cco-session-start.mjs", { hook_event_name: "sessionStart", conversation_id: "auto-ide", model: "default", cursor_version: "3.17.21", workspace_roots: [ws] });
   assert.match(ide.additional_context, /Session model: auto \(/, "IDE: Auto is priced at its measured fixed rate");
-  assert.match(ide.additional_context, /delegate FAST work/, "IDE: measured 14.2¢ direct vs 9.8¢ routed, so FAST work is delegated");
+  assert.doesNotMatch(ide.additional_context, /delegate FAST work/, "IDE on Auto: 6.4¢ in the chat against 7.5¢ delegated on Cursor's bill, so FAST work stays here");
   const cli = runHook("cco-session-start.mjs", { hook_event_name: "sessionStart", conversation_id: "auto-cli", model: "default", cursor_version: "2026.09.02-c22c1a3", workspace_roots: [ws] });
   assert.match(cli.additional_context, /Auto in the Cursor CLI/, "CLI: subagents are billed as Auto too");
   assert.match(cli.additional_context, /Routine work stays in this chat/);
@@ -568,6 +570,27 @@ test("paused project: a cco-* delegation is turned back into in-chat work and th
   assert.match(start.additional_context, /paused/);
 });
 
+test("when a subagent returns, the parent is told to relay its message verbatim, naming the model that did the work", () => {
+  const ws = readyWorkspace({ "fast-tier": "composer-2.5", "balanced-tier": "claude-sonnet-5-medium", "deep-tier": "claude-opus-5-thinking-high", "tier-verifier": "composer-2.5" });
+  fs.mkdirSync(path.join(ws, ".cursor"), { recursive: true });
+  fs.writeFileSync(path.join(ws, ".cursor", "cco.json"), JSON.stringify({ pricing: { enabled: false }, discovery: { auto: false }, verification: { autoRunTests: false } }));
+  createSession({ workspace: ws, conversationId: "relay-1", model: "default" });
+  const out = runHook("cco-task-result.mjs", {
+    hook_event_name: "postToolUse", conversation_id: "relay-1", tool_name: "Task", tool_input: { subagent_type: "composer-2.5-fast", prompt: "x" },
+    tool_output: "Done by Composer 2.5 (Fast tier).\nAdded units.mjs.\n\nChanges\n```diff\n+export const x = 1;\n```", workspace_roots: [ws]
+  });
+  assert.match(out.additional_context, /Relay composer-2\.5-fast's final message to the user verbatim/);
+  assert.match(out.additional_context, /Done by Composer 2\.5 \(Fast tier\)\./);
+  assert.match(out.additional_context, /diff code blocks/);
+  const log = fs.readFileSync(workspacePaths(ws).hooksLogPath, "utf8").trim().split("\n").map((l) => JSON.parse(l)).filter((l) => l.event === "postToolUse").pop();
+  assert.equal(log.hasAttribution, true);
+  assert.equal(log.hasChanges, true);
+  // The IDE fires no postToolUse for Task: the same instruction goes out on subagentStop (whose payload has no text).
+  const stop = runHook("cco-task-result.mjs", { hook_event_name: "subagentStop", conversation_id: "relay-1", subagent_type: "composer-2.5-fast", model: "composer-2.5", status: "completed", workspace_roots: [ws] });
+  assert.match(stop.additional_context, /Relay composer-2\.5-fast's final message to the user verbatim/);
+  assert.match(stop.additional_context, /Done by Composer 2\.5 \(Fast tier\)\./);
+});
+
 test("a failed DEEP subagent (usage limit) hands the task back to the chat with an honest footer", () => {
   const ws = readyWorkspace();
   createSession({ workspace: ws, conversationId: "deep-fail", model: "cursor-grok-4.6-high" });
@@ -760,7 +783,7 @@ test("the chat model is re-read on every prompt: after a switch to the Fast tier
   runHook("cco-prompt-capture.mjs", { hook_event_name: "beforeSubmitPrompt", conversation_id: "sw1", model: "composer-2.5-fast", prompt: "implement a slugify helper in utils/slugify.js", workspace_roots: [ws] });
   assert.equal(loadSession(ws, "sw1").model, "composer-2.5-fast");
   const before = runHook("cco-tool-gate.mjs", { hook_event_name: "preToolUse", conversation_id: "sw1", model: "composer-2.5-fast", tool_name: "Write", tool_input: { file_path: "a.js", content: "x" }, workspace_roots: [ws] });
-  assert.match(String(before.agent_message || ""), /Task/, "on the 2x fast variant the plain Fast tier is worth a delegation");
+  assert.equal(before.agent_message, undefined, "even on the 2x fast variant a Fast delegation does not recover its fixed cost");
   runHook("cco-prompt-capture.mjs", { hook_event_name: "beforeSubmitPrompt", conversation_id: "sw1", model: "composer-2.5", prompt: "implement a second helper in utils/slugify.js", workspace_roots: [ws] });
   assert.equal(loadSession(ws, "sw1").model, "composer-2.5", "the switch in the picker is picked up");
   const after = runHook("cco-tool-gate.mjs", { hook_event_name: "preToolUse", conversation_id: "sw1", model: "composer-2.5", tool_name: "Write", tool_input: { file_path: "a.js", content: "x" }, workspace_roots: [ws] });
@@ -838,7 +861,7 @@ test("an Ask chat is not briefed (no tools to route); the briefing arrives once 
 test("a task that adds tests in a project without a test runner tells the subagent to run the tests it writes", () => {
   const ws = readyWorkspace();
   createSession({ workspace: ws, conversationId: "acc-1", model: "cursor-grok-4.6-high" });
-  const out = runHook("cco-task-guard.mjs", { hook_event_name: "preToolUse", conversation_id: "acc-1", model: "grok-4.6", tool_name: "Task", tool_input: { subagent_type: "composer-2.5-fast", prompt: "CCO-SCORES: complexity=3 risk=0 breadth=2 uncertainty=0 latency=0\nCreate stats.mjs with mean/median/stdev and a node:test file covering them" }, workspace_roots: [ws] });
-  assert.equal(out.permission, "allow");
+  const out = runHook("cco-task-guard.mjs", { hook_event_name: "preToolUse", conversation_id: "acc-1", model: "grok-4.6", tool_name: "Task", tool_input: { subagent_type: "composer-2.5-fast", prompt: "CCO-SCORES: complexity=3 risk=0 breadth=2 uncertainty=0 latency=0\n[cco:fast] Create stats.mjs with mean/median/stdev and a node:test file covering them" }, workspace_roots: [ws] });
+  assert.equal(out.permission, "allow", "forced tier: allowed whatever the chat model");
   assert.match(String(out.updated_input?.prompt || ""), /Acceptance: run every test file you add or change/);
 });

@@ -1,3 +1,4 @@
+import { modelLabel } from "./labels.mjs";
 import path from "node:path";
 import fs from "node:fs";
 import { PLUGIN_ROOT, CCO_AGENT_NAMES, LEGACY_AGENT_NAMES, readTextSafe, writeTextIfChanged, workspacePaths, readJsonSafe, writeJson, windowAgentName, nowIso } from "./common.mjs";
@@ -27,7 +28,7 @@ export function renderWorkspaceAgent(role, modelId, name = role) {
     return null;
   }
   const model = modelId && modelId !== "inherit" ? modelId : "inherit";
-  const withModel = source.replace(/^model:\s*.*$/m, `model: ${model}`).replace(/^name:\s*.*$/m, `name: ${name}`);
+  const withModel = source.replace(/^model:\s*.*$/m, `model: ${model}`).replace(/^name:\s*.*$/m, `name: ${name}`).replace(/\{\{MODEL_LABEL\}\}/g, model === "inherit" ? "the chat model" : modelLabel(model));
   const closing = withModel.indexOf("\n---\n", 4);
   if (closing < 0) {
     return null;

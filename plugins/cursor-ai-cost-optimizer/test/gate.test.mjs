@@ -49,8 +49,8 @@ test("router mode: expensive parent is denied everything but Task before delegat
   assert.equal(risky.action, "allow", "deep tier model equals the chat model: no delegation overhead");
   assert.equal(risky.reason, "tier_deep_not_cheaper_than_session");
   const balanced = gateDecision({ toolName: "Edit", session: session(), config, pricing, models, prompt: "Refactor src/cart.js so coupon rules live in a table and add tests for it" });
-  assert.equal(balanced.action, "deny");
-  assert.equal(balanced.tier, "balanced");
+  assert.equal(balanced.action, "allow", "a Balanced task on Grok 4.6 High is not 20% cheaper than doing it here once the delegation's whole cost is counted (calibrated on the bill)");
+  assert.equal(balanced.reason, "tier_balanced_not_cheaper_than_session");
 });
 
 test("lenient mode: cheap parent may read and do ordinary work, but risky work is redirected to deep", () => {
@@ -123,7 +123,8 @@ test("gate hook process: end to end with session state, transcript prompt, denia
   assert.equal(afterDelegation.permission, "allow", "advise-first: relay advice attached, call allowed");
   assert.match(afterDelegation.agent_message, /relaying the subagent's final message verbatim/);
   const cascade = runHook("cco-task-guard.mjs", { hook_event_name: "preToolUse", conversation_id: "conv-B", tool_name: "Task", tool_input: { description: "d", prompt: "CCO-SCORES: complexity=3 risk=1 breadth=0 uncertainty=0 latency=0\nescalated", subagent_type: "balanced-tier" }, workspace_roots: [ws] });
-  assert.equal(cascade.permission, "allow");
+  assert.equal(cascade.permission, "deny", "the Balanced model is neither stronger nor 20% cheaper than this chat's: the escalated work is done here");
+  assert.match(cascade.agent_message, /directly in this chat/);
 
   const subagent = runHook("cco-tool-gate.mjs", { ...base, conversation_id: "unknown-subagent-conv" });
   assert.equal(subagent.permission, "allow");
@@ -157,13 +158,13 @@ test("session start hook re-creates missing workspace agents from a cached runti
   assert.match(out.additional_context, /`claude-opus-5-deep` on claude-opus-5-thinking-high/);
 });
 
-test("gate refines a placeholder session model from a later hook payload; an IDE Auto chat is worth a FAST delegation (Auto bills at a fixed rate about 4× Composer), a Composer chat is not", () => {
+test("gate refines a placeholder session model from a later hook payload; neither an Auto chat nor a Composer chat is worth a FAST delegation (measured: a delegation's fixed cost is not recovered)", () => {
   const ws = fs.mkdtempSync(path.join(os.tmpdir(), "cco-gate2-"));
   writeWorkspaceAgents(ws, { "fast-tier": "composer-2.5", "balanced-tier": "claude-sonnet-5-thinking-high", "deep-tier": "claude-opus-5-thinking-high", "tier-verifier": "composer-2.5" });
   createSession({ workspace: ws, conversationId: "conv-ide", model: "auto" });
   const first = runHook("cco-tool-gate.mjs", { hook_event_name: "preToolUse", conversation_id: "conv-ide", model: "", tool_name: "Write", tool_input: {}, workspace_roots: [ws] });
   assert.equal(first.permission, "allow");
-  assert.match(first.agent_message, /composer-2\.5-fast/, "IDE on Auto: measured 14.2¢ direct vs 9.8¢ with a Composer subagent, so routine work is routed");
+  assert.equal(first.agent_message, undefined, "on Auto the same task billed 6.4¢ in the chat and 7.5¢ delegated: no routing advice");
   const refined = runHook("cco-tool-gate.mjs", { hook_event_name: "preToolUse", conversation_id: "conv-ide", model: "composer-2.5", tool_name: "Write", tool_input: {}, workspace_roots: [ws] });
   assert.equal(loadSession(ws, "conv-ide").model, "composer-2.5");
   assert.equal(refined.permission, "allow", "once the concrete cheap model is known, ordinary work stays in the chat");
@@ -179,7 +180,7 @@ test("router mode answers FAST questions directly but still routes FAST work", (
   assert.equal(work.action, "deny");
 });
 
-test("IDE replay: workspaceOpen + first prompt on Auto → the FAST delegation goes ahead (measured cheaper in the IDE); cheap chat keeps FAST work; the same chat in the CLI stays put (subagents billed as Auto there)", () => {
+test("IDE replay: workspaceOpen + first prompt on Auto → a FAST delegation is turned back (measured: not cheaper); cheap chat keeps FAST work; the same chat in the CLI stays put (subagents billed as Auto there)", () => {
   const ws = fs.mkdtempSync(path.join(os.tmpdir(), "cco-ide-"));
   fs.mkdirSync(path.join(ws, ".cursor"), { recursive: true });
   fs.writeFileSync(path.join(ws, ".cursor", "cco.json"), JSON.stringify({ pricing: { enabled: false }, discovery: { auto: false } }));
@@ -190,9 +191,10 @@ test("IDE replay: workspaceOpen + first prompt on Auto → the FAST delegation g
   assert.equal(prompt.continue, true);
   const grep = runHook("cco-tool-gate.mjs", { hook_event_name: "preToolUse", conversation_id: "ide-A", model: "default", tool_name: "Grep", tool_input: { pattern: "slugify" }, workspace_roots: [ws] });
   assert.equal(grep.permission, "allow");
-  assert.match(grep.agent_message, /composer-2\.5-fast/, "IDE on Auto: routine work is routed to the Composer subagent");
+  assert.equal(grep.agent_message, undefined, "on Auto routine work stays in the chat: no routing advice");
   const task = runHook("cco-task-guard.mjs", { hook_event_name: "preToolUse", conversation_id: "ide-A", model: "default", tool_name: "Task", tool_input: { description: "slugify", prompt: "CCO-SCORES: complexity=3 risk=0 breadth=1 uncertainty=0 latency=2\nCreate utils/slugify.js ...", subagent_type: "fast-tier" }, workspace_roots: [ws] });
-  assert.equal(task.permission, "allow", "IDE on Auto: the subagent runs and is billed as Composer, measured 31% cheaper on the same task");
+  assert.equal(task.permission, "deny", "on Auto a Fast delegation costs more than the work (6.4¢ in the chat, 7.5¢ delegated on Cursor's bill): the guard turns it back");
+  assert.match(task.agent_message, /directly in this chat/);
   // The Cursor CLI (dated version string) runs an Auto chat's subagents on Auto too: there the work stays in the chat.
   runHook("cco-prompt-capture.mjs", { hook_event_name: "beforeSubmitPrompt", conversation_id: "cli-A", model: "default", cursor_version: "2026.09.02-c22c1a3", prompt: "Create utils/slugify.js exporting slugify(str) and a node:test for it, then run node --test utils/", workspace_roots: [ws] });
   const cliTask = runHook("cco-task-guard.mjs", { hook_event_name: "preToolUse", conversation_id: "cli-A", model: "default", cursor_version: "2026.09.02-c22c1a3", tool_name: "Task", tool_input: { description: "slugify", prompt: "CCO-SCORES: complexity=3 risk=0 breadth=1 uncertainty=0 latency=2\nCreate utils/slugify.js ...", subagent_type: "fast-tier" }, workspace_roots: [ws] });

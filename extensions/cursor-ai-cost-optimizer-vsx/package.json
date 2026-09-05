@@ -229,6 +229,13 @@
           "scope": "application",
           "order": 9,
           "markdownDescription": "Show the estimated savings for the current project in the status bar (`⚡ Saved ~$4.12`). Off: the item reads `AI Cost`."
+        },
+        "costOptimizer.showRoutingNotifications": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "order": 10,
+          "markdownDescription": "When a task goes to a tier subagent, show a short notification naming the model that is doing it (`Composer 2.5 (Fast tier) is doing this task`). The chat's own model picker keeps showing the chat model, so this is where you see what actually ran; the status bar names it too."
         }
       }
     },
@@ -289,7 +296,7 @@
           {
             "id": "cco.step.chat",
             "title": "Work as usual",
-            "description": "Keep your chat model. On a pricier chat model, routine work runs on a cheaper model through a subagent named after that model and its tier (a **Composer 2.5 Fast** card, for example; click it to see its steps and diffs); on Composer it stays in the chat; on Auto it is routed in the IDE, where that measured 31% cheaper. Risky work goes to the Deep tier. Nothing is blocked for long, nothing is written into your project.",
+            "description": "Keep your chat model. On an Opus-class chat model, routine work runs on a cheaper model through a subagent named after that model and its tier (a **Composer 2.5 Fast** card, for example; click it to see its steps and diffs); on Auto, Composer, Grok, Sonnet and GPT it stays in the chat, because on Cursor's bill a delegation costs about what the work does. The status bar names where each task ran. Risky work goes to the Deep tier. Nothing is blocked for long, nothing is written into your project.",
             "media": {
               "markdown": "media/walkthrough/step-init.md"
             }

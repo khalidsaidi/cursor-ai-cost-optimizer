@@ -5,7 +5,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { decideHookMode, doctorWorkspace, findBundledBinary, findNode, installWorkspace, plannedFiles, runPluginScriptAsync, stripCcoHooks, uninstallWorkspace, workspacePaths, workspaceStatus, type HookRuntimePreference, type HooksFile, type Options, hasProjectLeftovers } from "./install";
-import { costStatement, formatUsd, readSavings, readLastDecision, readTierModels, loadPricing, modelDisplayName, resolveModelPrice, pickerModels, overrideMismatches, modelBaseName } from "./pricing";
+import { costStatement, formatUsd, readSavings, readLastDecision, readTierModels, loadPricing, modelDisplayName, resolveModelPrice, pickerModels, overrideMismatches, modelBaseName, readLastRun } from "./pricing";
 import { syncSettingsToPluginConfig } from "./settings";
 import { hooksLoadedInWindow } from "./hooksLog";
 import { doctorUser, installUser, pauseWorkspace, stripUserHooks, uninstallUser, userHookCommand, userStatus, workspacePaused, workspaceStateDir, findPluginCopies, retirePluginCopies, recordAgentsWrittenAfterOpen, generatedAgentNames } from "./userScope";
@@ -207,9 +207,33 @@ export function activate(context: vscode.ExtensionContext) {
   status.name = "AI Cost Optimizer";
   status.command = "cco.showMenu";
   context.subscriptions.push(status);
+  // The chat's picker keeps naming the chat model whatever ran, and the chat model paraphrases a subagent's reply
+  // (measured: it drops the "Done by <model>" line even when told to relay verbatim). So when a task goes to a
+  // subagent, the extension itself says so for a few seconds, in a notification it owns.
+  let announcedDecisionTs: string | null = null;
+  const announceRouting = (ws: string, stateDir: string | undefined) => {
+    const run = readLastRun(ws, stateDir);
+    if (announcedDecisionTs === null) {
+      announcedDecisionTs = run?.ts ?? ""; // whatever was there when the window opened is not news
+      return;
+    }
+    if (!run || run.ts === announcedDecisionTs) {
+      return;
+    }
+    announcedDecisionTs = run.ts;
+    if (run.where !== "subagent" || Date.now() - Date.parse(run.ts) > 120_000 || !vscode.workspace.getConfiguration("costOptimizer").get<boolean>("showRoutingNotifications", true)) {
+      return;
+    }
+    const tierName = run.tier === "fast" ? vscode.l10n.t("Fast") : run.tier === "balanced" ? vscode.l10n.t("Balanced") : run.tier === "deep" ? vscode.l10n.t("Deep") : "";
+    const title = vscode.l10n.t("{0} ({1} tier) is doing this task", modelDisplayName(run.model, loadPricing(null, bundledPricing)), tierName);
+    void vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title, cancellable: false }, () => new Promise<void>((resolve) => setTimeout(resolve, 8000)));
+  };
   const refreshStatus = () => {
     const ws = firstWorkspace();
     const c = combined(ws);
+    if (ws && c.mode !== "none") {
+      announceRouting(ws, c.mode === "user" ? path.join(workspaceStateDir(stateRoot, ws), "state") : undefined);
+    }
     const md = new vscode.MarkdownString(undefined, true);
     md.isTrusted = true;
     const where = c.mode === "user" ? vscode.l10n.t("on for all projects") : c.mode === "project" ? vscode.l10n.t("on in {0}", path.basename(ws as string)) : "";
@@ -256,7 +280,18 @@ export function activate(context: vscode.ExtensionContext) {
     } else {
       md.appendMarkdown(`${vscode.l10n.t("Routes routine work to cheaper models and shows what it saves.")} [${vscode.l10n.t("Turn on")}](command:cco.installCursorAssets?%7B%22scope%22%3A%22user%22%2C%22confirm%22%3Afalse%7D)\n`);
     }
-    const savedText = savedUsd >= 0.01 && vscode.workspace.getConfiguration("costOptimizer").get<boolean>("showSavingsInStatusBar", true) ? vscode.l10n.t("Saved {0}", formatUsd(savedUsd)) : "AI Cost";
+    const showSaved = savedUsd >= 0.01 && vscode.workspace.getConfiguration("costOptimizer").get<boolean>("showSavingsInStatusBar", true);
+    // The chat's picker keeps saying "Auto" (or whatever the chat runs on) whatever the extension did, so the bar
+    // names where the last task actually ran: "Composer 2.5 · Fast" or "In chat · Auto". Older than a day: plain.
+    const lastRun = c.mode !== "none" && ws ? readLastRun(ws, c.mode === "user" ? path.join(workspaceStateDir(stateRoot, ws), "state") : undefined) : null;
+    const recent = lastRun && Date.now() - Date.parse(lastRun.ts) < 24 * 3600 * 1000;
+    const tierWord = (t: string | null) => (t === "fast" ? vscode.l10n.t("Fast") : t === "balanced" ? vscode.l10n.t("Balanced") : t === "deep" ? vscode.l10n.t("Deep") : "");
+    const whereText = recent && lastRun
+      ? lastRun.where === "subagent"
+        ? `${modelDisplayName(lastRun.model, loadPricing(null, bundledPricing))}${lastRun.tier ? ` · ${tierWord(lastRun.tier)}` : ""}`
+        : vscode.l10n.t("In chat · {0}", modelDisplayName(lastRun.model, loadPricing(null, bundledPricing)))
+      : "";
+    const savedText = whereText ? `${whereText}${showSaved ? ` · ${vscode.l10n.t("Saved {0}", formatUsd(savedUsd))}` : ""}` : showSaved ? vscode.l10n.t("Saved {0}", formatUsd(savedUsd)) : "AI Cost";
     if (hooksFailure) {
       warn = true;
       md.appendMarkdown(`\n$(warning) ${vscode.l10n.t("The hooks were turned off: their command did not run here ({0}). Cursor works normally without them. Fix the cause (Node.js 18+ on PATH usually) and choose Turn on again.", hooksFailure)}\n`);

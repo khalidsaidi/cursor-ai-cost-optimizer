@@ -99,33 +99,20 @@
       "maxFileReads": 3,
       "maxToolCalls": 6,
       "maxWebSearches": 0,
-      "style": "terse",
-      "expectedTokens": {
-        "input": 60000,
-        "output": 1500
-      }
+      "style": "terse"
     },
     "balanced": {
       "maxFileReads": 10,
       "maxToolCalls": 20,
       "maxWebSearches": 1,
-      "style": "normal",
-      "expectedTokens": {
-        "input": 150000,
-        "output": 4000
-      }
+      "style": "normal"
     },
     "deep": {
       "maxFileReads": 30,
       "maxToolCalls": 60,
       "maxWebSearches": 3,
-      "style": "thorough",
-      "expectedTokens": {
-        "input": 400000,
-        "output": 12000
-      }
+      "style": "thorough"
     },
-    "sessionOverheadTokens": 38000,
     "effortOutputFactor": {
       "low": 0.7,
       "medium": 1.0,
@@ -133,6 +120,40 @@
       "xhigh": 2.0,
       "max": 3.0,
       "thinking": 1.3
+    },
+    "taskProfile": {
+      "_note": "Tokens one task of each tier bills, measured on Cursor's usage events (2026-09-05; a module, its tests and a README section = one FAST task). 'subagent' is the tier subagent doing it in its own session; 'chat' is the same work done in an ongoing chat. Balanced and Deep scale the FAST profile.",
+      "fast": {
+        "subagent": {
+          "input": 18000,
+          "output": 3000,
+          "cacheRead": 120000
+        },
+        "chat": {
+          "input": 3000,
+          "output": 1500,
+          "cacheRead": 98000
+        }
+      },
+      "balanced": {
+        "scale": 2.5
+      },
+      "deep": {
+        "scale": 6.7
+      }
+    },
+    "parentOverhead": {
+      "_note": "What the chat pays to delegate one task: the Task call and the relay of the reply (measured: two requests).",
+      "input": 2800,
+      "output": 700,
+      "cacheRead": 48000
+    },
+    "turnFactor": {
+      "_note": "Multiplies a model's input and cache-read volume for the same task. In the IDE every model measured took the same turns (Grok 4.6 High: 98k cache reads, Auto: 98k), so the factors are 1; raise one here if a model of yours retries a lot.",
+      "high": 1.0,
+      "xhigh": 1.0,
+      "max": 1.0,
+      "thinking": 1.0
     }
   },
   "enforcement": {

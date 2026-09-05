@@ -7,7 +7,7 @@
  * Fail-open.
  */
 import { loadSession, saveSession, updateSession } from "./lib/session.mjs";
-import { tierLabel } from "./lib/labels.mjs";
+import { tierLabel, modelLabel } from "./lib/labels.mjs";
 import {
   readStdin,
   safeJsonParse,
@@ -84,6 +84,9 @@ export function analyzeOutcome({ hookEvent, payload }) {
     rework: Boolean(requestedEscalation || verifyFail),
     requestedEscalation,
     nextTier,
+    // What the subagent's reply carries for the user: its "Done by <model> (<tier> tier)." line and its Changes diffs.
+    hasAttribution: /^\s*Done by .+ tier\)\./m.test(outputText),
+    hasChanges: /```diff|\n#+\s*Changes\b/.test(outputText),
     durationMs: asNumber(payload.duration ?? payload.duration_ms, 0)
   };
 }
@@ -154,6 +157,8 @@ async function main() {
       isError: analysis.isError,
       rework: analysis.rework,
       requestedEscalation: analysis.requestedEscalation,
+      hasAttribution: analysis.hasAttribution,
+      hasChanges: analysis.hasChanges,
       nextTier: analysis.nextTier
     });
 
@@ -182,9 +187,14 @@ async function main() {
     const cascade = config?.escalation?.cascade !== false;
     // The cost line is the one thing the user should always see: repeat it right when the delegation returns.
     const sess = workspace && payload.conversation_id ? loadSession(workspace, payload.conversation_id) : null;
-    const footerReminder = "";
+    // The chat's picker keeps naming the chat model, and a parent left to itself paraphrases the subagent's reply,
+    // dropping the line that names the model and the diff blocks. At the moment the result comes back, the parent
+    // is told to relay it verbatim, so the user sees which model did the work and what it changed.
+    const subagentModel = workspace ? readWorkspaceAgentModel(workspace, analysis.subagentType) : null;
+    const doneBy = `Done by ${subagentModel && subagentModel !== "inherit" ? modelLabel(subagentModel) : "the subagent"} (${tierLabel(analysis.tier)} tier).`;
+    const footerReminder = ` Relay ${analysis.subagentType}'s final message to the user verbatim: its first line "${doneBy}" and its Changes section with the diff code blocks included; write nothing of your own before or after it.`;
     if (verification && verification.ok) {
-      emit({ additional_context: `CCO-VERIFY: pass (${verification.command} exit 0). Relay the result; no further checks needed.${footerReminder}` });
+      emit({ additional_context: `CCO-VERIFY: pass (${verification.command} exit 0). No further checks needed.${footerReminder}` });
       return;
     }
     if (verification && !verification.ok && cascade && analysis.nextTier) {
@@ -233,7 +243,10 @@ async function main() {
       emit({ additional_context: message });
       return;
     }
-    if (footerReminder) {
+    // In the IDE the Task tool fires no postToolUse; subagentStop is the event whose additional_context the parent
+    // acts on (measured on 3.17), so the relay instruction goes out on either event once the subagent completed.
+    const completed = hookEvent === "postToolUse" ? !analysis.isError : !analysis.status || analysis.status === "completed";
+    if (completed && !analysis.isError && !analysis.requestedEscalation) {
       emit({ additional_context: `CCO:${footerReminder}` });
       return;
     }

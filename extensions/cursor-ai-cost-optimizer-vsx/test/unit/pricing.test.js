@@ -63,6 +63,25 @@ test("rate multipliers, staleness, savings and the cost statement", () => {
   }
 });
 
+test("readLastRun: names where the last task ran, in the chat (on the chat model) or on a tier subagent", () => {
+  const { readLastRun } = require("../../dist/pricing.js");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cco-lastrun-"));
+  const rows = [
+    { ts: "1", final: "composer-2.5-fast", model: "composer-2.5", chatModel: "auto" },
+    { ts: "2", final: "chat", model: "auto", chatModel: null, reason: "tier_fast_not_cheaper_than_chat_model" },
+  ];
+  fs.writeFileSync(path.join(dir, "decisions.jsonl"), rows.map((r) => JSON.stringify(r)).join("\n"));
+  const inChat = readLastRun(dir, dir);
+  assert.equal(inChat.where, "chat");
+  assert.equal(inChat.model, "auto");
+  fs.writeFileSync(path.join(dir, "decisions.jsonl"), JSON.stringify(rows[0]));
+  const routed = readLastRun(dir, dir);
+  assert.equal(routed.where, "subagent");
+  assert.equal(routed.tier, "fast");
+  assert.equal(routed.model, "composer-2.5");
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test("readLastDecision: the tier comes from the subagent name suffix, whatever the naming scheme", () => {
   const { readLastDecision } = require("../../dist/pricing.js");
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cco-last-"));

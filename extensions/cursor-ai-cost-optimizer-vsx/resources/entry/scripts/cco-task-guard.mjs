@@ -29,7 +29,7 @@ import { loadJointState, modelLimitedUntil } from "./lib/state.mjs";
 import { tierLabel, modelLabel, reasonLabel } from "./lib/labels.mjs";
 import { readWorkspaceAgentModel } from "./lib/agents.mjs";
 import { tierFor } from "./lib/models.mjs";
-import { detectTestCommand, estimateTaskCostUsd, formatUsd, delegationWorth } from "./lib/project.mjs";
+import { detectTestCommand, estimateTaskCostUsd, parentOverheadUsd, formatUsd, delegationWorth } from "./lib/project.mjs";
 import { updateSession, loadSession, createSession, normalizeModelId, syncTurnFromTranscript, guessTranscriptPath, saveSession } from "./lib/session.mjs";
 import { loadPricing, resolveModelPrice, blendedRatePerMillion } from "./lib/pricing.mjs";
 
@@ -291,7 +291,9 @@ async function main() {
     let multiplier = null;
     try {
       const pricingNow = loadPricing(paths?.pricingPath);
-      const est = estimateTaskCostUsd({ tier: result.targetTier, model: result.model, pricing: pricingNow, config, delegation: true });
+      const sub = estimateTaskCostUsd({ tier: result.targetTier, model: result.model, pricing: pricingNow, config, delegation: true });
+      const overhead = sessionModel ? parentOverheadUsd({ model: sessionModel, pricing: pricingNow, config }) : 0;
+      const est = sub === null ? null : Number((sub + (overhead || 0)).toFixed(3));
       estimateUsd = est;
       chatEstimateUsd = sessionModel ? estimateTaskCostUsd({ tier: result.targetTier, model: sessionModel, pricing: pricingNow, config }) : null;
       const chatRate0 = blendedRatePerMillion(resolveModelPrice(sessionModel, pricingNow, { overrides: config?.pricing?.overrides }));

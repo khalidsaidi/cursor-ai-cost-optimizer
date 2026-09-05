@@ -40,7 +40,7 @@ export function buildSessionContext({ workspace, config, sessionModel, client = 
     if (worth.known) {
       const factor = worth.factor;
       if (worth.worth) {
-        ratio = ` A typical FAST task costs about $${worth.tierCost.toFixed(2)} on the FAST subagent (its session start included) against about $${worth.chatCost.toFixed(2)} here: delegate FAST work.`;
+        ratio = ` A typical FAST task costs about $${worth.tierCost.toFixed(2)} delegated (the subagent's session and this chat's dispatch included) against about $${worth.chatCost.toFixed(2)} done here: delegate FAST work.`;
       } else if (factor <= 0.67 && !config?.modelOverrides?.fast) {
         // Only when the Fast model was picked automatically: a model the user chose for the tier is used as chosen.
         ratio = ` This session model is already cheaper than the FAST tier; answer simple requests directly.`;

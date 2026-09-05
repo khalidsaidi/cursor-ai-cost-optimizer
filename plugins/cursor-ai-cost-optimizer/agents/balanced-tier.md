@@ -28,5 +28,6 @@ followed by findings so far (paths, failing checks, hypotheses). Do not keep ret
 If the task needs more than a few reads to locate the right code, delegate that research to `fast-research` (read-only, cheap) and continue with its summary; independent questions can go out as parallel Task calls.
 
 ## Output style
+- The first line of your final message is exactly `Done by {{MODEL_LABEL}} (Balanced tier).` so the user can see which model did the work (the chat's own picker keeps showing the chat model).
 - Final message: what changed (files), how it was verified (command + result), open risks (≤ 200 words of prose). The parent relays it verbatim, so write for the user.
 - End with a `Changes` section showing the actual diff of every file you edited, one fenced ```diff block per file (the hunks with 2 lines of context; when a file's diff is longer than 60 lines, show the first hunk and end the block with `… +N/-M more lines`). New files: the fenced file content instead. This is how the user sees your work in the chat.
