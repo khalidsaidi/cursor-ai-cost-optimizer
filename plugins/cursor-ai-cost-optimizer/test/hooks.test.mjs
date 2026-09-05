@@ -523,3 +523,15 @@ test("paused project: a cco-* delegation is turned back into in-chat work and th
   assert.equal(start.cco, "workspace_opt_out");
   assert.match(start.additional_context, /paused/);
 });
+
+test("a failed DEEP subagent (usage limit) hands the task back to the chat with an honest footer", () => {
+  const ws = readyWorkspace();
+  createSession({ workspace: ws, conversationId: "deep-fail", model: "cursor-grok-4.6-high" });
+  const out = runHook("cco-task-result.mjs", {
+    hook_event_name: "subagentStop", conversation_id: "deep-fail", subagent_type: "cco-deep", model: "claude-opus-5-thinking-high",
+    status: "error", summary: "ActionRequiredError: You've hit your usage limit for Opus", workspace_roots: [ws]
+  });
+  assert.match(out.followup_message, /cco-deep did not complete/);
+  assert.match(out.followup_message, /\[cco: DEEP in chat → cursor-grok-4\.6-high • 1x • subagent failed\]/);
+  assert.match(String(loadSession(ws, "deep-fail")?.lastFooter), /subagent failed\]$/, "later reminders repeat the honest footer");
+});

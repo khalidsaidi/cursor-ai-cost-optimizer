@@ -299,6 +299,21 @@ async function main() {
       session.directWork = asNumber(session.directWork, 0) + 1;
       saveSession(workspace, session);
     }
+    // The model ignored the delegation reminders and the escape hatch opened: the work stays in this chat.
+    // Say so once, with an honest footer (models otherwise invent one that names the tier model they never used).
+    if (verdict.reason === "escape_hatch_after_denials" && !session.footerSent) {
+      session.footerSent = true;
+      saveSession(workspace, session);
+      const tier = String(session.lastDenial?.tier || session.decision?.tier || "").toUpperCase();
+      const model = session.model || "the chat model";
+      const footer = `[cco: ${tier || "AUTO"} in chat → ${model} • 1x • delegation skipped]`;
+      emit({
+        permission: "allow",
+        agent_message: `CCO: no cco-* delegation was made; this work runs in this chat on ${model}. Do not claim another model. End your final message with exactly this line: ${footer}`,
+        user_message: `CCO: running in chat on ${model} (delegation skipped).`
+      });
+      return;
+    }
     // Copilot-style footer for work that rightly stays in this chat: say so once per turn.
     const workTool = new RegExp(config?.enforcement?.gatedTools || DEFAULT_WORK_TOOLS, "i").test(String(payload.tool_name || ""));
     if (workTool && !session.footerSent && /tier_.*_not_cheaper|session_model_already_matches_tier|no_savings_expected/.test(verdict.reason)) {

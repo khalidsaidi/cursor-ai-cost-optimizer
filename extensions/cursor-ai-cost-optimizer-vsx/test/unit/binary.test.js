@@ -86,10 +86,13 @@ test("compiled binary: config from .cursor/cco.json overrides plugin defaults (r
   }
 });
 
-test("compiled binary: inert when the workspace opts out or has no tier agents", { skip: !available && `binary not built: ${BINARY}` }, async () => {
+test("compiled binary: paused workspace turns cco-* delegations back into chat work; no tier agents means inert", { skip: !available && `binary not built: ${BINARY}` }, async () => {
   const t = await setup((cfg) => ({ ...cfg, enabled: false }));
   try {
-    assert.deepEqual(t.run("preToolUse", { conversation_id: "conv-3", tool_name: "Task", tool_input: { prompt: "x", subagent_type: "cco-fast" } }).out, { permission: "allow" });
+    const paused = t.run("preToolUse", { conversation_id: "conv-3", tool_name: "Task", tool_input: { prompt: "x", subagent_type: "cco-fast" } }).out;
+    assert.equal(paused.permission, "deny");
+    assert.match(paused.agent_message, /paused in this project/);
+    assert.deepEqual(t.run("preToolUse", { conversation_id: "conv-3b", tool_name: "Read", tool_input: { path: "x" } }).out, { permission: "allow" }, "ordinary tools stay untouched while paused");
     fs.writeFileSync(t.p.configPath, "{}");
     fs.rmSync(t.p.agentsDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
     assert.deepEqual(t.run("preToolUse", { conversation_id: "conv-4", tool_name: "Task", tool_input: { prompt: "x", subagent_type: "cco-fast" } }).out, { permission: "allow" });

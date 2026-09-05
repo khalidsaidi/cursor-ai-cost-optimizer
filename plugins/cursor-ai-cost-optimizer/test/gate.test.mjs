@@ -108,6 +108,10 @@ test("gate hook process: end to end with session state, transcript prompt, denia
   assert.equal(strict2.permission, "deny");
   const strict3 = runHook("cco-tool-gate.mjs", base);
   assert.equal(strict3.permission, "allow", "escape hatch after two denials in strict mode");
+  assert.match(strict3.agent_message, /in chat → claude-opus-5-thinking-high • 1x • delegation skipped\]/, "honest footer when the model never delegated");
+  assert.match(strict3.user_message, /running in chat/);
+  const strict4 = runHook("cco-tool-gate.mjs", base);
+  assert.equal(strict4.agent_message, undefined, "the in-chat footer is given once");
   assert.equal(loadSession(ws, "conv-A").denials, 2);
   fs.unlinkSync(path.join(ws, ".cursor", "cco.json"));
 

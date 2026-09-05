@@ -6,7 +6,7 @@
  * cascade: when a cheaper tier asks to escalate, remind the parent to delegate one tier up.
  * Fail-open.
  */
-import { loadSession } from "./lib/session.mjs";
+import { loadSession, saveSession } from "./lib/session.mjs";
 import {
   readStdin,
   safeJsonParse,
@@ -134,7 +134,7 @@ async function main() {
 
     const cascade = config?.escalation?.cascade !== false;
     // The cost line is the one thing the user should always see: repeat it right when the delegation returns.
-    const sess = hookEvent === "postToolUse" && workspace && payload.conversation_id ? loadSession(workspace, payload.conversation_id) : null;
+    const sess = workspace && payload.conversation_id ? loadSession(workspace, payload.conversation_id) : null;
     const footerReminder = sess?.lastFooter ? ` Relay the subagent's final message verbatim and end your reply with exactly this line: ${sess.lastFooter}` : "";
     if (verification && verification.ok) {
       emit({ additional_context: `CCO-VERIFY: pass (${verification.command} exit 0). Relay the result; no further checks needed.${footerReminder}` });
@@ -142,6 +142,30 @@ async function main() {
     }
     if (verification && !verification.ok && cascade && analysis.nextTier) {
       emit({ additional_context: `CCO-VERIFY: fail (${verification.command}):\n${verification.tail}\nTell the user in one line that the ${analysis.tier.toUpperCase()} attempt failed verification and you are escalating to ${analysis.nextTier.toUpperCase()}, then delegate once to cco-${analysis.nextTier} with this failure and the subagent's summary; do not retry ${analysis.subagentType} and do not fix it here.` });
+      return;
+    }
+    // The top tier failed (typically a usage limit on the DEEP model): there is nothing to escalate to, so the
+    // chat model finishes the task itself and says so honestly instead of leaving a dead subagent card.
+    if (analysis.isError && analysis.tier === "deep" && !analysis.nextTier) {
+      const sessionModel = sess?.model || "the chat model";
+      const footer = `[cco: DEEP in chat → ${sessionModel} • 1x • subagent failed]`;
+      const message = `CCO: ${analysis.subagentType} did not complete (${analysis.status || "error"}; often a usage limit on its model). Do the task directly in this chat on ${sessionModel}, tell the user in one line that the DEEP subagent failed, and end with exactly this line: ${footer}`;
+      if (sess && workspace) {
+        // Later postToolUse reminders repeat this footer, so the final reply stays honest even if the follow-up is skimmed.
+        sess.lastFooter = footer;
+        try {
+          saveSession(workspace, sess);
+        } catch {}
+      }
+      if (hookEvent === "subagentStop") {
+        if (config?.escalation?.followupOnSubagentFailure !== false) {
+          emit({ followup_message: message });
+          return;
+        }
+        emit({});
+        return;
+      }
+      emit({ additional_context: message });
       return;
     }
     if (cascade && analysis.nextTier && analysis.nextTier !== analysis.tier) {
