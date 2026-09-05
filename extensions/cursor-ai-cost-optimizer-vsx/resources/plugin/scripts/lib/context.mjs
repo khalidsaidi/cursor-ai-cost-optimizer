@@ -14,7 +14,7 @@ function fmtPrice(price) {
  * Build the short context block injected at sessionStart so the parent agent knows
  * the live tier→model mapping and relative prices without reading files.
  */
-export function buildSessionContext({ workspace, config, sessionModel }) {
+export function buildSessionContext({ workspace, config, sessionModel, client = "ide" }) {
   const paths = workspacePaths(workspace);
   const runtime = readJsonSafe(paths.runtimePath);
   const pricing = loadPricing(paths.pricingPath);
@@ -36,7 +36,7 @@ export function buildSessionContext({ workspace, config, sessionModel }) {
     const sessionBlended = blendedRatePerMillion(sessionPrice);
     const fastBlended = blendedRatePerMillion(tierPrices.fast.price);
     let ratio = "";
-    const worth = delegationWorth({ tier: "fast", tierModel: tierPrices.fast.model, sessionModel, pricing, config });
+    const worth = delegationWorth({ tier: "fast", tierModel: tierPrices.fast.model, sessionModel, pricing, config, client });
     if (worth.known) {
       const factor = worth.factor;
       if (worth.worth) {
@@ -48,8 +48,8 @@ export function buildSessionContext({ workspace, config, sessionModel }) {
         ratio = ` The FAST tier's model was chosen by the user: delegate FAST work to it as usual.`;
       }
     }
-    if (/^auto/i.test(sessionModel)) {
-      lines.push(`Session model: Auto (Cursor picks a model per request and bills its list price; estimated ${fmtPrice(sessionPrice)}). CCO takes over routing so tiers are explicit and logged.${ratio}`);
+    if (worth.sessionUnpriced) {
+      lines.push(`Session model: Auto in the Cursor CLI, where a subagent also runs on Auto and pays its own session start (measured: delegating cost more). Routine work stays in this chat. Delegate only risky work to the DEEP subagent, or a tier the user forces with [cco:…].`);
     } else {
       lines.push(`Session model: ${sessionModel} (${fmtPrice(sessionPrice)}).${ratio}`);
     }

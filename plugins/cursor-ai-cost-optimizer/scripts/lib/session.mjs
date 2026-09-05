@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { readJsonSafe, writeJson, readTextSafe, nowIso, ageHours, workspacePaths } from "./common.mjs";
+import { readJsonSafe, writeJson, readTextSafe, nowIso, ageHours, workspacePaths, hookClient } from "./common.mjs";
 
 /**
  * Per-conversation state. Only parent conversations get a sessionStart hook, so the existence
@@ -40,6 +40,7 @@ export function createSession({ workspace, conversationId, model, payload = {} }
     conversation_id: conversationId,
     startedAt: nowIso(),
     model: model || null,
+    client: hookClient(payload),
     composer_mode: payload.composer_mode ?? null,
     is_background_agent: Boolean(payload.is_background_agent),
     userPrompt: null,

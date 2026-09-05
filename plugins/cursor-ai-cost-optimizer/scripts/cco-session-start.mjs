@@ -34,7 +34,7 @@ import { buildSessionContext } from "./lib/context.mjs";
 import { cliVersion } from "./lib/models.mjs";
 import { createSession, pruneSessions, normalizeModelId } from "./lib/session.mjs";
 import { writeWorkspaceAgents, workspaceHasAgents, readWorkspaceAgentModel } from "./lib/agents.mjs";
-import { TIERS } from "./lib/common.mjs";
+import { TIERS, hookClient } from "./lib/common.mjs";
 
 const REFRESH_LOCK_MINUTES = 10;
 
@@ -72,7 +72,29 @@ export function scheduleBackgroundRefresh({ workspace, paths, force = false }) {
 }
 
 /** True when delegating FAST work would not save materially over the session model (Composer, Auto, …). */
-export function sessionIsCheap({ workspace, config, sessionModel }) {
+/** Which routing rule a chat gets: "full", "compact" (the chat model is already the cheap tier) or "cli-auto". */
+export function ruleKind({ workspace, config, sessionModel, client = "ide" }) {
+  if (!sessionModel || config?.enforcement?.requireDelegation === "always") {
+    return "full";
+  }
+  try {
+    const paths = workspacePaths(workspace);
+    const pricing = loadPricing(paths.pricingPath);
+    const fastModel = readWorkspaceAgentModel(workspace, "fast-tier") || readJsonSafe(paths.runtimePath)?.profiles?.fast?.model || "inherit";
+    const worth = delegationWorth({ tier: "fast", tierModel: fastModel, sessionModel, pricing, config, client });
+    if (worth.sessionUnpriced) {
+      return "cli-auto"; // an Auto chat in the CLI: every subagent it starts runs and is billed as Auto too
+    }
+    if (String(config?.modelOverrides?.fast || "").trim()) {
+      return "full";
+    }
+    return worth.known && !worth.worth ? "compact" : "full";
+  } catch {
+    return "full";
+  }
+}
+
+export function sessionIsCheap({ workspace, config, sessionModel, client = "ide" }) {
   if (!sessionModel || config?.enforcement?.requireDelegation === "always" || String(config?.modelOverrides?.fast || "").trim()) {
     return false;
   }
@@ -81,7 +103,10 @@ export function sessionIsCheap({ workspace, config, sessionModel }) {
     const pricing = loadPricing(paths.pricingPath);
     const fastModel = readWorkspaceAgentModel(workspace, "fast-tier") || readJsonSafe(paths.runtimePath)?.profiles?.fast?.model || "inherit";
     // Whole-task comparison, the subagent's session start included (the same test the hooks apply per call).
-    const worth = delegationWorth({ tier: "fast", tierModel: fastModel, sessionModel, pricing, config });
+    const worth = delegationWorth({ tier: "fast", tierModel: fastModel, sessionModel, pricing, config, client });
+    if (worth.sessionUnpriced) {
+      return true; // Auto in the CLI: subagents are billed as Auto too; routine work stays in the chat (measured: routing cost more)
+    }
     return worth.known ? !worth.worth : false;
   } catch {
     return false;
@@ -93,6 +118,19 @@ export function compactRuleText() {
   return [
     "# CCO routing (short form: your chat model is already the cheap tier)",
     "Work normally in this chat. Delegate only when it improves quality: risky work (production, auth, payments, security, privacy, data loss, irreversible operations) or a genuinely complex multi-file change goes to the `-deep` subagent (Task tool; the session context lists the exact subagent names; the prompt starts with `CCO-SCORES: complexity=<n> risk=<n> breadth=<n> uncertainty=<n> latency=<n>`, 0–10 each), medium work to the `-balanced` subagent. `[cco:deep]`, `[cco:balanced]`, `[cco:fast]` force a tier; `[cco:off]` skips routing. Relay a subagent's final message verbatim. Never mention tiers, routing, subagents or costs in your own text; never add a cost line. If the Task tool has no subagent whose name ends in `-fast`, CCO is not enabled here: ignore all of this."
+  ].join("\n");
+}
+
+/**
+ * The rule for an Auto chat in the Cursor CLI. Measured on Cursor's bill (2026-09-05, same task, tests passing):
+ * 13.7¢ done in the chat, 24.9¢ with a Fast subagent, because the CLI runs and bills an Auto chat's subagents as
+ * Auto too and each pays its own session start. Even a Task attempt that the guard turns back costs a round trip,
+ * so the rule is short and absolute.
+ */
+export function cliAutoRuleText() {
+  return [
+    "# CCO routing (Auto in the Cursor CLI)",
+    "Do every task yourself in this chat. Never call the Task tool with a subagent whose name ends in `-fast`, `-balanced`, `-deep`, `-verifier` or `fast-research`: in the CLI they run and are billed as Auto exactly like this chat, plus a session start of their own, so they cannot be cheaper or better (such calls are blocked). Only a tier the user forces with `[cco:fast]`, `[cco:balanced]` or `[cco:deep]` is delegated. Never mention tiers, routing, subagents or costs in your own text; never add a cost line."
   ].join("\n");
 }
 
@@ -187,15 +225,17 @@ export function refreshDiscoveryIfStale({ workspace, paths, config, background =
  * project) the routing rule itself. Sent by sessionStart, or by beforeSubmitPrompt for a chat that never got
  * a sessionStart (the chat panel Cursor opens with the window, on every version tested).
  */
-export function fullSessionContext({ workspace, paths, config, sessionModel }) {
+export function fullSessionContext({ workspace, paths, config, sessionModel, client = "ide" }) {
   if (windowLacksAgents(workspace)) {
     return "AI Cost Optimizer: its tier subagents were set up after this window opened, and Cursor lists subagents only when a window opens. Work normally in this chat (no delegation, no cost or tier lines); routing starts after the window is reloaded.";
   }
-  let context = buildSessionContext({ workspace, config, sessionModel });
-  if (paths.scope === "user") {
-    // A cheap chat model (Composer, Auto) rarely needs routing: it gets the short rule (risk escalation and
-    // overrides only) instead of paying for the full one on every turn.
-    const rule = sessionIsCheap({ workspace, config, sessionModel }) ? compactRuleText() : routingRuleText();
+  let context = buildSessionContext({ workspace, config, sessionModel, client });
+  // In user scope the rule travels with the briefing (no rule file in the workspace). A cheap chat model (Composer)
+  // gets the short rule (risk escalation and overrides only) instead of paying for the full one on every turn. An
+  // Auto chat in the CLI gets its own absolute rule in both scopes: the workspace rule file would invite delegation.
+  const kind = ruleKind({ workspace, config, sessionModel, client });
+  if (paths.scope === "user" || kind === "cli-auto") {
+    const rule = kind === "cli-auto" ? cliAutoRuleText() : kind === "compact" ? compactRuleText() : routingRuleText();
     if (rule) {
       context += `\n\n${rule}`;
     }
@@ -239,7 +279,7 @@ async function main() {
   }
   let additionalContext = "";
   try {
-    additionalContext = fullSessionContext({ workspace, paths, config, sessionModel });
+    additionalContext = fullSessionContext({ workspace, paths, config, sessionModel, client: hookClient(payload) });
   } catch (error) {
     additionalContext = "";
     hookLog(paths, { event: "sessionStart", contextError: String(error?.message || error) });

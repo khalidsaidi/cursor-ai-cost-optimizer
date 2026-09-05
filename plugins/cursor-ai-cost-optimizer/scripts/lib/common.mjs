@@ -192,6 +192,18 @@ export function readJsonl(filePath) {
   return out;
 }
 
+/**
+ * Which Cursor client sent this hook: "cli" (cursor-agent) or "ide". The CLI sets CURSOR_INVOKED_AS and dates its
+ * version string (2026.09.02-c22c1a3); the IDE numbers it (3.17.21). Matters for Auto chats: the IDE runs a tier
+ * subagent on the tier's own model and bills it so, the CLI runs and bills an Auto chat's subagents as Auto.
+ */
+export function hookClient(payload) {
+  if (process.env.CURSOR_INVOKED_AS === "cursor-agent") {
+    return "cli";
+  }
+  return /^\d{4}\.\d{2}\.\d{2}/.test(String(payload?.cursor_version || "")) ? "cli" : "ide";
+}
+
 /** Resolve the workspace root from a hook payload, falling back to cwd. */
 export function workspaceFromPayload(payload) {
   const roots = payload?.workspace_roots;

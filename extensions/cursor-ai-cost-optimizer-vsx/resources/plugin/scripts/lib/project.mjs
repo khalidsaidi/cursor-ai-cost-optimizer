@@ -79,11 +79,16 @@ export function estimateTaskCostUsd({ tier, model, pricing, config, delegation =
  * Compares whole-task estimates (the delegation's session start included) against the configured minimum
  * savings factor. Returns nulls when a price is unknown.
  */
-export function delegationWorth({ tier, tierModel, sessionModel, pricing, config }) {
-  // Auto (or an unknown chat model) has no price of its own: Cursor bills whatever it picked. Until a hook payload
-  // names that model, the parent's own routing choice stands (nothing is denied on a guess).
+export function delegationWorth({ tier, tierModel, sessionModel, pricing, config, client = "ide" }) {
+  // An Auto chat in the Cursor CLI: its subagents run and are billed as Auto too, so delegating buys nothing and pays
+  // a session start on top. Measured on Cursor's bill: the same task cost 15.2¢ direct and 17.6¢ routed. In the IDE
+  // the subagent runs on its own model (billed as Composer): 14.2¢ direct against 9.8¢ routed on the same task.
+  if (client === "cli" && /^auto/i.test(String(sessionModel || ""))) {
+    return { known: false, worth: null, tierCost: null, chatCost: null, factor: null, sessionUnpriced: true };
+  }
+  // A chat model with no known price: the parent's own routing choice stands (nothing is denied on a guess).
   const sessionPrice = sessionModel ? resolveModelPrice(sessionModel, pricing, { overrides: config?.pricing?.overrides }) : null;
-  if (!sessionPrice || sessionPrice.confidence === "estimate" || sessionPrice.confidence === "unknown") {
+  if (!sessionPrice || sessionPrice.confidence === "unknown") {
     return { known: false, worth: null, tierCost: null, chatCost: null, factor: null };
   }
   const tierCost = tierModel && tierModel !== "inherit" ? estimateTaskCostUsd({ tier, model: tierModel, pricing, config, delegation: true }) : null;

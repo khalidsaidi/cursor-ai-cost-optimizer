@@ -5,15 +5,17 @@ export const PRICING_SOURCE_URL = "https://cursor.com/docs/models-and-pricing.md
 export const BUNDLED_PRICING_PATH = path.join(PLUGIN_ROOT, "config", "pricing.json");
 
 /**
- * Documented fixed rate for Auto (Cost) on Enterprise; used only as an estimate when
- * the model is "auto" because Auto otherwise bills at the routed model's list price.
+ * What Cursor bills an Auto request at, per million tokens. Fitted exactly (8 of 8 billed requests, 2026-09-05,
+ * Pro plan, cursor.com/dashboard usage events) to $2.00 input, $0.50 cache read, $6.00 output; cache write is not
+ * observable there and is taken as the input rate. Auto is billed at this one rate whatever model it picked.
  */
-export const AUTO_ESTIMATE_RATE = {
-  input: 1.25,
-  cacheWrite: 1.25,
-  cacheRead: 0.25,
+export const AUTO_RATE = {
+  input: 2.0,
+  cacheWrite: 2.0,
+  cacheRead: 0.5,
   output: 6.0
 };
+export const AUTO_ESTIMATE_RATE = AUTO_RATE;
 
 const FAST_MULTIPLIER = 2;
 const PARAM_TOKENS = new Set([
@@ -181,11 +183,11 @@ export function resolveModelPrice(modelId, pricing, options = {}) {
   }
   if (!id || id === "auto" || id.startsWith("auto")) {
     return {
-      ...AUTO_ESTIMATE_RATE,
-      matchedRow: "auto (estimate)",
+      ...AUTO_RATE,
+      matchedRow: "auto (measured)",
       provider: "Cursor",
-      confidence: "estimate",
-      note: "Auto bills at the routed model's list price; fixed Auto rate used as an estimate"
+      confidence: "measured",
+      note: "Auto is billed at one fixed rate whatever model it picked (fitted to billed usage events)"
     };
   }
 

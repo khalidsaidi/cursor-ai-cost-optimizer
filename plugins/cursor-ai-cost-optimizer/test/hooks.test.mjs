@@ -281,6 +281,36 @@ test("discovery with injected model list and fake probes picks runnable candidat
   assert.ok(strict.health.degraded);
 });
 
+test("a chat that opened on Composer and was switched to Auto in the picker is priced as Auto from that prompt on, and briefed again", () => {
+  const ws = readyWorkspace({ "fast-tier": "composer-2.5", "balanced-tier": "claude-sonnet-5-thinking-high", "deep-tier": "claude-opus-5-thinking-high", "tier-verifier": "composer-2.5" });
+  fs.mkdirSync(path.join(ws, ".cursor"), { recursive: true });
+  fs.writeFileSync(path.join(ws, ".cursor", "cco.json"), JSON.stringify({ pricing: { enabled: false }, discovery: { auto: false } }));
+  runHook("cco-session-start.mjs", { hook_event_name: "sessionStart", conversation_id: "sw-auto", model: "composer-2.5", cursor_version: "3.17.21", workspace_roots: [ws] });
+  assert.equal(loadSession(ws, "sw-auto").model, "composer-2.5");
+  const first = runHook("cco-prompt-capture.mjs", { hook_event_name: "beforeSubmitPrompt", conversation_id: "sw-auto", model: "default", cursor_version: "3.17.21", prompt: "Create units.mjs with three converters, a node:test file and a README section", workspace_roots: [ws] });
+  assert.equal(loadSession(ws, "sw-auto").model, "auto", "the prompt's model is the one this turn runs on; Auto is not a placeholder");
+  assert.match(String(first.additional_context || ""), /Session model: auto \(/, "briefed again with Auto's price");
+  const gate = runHook("cco-tool-gate.mjs", { hook_event_name: "preToolUse", conversation_id: "sw-auto", model: "default", cursor_version: "3.17.21", tool_name: "Write", tool_input: { file_path: "units.mjs", content: "x" }, workspace_roots: [ws] });
+  assert.match(String(gate.agent_message || ""), /composer-2\.5-fast/, "IDE on Auto: routine work is routed to the Composer subagent");
+  const empty = runHook("cco-prompt-capture.mjs", { hook_event_name: "beforeSubmitPrompt", conversation_id: "sw-auto", model: "", cursor_version: "3.17.21", prompt: "now add a fourth converter and its tests", workspace_roots: [ws] });
+  assert.equal(loadSession(ws, "sw-auto").model, "auto", "an empty model keeps the known one");
+  assert.equal(empty.additional_context, undefined, "no re-briefing without a switch");
+});
+
+test("an Auto chat is briefed differently per client: the IDE routes routine work to Composer, the Cursor CLI keeps it in the chat", () => {
+  const ws = readyWorkspace({ "fast-tier": "composer-2.5", "balanced-tier": "claude-sonnet-5-thinking-high", "deep-tier": "claude-opus-5-thinking-high", "tier-verifier": "composer-2.5" });
+  fs.mkdirSync(path.join(ws, ".cursor"), { recursive: true });
+  fs.writeFileSync(path.join(ws, ".cursor", "cco.json"), JSON.stringify({ pricing: { enabled: false }, discovery: { auto: false } }));
+  const ide = runHook("cco-session-start.mjs", { hook_event_name: "sessionStart", conversation_id: "auto-ide", model: "default", cursor_version: "3.17.21", workspace_roots: [ws] });
+  assert.match(ide.additional_context, /Session model: auto \(/, "IDE: Auto is priced at its measured fixed rate");
+  assert.match(ide.additional_context, /delegate FAST work/, "IDE: measured 14.2¢ direct vs 9.8¢ routed, so FAST work is delegated");
+  const cli = runHook("cco-session-start.mjs", { hook_event_name: "sessionStart", conversation_id: "auto-cli", model: "default", cursor_version: "2026.09.02-c22c1a3", workspace_roots: [ws] });
+  assert.match(cli.additional_context, /Auto in the Cursor CLI/, "CLI: subagents are billed as Auto too");
+  assert.match(cli.additional_context, /Routine work stays in this chat/);
+  assert.match(cli.additional_context, /Never call the Task tool/, "the CLI Auto rule is short and absolute: a turned-back Task attempt still costs a round trip");
+  assert.doesNotMatch(cli.additional_context, /medium work to the `-balanced` subagent/);
+});
+
 test("session start hook injects context and initializes runtime without probes", () => {
   const ws = readyWorkspace({ "fast-tier": "inherit", "balanced-tier": "inherit", "deep-tier": "inherit", "tier-verifier": "inherit" });
   fs.mkdirSync(path.join(ws, ".cursor"), { recursive: true });

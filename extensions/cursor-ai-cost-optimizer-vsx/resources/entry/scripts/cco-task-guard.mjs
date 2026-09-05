@@ -21,7 +21,7 @@ import {
   emit,
   nowIso,
   CCO_AGENT_NAMES,
-  isEnabled, isMain, applyScopeArgs, agentForTier, isCcoAgent, asNumber } from "./lib/common.mjs";
+  isEnabled, isMain, applyScopeArgs, agentForTier, isCcoAgent, asNumber, hookClient } from "./lib/common.mjs";
 applyScopeArgs();
 import { loadConfig } from "./lib/config.mjs";
 import { parseOverride, parseScoresLine, heuristicScores, decideTier, applyStateEscalation, formatScoresLine } from "./lib/scorer.mjs";
@@ -259,7 +259,19 @@ async function main() {
       const tierRate = blendedRatePerMillion(resolveModelPrice(result.model, pricing, { overrides: config?.pricing?.overrides }));
       // Escalating to a stronger (pricier) model is the parent's quality call and is always allowed;
       // only a sideways/downward move that does not save money once the subagent's session start is paid is pointless.
-      const worth = delegationWorth({ tier: result.targetTier, tierModel: result.model, sessionModel, pricing, config });
+      const worth = delegationWorth({ tier: result.targetTier, tierModel: result.model, sessionModel, pricing, config, client: hookClient(payload) });
+      // A tier the user forced with [cco:…] is theirs to force; the automatic choice is what is turned back.
+      if (worth.sessionUnpriced && result.targetTier !== "deep" && !(result.override && result.override !== "auto")) {
+        if (paths && config?.enforcement?.logDecisions !== false) {
+          appendJsonl(paths.decisionsPath, { ts: nowIso(), conversation_id: payload.conversation_id ?? null, requested: result.requestedAgent, final: "chat", model: sessionModel, rewritten: false, reason: "cli_auto_stays_in_chat", scores: result.scores, scoreSource: result.scoreSource, effort: result.effort });
+        }
+        emit({
+          permission: "deny",
+          agent_message: `CCO: do this ${result.targetTier.toUpperCase()}-tier task directly in this chat. This is an Auto chat in the Cursor CLI, where a subagent also runs on Auto and pays its own session start on top; measured, that costs more than doing the work here. Do not call Task for it and do not mention routing.`,
+          user_message: "Auto in the CLI: done in the chat."
+        });
+        return;
+      }
       if (sessionRate && tierRate && tierRate <= sessionRate && worth.known && !worth.worth) {
         if (paths && config?.enforcement?.logDecisions !== false) {
           appendJsonl(paths.decisionsPath, { ts: nowIso(), conversation_id: payload.conversation_id ?? null, requested: result.requestedAgent, final: "chat", model: sessionModel, rewritten: false, reason: `tier_${result.targetTier}_not_cheaper_than_chat_model`, scores: result.scores, scoreSource: result.scoreSource, effort: result.effort });

@@ -289,7 +289,7 @@
           {
             "id": "cco.step.chat",
             "title": "Work as usual",
-            "description": "Keep your chat model. On a pricier chat model, routine work runs on a cheaper model through a subagent named after that model and its tier (a **Composer 2.5 Fast** card, for example; click it to see its steps and diffs); on Composer it stays in the chat (on Auto, the model Auto picked is what counts). Risky work goes to the Deep tier. Nothing is blocked for long, nothing is written into your project.",
+            "description": "Keep your chat model. On a pricier chat model, routine work runs on a cheaper model through a subagent named after that model and its tier (a **Composer 2.5 Fast** card, for example; click it to see its steps and diffs); on Composer it stays in the chat; on Auto it is routed in the IDE, where that measured 31% cheaper. Risky work goes to the Deep tier. Nothing is blocked for long, nothing is written into your project.",
             "media": {
               "markdown": "media/walkthrough/step-init.md"
             }

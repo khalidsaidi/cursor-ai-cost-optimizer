@@ -46,7 +46,7 @@ test("resolves CLI model ids to price rows, including effort/thinking/fast suffi
   const codexFast = resolveModelPrice("gpt-5.3-codex-low-fast", pricing);
   assert.equal(codexFast.matchedRow, "GPT-5.3 Codex");
   assert.equal(codexFast.input, 3.5, "fast variants without a dedicated row are 2x");
-  assert.equal(resolveModelPrice("auto", pricing).confidence, "estimate");
+  assert.equal(resolveModelPrice("auto", pricing).confidence, "measured");
   assert.equal(resolveModelPrice("totally-unknown-model", pricing).confidence, "unknown");
   assert.equal(resolveModelPrice("claude-opus-5-thinking-high[context=1m]", pricing).matchedRow, "Claude Opus 5");
 });

@@ -70,7 +70,7 @@ export function isRouterMode({ session, config, pricing, models }) {
     return { router: true, factor: null, reason: "fast_model_chosen_by_user" };
   }
   const sessionModel = session?.model || null;
-  const worth = delegationWorth({ tier: "fast", tierModel: models.fast, sessionModel, pricing, config });
+  const worth = delegationWorth({ tier: "fast", tierModel: models.fast, sessionModel, pricing, config, client: session?.client || "ide" });
   const factor = worth.known ? worth.factor : null;
   return { router: Boolean(worth.known && worth.worth), factor, reason: factor ? `session_${factor.toFixed(1)}x_fast_tier` : "no_price_signal" };
 }
@@ -166,7 +166,7 @@ export function gateDecision({ toolName, session, config, pricing, models, promp
         return { action: "deny", reason: `quality_${decision?.guardrail || "deep"}`, tier: t, model: models[t], decision, phase: "pre" };
       }
       const userChosen = Boolean(String(config?.modelOverrides?.[t] || "").trim());
-      const worthT = delegationWorth({ tier: t, tierModel: models[t], sessionModel, pricing, config });
+      const worthT = delegationWorth({ tier: t, tierModel: models[t], sessionModel, pricing, config, client: session?.client || "ide" });
       if (!userChosen && worthT.known && !worthT.worth) {
         if (readTool && !explored && asNumber(session.readCount, 0) >= readBudget && models.fast !== "inherit" && models.fast !== sessionModel && !session.readNudged) {
           return { action: "deny", reason: "read_budget_use_explore", phase: "pre", tier: "explore", model: models.fast, decision };

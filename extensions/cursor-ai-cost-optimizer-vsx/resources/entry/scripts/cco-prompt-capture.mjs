@@ -4,7 +4,7 @@
  * override tokens even when the parent drops them from the delegated prompt, and pre-score
  * the request for the report. Never blocks; always {continue:true}.
  */
-import { readStdin, safeJsonParse, workspaceFromPayload, workspacePaths, writeJson, appendJsonl, emit, nowIso, isEnabled, applyScopeArgs } from "./lib/common.mjs";
+import { readStdin, safeJsonParse, workspaceFromPayload, workspacePaths, writeJson, appendJsonl, emit, nowIso, isEnabled, applyScopeArgs, hookClient } from "./lib/common.mjs";
 applyScopeArgs();
 import { loadConfig } from "./lib/config.mjs";
 import { parseOverride, heuristicScores, decideTier, isQuestionLike, isTinyTask } from "./lib/scorer.mjs";
@@ -55,15 +55,20 @@ async function main() {
       // An Ask chat has no tools to route: the briefing waits until the chat is in a mode with tools (Agent, Plan).
       const mode = String(payload.composer_mode || "agent").toLowerCase();
       const agentMode = !/^(chat|ask)$/.test(mode);
-      if (!existing?.briefed && agentMode) {
-        briefing = fullSessionContext({ workspace, paths, config, sessionModel: normalizeModelId(payload.model) }) || null;
+      // The picker can change the chat model between turns, Auto included ("default" in the payload): the rule a
+      // cheap model gets differs from a priced one's, so a switch is briefed again with the new model's numbers.
+      const switched = Boolean(existing?.briefed) && String(payload.model || "").trim() && normalizeModelId(payload.model) !== existing.model;
+      if ((!existing?.briefed || switched) && agentMode) {
+        briefing = fullSessionContext({ workspace, paths, config, sessionModel: normalizeModelId(payload.model), client: hookClient(payload) }) || null;
       }
     }
     // Each user turn is a new task: reset per-turn gate state so routing applies again. The chat model can change
     // between turns (the picker, the Fast toggle): the prompt payload carries the one this turn runs on.
+    // "default" is Auto, a real choice, not a placeholder: a chat that started on Composer and was switched to Auto
+    // must be priced as Auto (about 4x Composer). Only an empty model keeps the one already known.
     const turnModel = normalizeModelId(payload.model);
     updateSession(workspace, payload.conversation_id, (s) => ({
-      model: turnModel !== "auto" ? turnModel : s.model,
+      model: String(payload.model || "").trim() ? turnModel : s.model,
       userPrompt: null,
       promptMeta: { override, questionLike: isQuestionLike(prompt), tiny: isTinyTask(prompt), chars: prompt.length },
       decision: { tier: decision.tier, effort: decision.effort, guardrail: decision.guardrail, scores },

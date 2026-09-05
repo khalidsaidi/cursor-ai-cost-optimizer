@@ -35,12 +35,12 @@ export interface ResolvedPrice {
   output: number | null;
   matchedRow: string | null;
   provider: string | null;
-  confidence: "override" | "estimate" | "id" | "label" | "unknown";
+  confidence: "override" | "measured" | "estimate" | "id" | "label" | "unknown";
   note: string;
 }
 
-/** Documented fixed rate for Auto (estimate only; Auto bills at the routed model's list price). */
-export const AUTO_ESTIMATE_RATE = { input: 1.25, cacheWrite: 1.25, cacheRead: 0.25, output: 6.0 };
+/** What Cursor bills an Auto request at, whatever model it picked: fitted exactly to billed usage events (2026-09-05, Pro). Cache write is taken as the input rate. */
+export const AUTO_RATE = { input: 2.0, cacheWrite: 2.0, cacheRead: 0.5, output: 6.0 };
 const FAST_MULTIPLIER = 2;
 const PARAM_TOKENS = new Set(["thinking", "low", "medium", "high", "xhigh", "max", "fast", "1m", "extra", "nozdr", "zdr", "no"]);
 const VENDOR_TOKENS = new Set(["claude", "cursor", "openai", "google", "anthropic"]);
@@ -125,7 +125,7 @@ export function resolveModelPrice(modelId: unknown, pricing: PricingTable | null
     return { input: asNumber(o.input, 0), cacheWrite: asNumber(o.cacheWrite, asNumber(o.input, 0)), cacheRead: asNumber(o.cacheRead, 0), output: asNumber(o.output, 0), matchedRow: "override", provider: o.provider || "override", confidence: "override", note: "user override from cco.json pricing.overrides" };
   }
   if (!id || id === "auto" || id.startsWith("auto")) {
-    return { ...AUTO_ESTIMATE_RATE, matchedRow: "auto (estimate)", provider: "Cursor", confidence: "estimate", note: "Auto bills at the routed model's list price; fixed Auto rate used as an estimate" };
+    return { ...AUTO_RATE, matchedRow: "auto (measured)", provider: "Cursor", confidence: "measured", note: "Auto is billed at one fixed rate whatever model it picked (fitted to billed usage events)" };
   }
   const { tokens, fast } = modelIdTokens(id);
   let match = findRow(rows, tokens, fast);
