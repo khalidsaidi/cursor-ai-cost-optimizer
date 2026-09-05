@@ -1,5 +1,5 @@
 ---
-name: cco-verifier
+name: tier-verifier
 description: Read-only verifier. Use after an implementation to confirm the change matches the request and nothing obvious is broken. Cheap gate before escalating.
 model: inherit
 readonly: true

@@ -37,7 +37,7 @@ test("rate multipliers, staleness, savings and the cost statement", () => {
     fs.mkdirSync(path.join(ws, ".cursor", "agents"), { recursive: true });
     fs.mkdirSync(path.join(ws, ".cursor", "cco", "state", "sessions"), { recursive: true });
     for (const [tier, model] of [["fast", "composer-2.5"], ["balanced", "claude-sonnet-5-thinking-high"], ["deep", "inherit"]]) {
-      fs.writeFileSync(path.join(ws, ".cursor", "agents", `cco-${tier}.md`), `---\nname: cco-${tier}\nmodel: ${model}\n---\n`);
+      fs.writeFileSync(path.join(ws, ".cursor", "agents", `${tier}-tier.md`), `---\nname: ${tier}-tier\nmodel: ${model}\n---\n`);
     }
     fs.writeFileSync(path.join(ws, ".cursor", "cco", "state", "decisions.jsonl"), [JSON.stringify({ estimateUsd: 0.01, chatEstimateUsd: 0.05 }), JSON.stringify({ estimateUsd: 0.02, chatEstimateUsd: null }), "not json", JSON.stringify({ estimateUsd: 0.5, chatEstimateUsd: 0.1 })].join("\n"));
     const s = P.readSavings(ws);
@@ -49,7 +49,7 @@ test("rate multipliers, staleness, savings and the cost statement", () => {
     assert.equal(c.chatModel, null);
     assert.match(c.lines[0].text, /^FAST → composer-2\.5 • \$[0-9.]+\/M in, \$[0-9.]+\/M out$/);
     assert.match(c.lines[2].text, /^DEEP → inherit$/);
-    assert.ok(c.warnings.includes("cco-deep is inherit"));
+    assert.ok(c.warnings.includes("deep-tier is inherit"));
 
     // latest session -> relative rates, Copilot wording
     fs.writeFileSync(path.join(ws, ".cursor", "cco", "state", "sessions", "a.json"), JSON.stringify({ model: "claude-opus-5-thinking-high", updatedAt: "2026-01-01T00:00:00Z" }));

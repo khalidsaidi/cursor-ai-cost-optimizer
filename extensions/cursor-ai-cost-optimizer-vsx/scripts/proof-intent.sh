@@ -29,9 +29,9 @@ const extensionTs = path.join(rootDir, 'src/extension.ts');
 const scorerTs = path.join(rootDir, 'src/scorer.ts');
 const installTs = path.join(rootDir, 'src/install.ts');
 const routingRule = path.join(rootDir, 'resources/plugin/rules/cco-routing.mdc');
-const fastAgent = path.join(rootDir, 'resources/plugin/agents/cco-fast.md');
-const balancedAgent = path.join(rootDir, 'resources/plugin/agents/cco-balanced.md');
-const deepAgent = path.join(rootDir, 'resources/plugin/agents/cco-deep.md');
+const fastAgent = path.join(rootDir, 'resources/plugin/agents/fast-tier.md');
+const balancedAgent = path.join(rootDir, 'resources/plugin/agents/balanced-tier.md');
+const deepAgent = path.join(rootDir, 'resources/plugin/agents/deep-tier.md');
 const packageJsonPath = path.join(rootDir, 'package.json');
 const gitignorePath = path.join(rootDir, 'test-fixtures/workspace/.gitignore');
 
@@ -62,10 +62,10 @@ const requiredInstallFiles = [
   '.cursor/cco/cco-hook.mjs',
   '.cursor/cco/plugin-path.txt',
   '.cursor/cco/runtime.json',
-  '.cursor/agents/cco-fast.md',
-  '.cursor/agents/cco-balanced.md',
-  '.cursor/agents/cco-deep.md',
-  '.cursor/agents/cco-verifier.md',
+  '.cursor/agents/fast-tier.md',
+  '.cursor/agents/balanced-tier.md',
+  '.cursor/agents/deep-tier.md',
+  '.cursor/agents/tier-verifier.md',
   '.cursor/rules/cco-routing.mdc',
   '.cursor/skills/cco-init/SKILL.md',
   '.cursor/commands/cco.md',
@@ -163,7 +163,7 @@ const claims = [
     evidence: [
       'src/scorer.ts risk/latency guardrails',
       'resources/cursor/rules/cco-routing.mdc:22 guardrail text; :33-34 cascade (CCO-ESCALATE / CCO-VERIFY)',
-      'resources/cursor/agents/cco-{fast,balanced}.md escalation contract; cco-deep.md rollback path',
+      'resources/cursor/agents/cco-{fast,balanced}.md escalation contract; deep-tier.md rollback path',
     ],
   },
   {
@@ -209,9 +209,9 @@ const report = {
     'src/install.ts': sha256(installTs),
     'src/scorer.ts': sha256(scorerTs),
     'resources/plugin/rules/cco-routing.mdc': sha256(routingRule),
-    'resources/plugin/agents/cco-fast.md': sha256(fastAgent),
-    'resources/plugin/agents/cco-balanced.md': sha256(balancedAgent),
-    'resources/plugin/agents/cco-deep.md': sha256(deepAgent),
+    'resources/plugin/agents/fast-tier.md': sha256(fastAgent),
+    'resources/plugin/agents/balanced-tier.md': sha256(balancedAgent),
+    'resources/plugin/agents/deep-tier.md': sha256(deepAgent),
     'package.json': sha256(packageJsonPath),
   },
   runtimeProof: proof,

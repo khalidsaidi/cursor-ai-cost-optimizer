@@ -1,5 +1,6 @@
 import path from "node:path";
-import { PLUGIN_ROOT, CCO_AGENT_NAMES, readTextSafe, writeTextIfChanged, workspacePaths } from "./common.mjs";
+import fs from "node:fs";
+import { PLUGIN_ROOT, CCO_AGENT_NAMES, LEGACY_AGENT_NAMES, readTextSafe, writeTextIfChanged, workspacePaths } from "./common.mjs";
 
 /**
  * Cursor honors a subagent's `model:` line for project subagents (<workspace>/.cursor/agents) and user
@@ -37,6 +38,7 @@ export function renderWorkspaceAgent(name, modelId) {
 export function writeWorkspaceAgents(workspace, tierModels) {
   const dir = workspaceAgentsDir(workspace);
   const results = [];
+  removeLegacyAgents(dir);
   for (const name of CCO_AGENT_NAMES) {
     const modelId = tierModels[name] || "inherit";
     const target = path.join(dir, `${name}.md`);
@@ -67,5 +69,21 @@ export function readWorkspaceAgentModel(workspace, name) {
 
 /** A workspace is set up for CCO when its tier agents exist. */
 export function workspaceHasAgents(workspace) {
-  return Boolean(readTextSafe(path.join(workspaceAgentsDir(workspace), "cco-fast.md")));
+  return Boolean(readTextSafe(path.join(workspaceAgentsDir(workspace), "fast-tier.md")));
+}
+
+/** Generated agents under the pre-0.3 names (cco-*.md) are replaced by the user-facing names; user-authored files are kept. */
+export function removeLegacyAgents(dir) {
+  const removed = [];
+  for (const name of LEGACY_AGENT_NAMES) {
+    const file = path.join(dir, `${name}.md`);
+    const text = readTextSafe(file);
+    if (text && text.includes(GENERATED_MARKER_PREFIX)) {
+      try {
+        fs.unlinkSync(file);
+        removed.push(name);
+      } catch {}
+    }
+  }
+  return removed;
 }

@@ -1,4 +1,4 @@
-import { TIERS, readJsonSafe, workspacePaths } from "./common.mjs";
+import { TIERS, readJsonSafe, workspacePaths, agentForTier } from "./common.mjs";
 import { loadPricing, resolveModelPrice, blendedRatePerMillion } from "./pricing.mjs";
 import { readWorkspaceAgentModel } from "./agents.mjs";
 
@@ -17,18 +17,18 @@ export function buildSessionContext({ workspace, config, sessionModel }) {
   const paths = workspacePaths(workspace);
   const runtime = readJsonSafe(paths.runtimePath);
   const pricing = loadPricing(paths.pricingPath);
-  const lines = ["CCO (AI Cost Optimizer) is active. Tier → model mapping for `cco-*` delegations in this workspace:"];
+  const lines = ["CCO (AI Cost Optimizer) is active. Tier → model mapping for the tier subagents in this workspace:"];
   const tierPrices = {};
   for (const tier of TIERS) {
-    const fromAgent = readWorkspaceAgentModel(workspace, `cco-${tier}`);
+    const fromAgent = readWorkspaceAgentModel(workspace, agentForTier(tier));
     const model = fromAgent || runtime?.profiles?.[tier]?.model || "inherit";
     const price = model === "inherit" ? null : resolveModelPrice(model, pricing, { overrides: config?.pricing?.overrides });
     tierPrices[tier] = { model, price };
-    lines.push(`- cco-${tier} → ${model}${model === "inherit" ? " (not set up in this workspace; run cco-init --workspace . once)" : ` (${fmtPrice(price)})`}`);
+    lines.push(`- ${agentForTier(tier)} → ${model}${model === "inherit" ? " (not set up in this workspace; run cco-init --workspace . once)" : ` (${fmtPrice(price)})`}`);
   }
-  const verifierModel = readWorkspaceAgentModel(workspace, "cco-verifier") || runtime?.verifier?.model || "inherit";
-  const exploreModel = readWorkspaceAgentModel(workspace, "cco-explore") || tierPrices.fast.model;
-  lines.push(`- cco-verifier → ${verifierModel}; cco-explore (read-only research) → ${exploreModel}`);
+  const verifierModel = readWorkspaceAgentModel(workspace, "tier-verifier") || runtime?.verifier?.model || "inherit";
+  const exploreModel = readWorkspaceAgentModel(workspace, "fast-research") || tierPrices.fast.model;
+  lines.push(`- tier-verifier → ${verifierModel}; fast-research (read-only research) → ${exploreModel}`);
 
   if (sessionModel) {
     const sessionPrice = resolveModelPrice(sessionModel, pricing, { overrides: config?.pricing?.overrides });
@@ -38,7 +38,7 @@ export function buildSessionContext({ workspace, config, sessionModel }) {
     if (sessionBlended && fastBlended && fastBlended > 0) {
       const factor = sessionBlended / fastBlended;
       if (factor >= 1.5) {
-        ratio = ` Delegating FAST-tier work to cco-fast costs about ${factor.toFixed(1)}x less per token than doing it here.`;
+        ratio = ` Delegating FAST-tier work to fast-tier costs about ${factor.toFixed(1)}x less per token than doing it here.`;
       } else if (factor <= 0.67) {
         ratio = ` This session model is already cheaper than the FAST tier; answer simple requests directly.`;
       }

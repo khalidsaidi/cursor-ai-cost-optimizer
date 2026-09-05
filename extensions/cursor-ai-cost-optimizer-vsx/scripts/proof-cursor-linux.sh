@@ -7,7 +7,7 @@
 # account (copies state.vscdb from $CURSOR_STATE_DB), installs the linux-x64 VSIX through Cursor's own CLI
 # entry, opens a tiny fixture workspace, submits an edit task through Cursor's `prompt` deeplink
 # (cursor://anysphere.cursor-deeplink/prompt?text=...) and reads Cursor's hooks log for a `Task` call with
-# `subagent_type: cco-fast` plus a `subagentStop` on the fast-tier model. Requires the "Everywhere" setup
+# `subagent_type: fast-tier` plus a `subagentStop` on the fast-tier model. Requires the "Everywhere" setup
 # already in ~/.cursor (the build under test loads the same user-level hooks and subagents).
 # Needs: xdotool, ImageMagick `import`, node, DISPLAY. Everything it creates lives under $PROOF_ROOT.
 set -euo pipefail
@@ -39,10 +39,10 @@ sleep 4; xdotool key --window "$WIN" --clearmodifiers Return                    
 LOG=""; for i in $(seq 1 60); do sleep 3; LOG=$(grep -l '"subagentStop"' "$UD"/logs/*/window*/output_*/cursor.hooks.workspaceId-*.log 2>/dev/null | head -1 || true); [ -n "$LOG" ] && break; done
 import -window "$WIN" "$R/chat-$V.png" || true
 echo "hooks log: ${LOG:-<none>}"
-if [ -n "$LOG" ] && grep -q '"subagent_type": "cco-fast"' "$LOG" && grep -q '"tool_name": "Task"' "$LOG"; then
-  echo "PASS $V: Task -> cco-fast, subagent model: $(grep -o '"model": "[^"]*"' "$LOG" | sort | uniq -c | sort -rn | head -1)"
+if [ -n "$LOG" ] && grep -q '"subagent_type": "fast-tier"' "$LOG" && grep -q '"tool_name": "Task"' "$LOG"; then
+  echo "PASS $V: Task -> fast-tier, subagent model: $(grep -o '"model": "[^"]*"' "$LOG" | sort | uniq -c | sort -rn | head -1)"
   (cd "$W" && git --no-pager diff --stat)
 else
-  echo "FAIL $V: no Task -> cco-fast in hooks log"; exit 1
+  echo "FAIL $V: no Task -> fast-tier in hooks log"; exit 1
 fi
 pkill -9 -f "ud-$V" || true

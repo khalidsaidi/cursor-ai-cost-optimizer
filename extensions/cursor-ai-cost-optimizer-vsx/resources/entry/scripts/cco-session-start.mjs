@@ -124,11 +124,11 @@ export function refreshDiscoveryIfStale({ workspace, paths, config, background =
     if (discoveryCfg.writeAgents !== false && existing.profiles && workspaceHasAgents(workspace)) {
       const verifierTier = TIERS.includes(existing.verifier?.tier) ? existing.verifier.tier : "balanced";
       agents = writeWorkspaceAgents(workspace, {
-        "cco-fast": existing.profiles.fast?.model || "inherit",
-        "cco-balanced": existing.profiles.balanced?.model || "inherit",
-        "cco-deep": existing.profiles.deep?.model || "inherit",
-        "cco-verifier": existing.verifier?.model || existing.profiles[verifierTier]?.model || "inherit",
-        "cco-explore": existing.profiles.fast?.model || "inherit"
+        "fast-tier": existing.profiles.fast?.model || "inherit",
+        "balanced-tier": existing.profiles.balanced?.model || "inherit",
+        "deep-tier": existing.profiles.deep?.model || "inherit",
+        "tier-verifier": existing.verifier?.model || existing.profiles[verifierTier]?.model || "inherit",
+        "fast-research": existing.profiles.fast?.model || "inherit"
       }).filter((a) => a.action === "written").map((a) => a.name);
     }
     return { action: "cached", ageHours: Number(age.toFixed(2)), agentsWritten: agents };
@@ -168,7 +168,7 @@ async function main() {
     const output = { continue: true, cco: enabled.reason };
     if (enabled.reason === "workspace_opt_out") {
       // The rule and cco-* subagents are still loaded; tell the session to work as if CCO were not there.
-      output.additional_context = "AI Cost Optimizer is paused in this project: work normally in this chat, do not delegate to cco-* subagents, and do not add a [cco: …] footer.";
+      output.additional_context = "AI Cost Optimizer is paused in this project: work normally in this chat, do not delegate to the tier subagents, and do not add a [cco: …] footer.";
     }
     emit(output);
     return;

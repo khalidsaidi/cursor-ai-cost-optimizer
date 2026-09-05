@@ -21,12 +21,12 @@ import {
   emit,
   nowIso,
   CCO_AGENT_NAMES,
-  isEnabled, isMain, applyScopeArgs } from "./lib/common.mjs";
+  isEnabled, isMain, applyScopeArgs, agentForTier, isCcoAgent } from "./lib/common.mjs";
 applyScopeArgs();
 import { loadConfig } from "./lib/config.mjs";
 import { parseOverride, parseScoresLine, heuristicScores, decideTier, applyStateEscalation, formatScoresLine } from "./lib/scorer.mjs";
 import { loadJointState, modelLimitedUntil, limitsPathFor } from "./lib/state.mjs";
-import { tierLabel, modelLabel, reasonLabel, footerLine } from "./lib/labels.mjs";
+import { tierLabel, modelLabel, reasonLabel } from "./lib/labels.mjs";
 import { readWorkspaceAgentModel } from "./lib/agents.mjs";
 import { tierFor } from "./lib/models.mjs";
 import { detectTestCommand, estimateTaskCostUsd, formatUsd } from "./lib/project.mjs";
@@ -37,11 +37,11 @@ export function evaluateTask({ toolInput, config, state = null, lastPrompt = nul
   const requestedAgent = String(toolInput?.subagent_type || "");
   // Cursor's built-in `explore` subagent is the model's natural choice for research; take it over so the
   // research runs on the mapped FAST model and counts as the research step.
-  const builtinExplore = requestedAgent === "explore" && workspace && readWorkspaceAgentModel(workspace, "cco-explore");
-  if (requestedAgent === "cco-explore" || requestedAgent === "cco-verifier" || builtinExplore) {
-    const targetAgent = builtinExplore ? "cco-explore" : requestedAgent;
+  const builtinExplore = requestedAgent === "explore" && workspace && readWorkspaceAgentModel(workspace, "fast-research");
+  if (requestedAgent === "fast-research" || requestedAgent === "tier-verifier" || builtinExplore) {
+    const targetAgent = builtinExplore ? "fast-research" : requestedAgent;
     const model = (workspace && readWorkspaceAgentModel(workspace, targetAgent)) || runtime?.profiles?.fast?.model || "inherit";
-    return { applies: true, research: true, requestedAgent, targetAgent, targetTier: "fast", requestedTier: "fast", rewritten: Boolean(builtinExplore), reason: targetAgent === "cco-explore" ? (builtinExplore ? "research_builtin_explore_rewritten" : "research") : "verification", override: null, overrideSource: null, scores: null, scoreSource: null, effort: null, guardrail: null, computedTier: "fast", learning: { escalated: false }, model, updatedPrompt: String(toolInput?.prompt || "") };
+    return { applies: true, research: true, requestedAgent, targetAgent, targetTier: "fast", requestedTier: "fast", rewritten: Boolean(builtinExplore), reason: targetAgent === "fast-research" ? (builtinExplore ? "research_builtin_explore_rewritten" : "research") : "verification", override: null, overrideSource: null, scores: null, scoreSource: null, effort: null, guardrail: null, computedTier: "fast", learning: { escalated: false }, model, updatedPrompt: String(toolInput?.prompt || "") };
   }
   const requestedTier = tierFor(requestedAgent);
   if (!requestedTier) {
@@ -96,7 +96,7 @@ export function evaluateTask({ toolInput, config, state = null, lastPrompt = nul
     reason = `learning:${learning.reason}`;
   }
 
-  const modelFor = (t) => (workspace && readWorkspaceAgentModel(workspace, `cco-${t}`)) || runtime?.profiles?.[t]?.model || "inherit";
+  const modelFor = (t) => (workspace && readWorkspaceAgentModel(workspace, agentForTier(t))) || runtime?.profiles?.[t]?.model || "inherit";
   // A tier whose model is on cooldown (it refused to start a subagent recently: usage limit) steps down to the
   // nearest lower tier whose model is usable, rather than failing the same way again.
   let limited = null;
@@ -112,7 +112,7 @@ export function evaluateTask({ toolInput, config, state = null, lastPrompt = nul
     }
   }
   const rewritten = target !== requestedTier;
-  const targetAgent = `cco-${target}`;
+  const targetAgent = agentForTier(target);
   const model = modelFor(target);
   const scoresLine = formatScoresLine(scores);
   let updatedPrompt = prompt;
@@ -157,10 +157,10 @@ async function main() {
       // Paused in this project: the routing rule and the cco-* subagents are still loaded (they are Cursor's,
       // not per-project), so a delegation must be turned back into plain in-chat work here.
       const requested = String(payload.tool_input?.subagent_type || "");
-      if (enabled.reason === "workspace_opt_out" && /^cco-/.test(requested)) {
+      if (enabled.reason === "workspace_opt_out" && isCcoAgent(requested)) {
         emit({
           permission: "deny",
-          agent_message: "AI Cost Optimizer is paused in this project: do this task directly in this chat (no cco-* delegation) and do not add a [cco: …] footer.",
+          agent_message: "AI Cost Optimizer is paused in this project: do this task directly in this chat (no tier delegation) and do not add a [cco: …] footer.",
           user_message: "Cost Optimizer is paused here; working in chat."
         });
         return;
@@ -200,10 +200,10 @@ async function main() {
       if (paths && config?.enforcement?.logDecisions !== false) {
         appendJsonl(paths.decisionsPath, { ts: nowIso(), conversation_id: payload.conversation_id ?? null, requested: result.requestedAgent, final: result.targetAgent, model: result.model, rewritten: false, reason: result.reason, description: String(payload.tool_input?.description || "").slice(0, 200) });
       }
-      const output = { permission: "allow", user_message: `${result.targetAgent === "cco-explore" ? "Research" : "Verification"} on ${modelLabel(result.model, loadPricing(paths?.pricingPath))}` };
+      const output = { permission: "allow", user_message: `${result.targetAgent === "fast-research" ? "Research" : "Verification"} on ${modelLabel(result.model, loadPricing(paths?.pricingPath))}` };
       if (result.rewritten) {
         output.updated_input = { ...(payload.tool_input || {}), subagent_type: result.targetAgent };
-        output.agent_message = `CCO: research runs on cco-explore (${result.model}) instead of the built-in explore subagent. Use its summary and continue.`;
+        output.agent_message = `CCO: research runs on fast-research (${result.model}) instead of the built-in explore subagent. Use its summary and continue.`;
       }
       emit(output);
       return;
@@ -296,11 +296,7 @@ async function main() {
     const savedUsd = estimateUsd !== null && chatEstimateUsd !== null && chatEstimateUsd > estimateUsd ? chatEstimateUsd - estimateUsd : null;
     const costPart = estimateUsd !== null ? (savedUsd !== null && savedUsd >= 0.005 ? `${formatUsd(estimateUsd)}, saves ${formatUsd(savedUsd)}` : `${formatUsd(estimateUsd)}${multiplier !== null && multiplier >= 1.5 ? " (stronger model)" : ""}`) : "";
     const limitedPart = result.limited ? `${tierLabel(result.limited.tier)} model at its usage limit` : "";
-    const footer = footerLine([`${tierName} on ${modelName}`, costPart, limitedPart]);
     const cardLine = [`${tierName} on ${modelName}`, costPart, limitedPart || (result.rewritten ? `moved from ${tierLabel(result.requestedTier)}: ${reasonLabel(result.reason)}` : "")].filter(Boolean).join(" · ");
-    if (workspace && payload.conversation_id) {
-      updateSession(workspace, payload.conversation_id, { lastFooter: footer }); // repeated when the delegation returns (postToolUse)
-    }
     // Per-chat budget (Copilot quota / Kilo maxCost pattern): warn, and optionally force FAST when far over.
     let budgetNote = "";
     if (workspace && payload.conversation_id && Number(config?.budget?.sessionUsd) > 0 && estimateUsd !== null) {
@@ -312,9 +308,9 @@ async function main() {
         budgetNote = ` · budget: ${formatUsd(spent)} of $${limit.toFixed(2)} used in this chat`;
       }
       if (config.budget.enforce && spent > limit * 2 && result.targetTier !== "fast" && !(result.override && result.override !== "auto")) {
-        result.targetAgent = "cco-fast";
+        result.targetAgent = "fast-tier";
         result.targetTier = "fast";
-        result.model = readWorkspaceAgentModel(workspace, "cco-fast") || result.model;
+        result.model = readWorkspaceAgentModel(workspace, "fast-tier") || result.model;
         result.rewritten = true;
         result.reason = "budget_exceeded_force_fast";
       }
@@ -334,15 +330,15 @@ async function main() {
         ? ` Tell the user in one line that ${result.limited.model} (${result.limited.tier.toUpperCase()}) hit its usage limit and the task ran on ${result.targetTier.toUpperCase()} (${result.model}); do not present it as ${result.limited.tier.toUpperCase()} work.`
         : "";
       output.agent_message = result.rewritten
-        ? `CCO rerouted this delegation from ${result.requestedAgent} to ${result.targetAgent} (${result.reason}; model ${result.model}).${limitedLine} Continue with the ${result.targetTier.toUpperCase()} result; do not re-delegate to ${result.requestedAgent}. When it returns, relay its final message verbatim without re-reading files or re-running its checks, then end with exactly this line: ${footer}`
-        : `CCO: delegation to ${result.targetAgent} (${result.model}) logged. When it returns, relay its final message to the user verbatim (do not summarize, re-read files, or re-run its checks), then end with exactly this line: ${footer}`;
+        ? `CCO rerouted this delegation from ${result.requestedAgent} to ${result.targetAgent} (${result.reason}; model ${result.model}).${limitedLine} Continue with the ${result.targetTier.toUpperCase()} result; do not re-delegate to ${result.requestedAgent}. When it returns, relay its final message verbatim without re-reading files or re-running its checks`
+        : `CCO: delegation to ${result.targetAgent} (${result.model}) logged. When it returns, relay its final message to the user verbatim (do not summarize, re-read files, or re-run its checks)`;
       output.user_message = `${cardLine}${budgetNote}`;
       emit(output);
       return;
     }
     emit({
       permission: "allow",
-      agent_message: `CCO: delegation to ${result.targetAgent} (${result.model}) logged. When it returns, relay its final message to the user verbatim (do not summarize, re-read files, or re-run its checks), then end with exactly this line: ${footer}`,
+      agent_message: `CCO: delegation to ${result.targetAgent} (${result.model}) logged. When it returns, relay its final message to the user verbatim (do not summarize, re-read files, or re-run its checks). Do not add a Cost Optimizer line yourself.`,
       user_message: `${cardLine}${budgetNote}`
     });
   } catch (error) {

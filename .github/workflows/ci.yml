@@ -40,15 +40,15 @@ jobs:
           echo "--- init.json"; cat "$ws/init.json"; echo; echo "--- .cursor"; ls -la "$ws/.cursor" "$ws/.cursor/cco"
           test -f "$ws/.cursor/hooks.json" || { echo "missing hooks.json"; exit 1; }
           test -f "$ws/.cursor/cco-hook.mjs" || { echo "missing shim"; exit 1; }
-          test -f "$ws/.cursor/agents/cco-fast.md" || { echo "missing agents"; exit 1; }
+          test -f "$ws/.cursor/agents/fast-tier.md" || { echo "missing agents"; exit 1; }
           test ! -e "$ws/.cursor/cco.json" || { echo "cco.json must not be created by init"; exit 1; }
           cd "$ws"
           # Git Bash on Windows reports POSIX-style paths; Cursor passes native ones. Use the native form.
           if [ "$RUNNER_OS" = "Windows" ]; then wsdir="$(pwd -W)"; else wsdir="$PWD"; fi
           out="$(printf '{"hook_event_name":"preToolUse","tool_name":"Read","conversation_id":"x","workspace_roots":["%s"]}' "$wsdir" | node .cursor/cco-hook.mjs preToolUse)"
           echo "--- Read: $out"; echo "$out" | grep -q '"permission":"allow"' || { echo "expected allow"; exit 1; }
-          out="$(printf '{"hook_event_name":"preToolUse","tool_name":"Task","conversation_id":"x","tool_input":{"description":"d","prompt":"CCO-SCORES: complexity=2 risk=9 breadth=1 uncertainty=0 latency=0\\nrefund flow","subagent_type":"cco-fast"},"workspace_roots":["%s"]}' "$wsdir" | node .cursor/cco-hook.mjs preToolUse)"
-          echo "--- Task: $out"; echo "$out" | grep -q 'cco-deep' || { echo "expected reroute to cco-deep"; exit 1; }
+          out="$(printf '{"hook_event_name":"preToolUse","tool_name":"Task","conversation_id":"x","tool_input":{"description":"d","prompt":"CCO-SCORES: complexity=2 risk=9 breadth=1 uncertainty=0 latency=0\\nrefund flow","subagent_type":"fast-tier"},"workspace_roots":["%s"]}' "$wsdir" | node .cursor/cco-hook.mjs preToolUse)"
+          echo "--- Task: $out"; echo "$out" | grep -q 'deep-tier' || { echo "expected reroute to deep-tier"; exit 1; }
           node "$GITHUB_WORKSPACE/plugins/cursor-ai-cost-optimizer/scripts/cco-init.mjs" --workspace "$wsdir" --uninstall > /dev/null
           test ! -e .cursor/hooks.json && test ! -e .cursor/cco-hook.mjs && test ! -e .cursor/cco || { echo "uninstall left files"; ls -la .cursor; exit 1; }
           echo "OK"
@@ -92,7 +92,7 @@ jobs:
           set -euo pipefail
           ws="$(mktemp -d)"
           mkdir -p "$ws/.cursor/agents" "$ws/.cursor/cco"
-          cp resources/plugin/agents/cco-fast.md "$ws/.cursor/agents/cco-fast.md"
+          cp resources/plugin/agents/fast-tier.md "$ws/.cursor/agents/fast-tier.md"
           printf '{"shellGuard":{"enabled":true}}' > "$ws/.cursor/cco.json"
           printf '%s\n' "$PWD/resources/plugin" > "$ws/.cursor/cco/plugin-path.txt"
           mkdir -p "$ws/.cursor/cco/bin" && cp "dist-bin/${{ matrix.target }}/cco-hook" "$ws/.cursor/cco/bin/cco-hook"
@@ -109,7 +109,7 @@ jobs:
           if (-not (Test-Path $exe)) { throw "no $exe built" }
           $ws = Join-Path ([System.IO.Path]::GetTempPath()) ("cco-smoke-" + [guid]::NewGuid().ToString('N'))
           New-Item -ItemType Directory -Path "$ws\.cursor\agents", "$ws\.cursor\cco\bin" -Force | Out-Null
-          Copy-Item 'resources\plugin\agents\cco-fast.md' "$ws\.cursor\agents\cco-fast.md"
+          Copy-Item 'resources\plugin\agents\fast-tier.md' "$ws\.cursor\agents\fast-tier.md"
           Set-Content -Path "$ws\.cursor\cco.json" -Value '{"shellGuard":{"enabled":true}}'
           Set-Content -Path "$ws\.cursor\cco\plugin-path.txt" -Value (Resolve-Path 'resources\plugin').Path
           Copy-Item $exe "$ws\.cursor\cco\bin\cco-hook.exe"

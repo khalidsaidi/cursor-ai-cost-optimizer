@@ -22,7 +22,7 @@ export function buildReport(workspace) {
   let rewritten = 0;
   const reasons = {};
   for (const d of decisions) {
-    const tier = String(d.final || "").replace(/^cco-/, "");
+    const tier = String(d.final || "").replace(/^cco-/, "").replace(/-tier$/, "");
     if (byTier[tier] !== undefined) {
       byTier[tier] += 1;
     }

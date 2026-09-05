@@ -5,7 +5,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { decideHookMode, doctorWorkspace, findBundledBinary, findNode, installWorkspace, plannedFiles, runPluginScriptAsync, stripCcoHooks, uninstallWorkspace, workspacePaths, workspaceStatus, type HookRuntimePreference, type HooksFile, type Options } from "./install";
-import { costStatement, formatUsd, readSavings, loadPricing, modelDisplayName } from "./pricing";
+import { costStatement, formatUsd, readSavings, readLastDecision, loadPricing, modelDisplayName } from "./pricing";
 import { doctorUser, installUser, pauseWorkspace, stripUserHooks, uninstallUser, userHookCommand, userStatus, workspacePaused, workspaceStateDir } from "./userScope";
 import { runHookCommand } from "./selfcheck";
 import { decideTier, heuristicScores, overrideToken, parseOverride, DEFAULT_CONFIG } from "./scorer";
@@ -145,6 +145,12 @@ export function activate(context: vscode.ExtensionContext) {
       }
       const savings = readSavings(ws, c.mode === "user" ? path.join(workspaceStateDir(stateRoot, ws), "state") : undefined);
       savedUsd = savings.savedUsd;
+      const last = readLastDecision(ws, c.mode === "user" ? path.join(workspaceStateDir(stateRoot, ws), "state") : undefined);
+      if (last) {
+        const tierName = last.tier === "fast" ? vscode.l10n.t("Fast") : last.tier === "balanced" ? vscode.l10n.t("Balanced") : vscode.l10n.t("Deep");
+        const numbers = last.estimateUsd !== null ? ` · ${formatUsd(last.estimateUsd)}${last.savedUsd !== null && last.savedUsd >= 0.005 ? `, ${vscode.l10n.t("saved {0}", formatUsd(last.savedUsd))}` : ""}` : "";
+        md.appendMarkdown(`\n${vscode.l10n.t("Last task")}: ${tierName} ${vscode.l10n.t("on")} ${modelDisplayName(last.model, loadPricing(null, bundledPricing))}${numbers}\n`);
+      }
       md.appendMarkdown(`\n${vscode.l10n.t("Saved about {0} in this project ({1} routed tasks).", formatUsd(savings.savedUsd), String(savings.decisions))}\n`);
       if (cost.warnings.length) {
         warn = true;
@@ -156,7 +162,7 @@ export function activate(context: vscode.ExtensionContext) {
     } else {
       md.appendMarkdown(`${vscode.l10n.t("Routes routine work to cheaper models and shows what it saves.")} [${vscode.l10n.t("Turn on")}](command:cco.installCursorAssets?%7B%22scope%22%3A%22user%22%2C%22confirm%22%3Afalse%7D)\n`);
     }
-    const savedText = savedUsd >= 0.01 ? vscode.l10n.t("Saved {0}", formatUsd(savedUsd).replace(/^~/, "")) : "AI Cost";
+    const savedText = savedUsd >= 0.01 ? vscode.l10n.t("Saved {0}", formatUsd(savedUsd)) : "AI Cost";
     status.text = warn ? "$(warning) AI Cost" : c.mode === "none" ? `$(zap) ${vscode.l10n.t("AI Cost: Off")}` : c.enabled ? `$(zap) ${savedText}` : `$(zap) ${vscode.l10n.t("AI Cost: Paused")}`;
     status.tooltip = md;
     status.show();
@@ -165,7 +171,7 @@ export function activate(context: vscode.ExtensionContext) {
     void vscode.commands.executeCommand("setContext", "cco.paused", c.paused);
   };
   refreshStatus();
-  const watcher = vscode.workspace.createFileSystemWatcher("**/.cursor/{cco.json,hooks.json,agents/cco-*.md,cco/pricing.json,cco/state/decisions.jsonl,cco/state/sessions/*.json}");
+  const watcher = vscode.workspace.createFileSystemWatcher("**/.cursor/{cco.json,hooks.json,agents/*-tier.md,cco/pricing.json,cco/state/decisions.jsonl,cco/state/sessions/*.json}");
   context.subscriptions.push(watcher, watcher.onDidChange(refreshStatus), watcher.onDidCreate(refreshStatus), watcher.onDidDelete(refreshStatus));
   // "Everywhere" keeps its state in the extension's storage, outside the workspace watcher: poll cheaply for the savings figure.
   const ticker = setInterval(() => { try { refreshStatus(); } catch {} }, 30_000);
@@ -254,21 +260,19 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(vscode.workspace.onDidChangeWorkspaceFolders(() => void runDoctor()));
 
   void migrateRemovedSettings(context);
-  // One offer, once per machine (Copilot's sign-in prompt pattern): nothing is written until the user says yes.
-  const ONBOARDED_KEY = "cco.onboardingOffered";
-  if (combined(firstWorkspace()).mode === "none" && !context.globalState.get<boolean>(ONBOARDED_KEY)) {
-    void context.globalState.update(ONBOARDED_KEY, true);
-    const turnOn = vscode.l10n.t("Turn on");
-    const notNow = vscode.l10n.t("Not now");
-    void vscode.window.showInformationMessage(vscode.l10n.t("AI Cost Optimizer can send routine work to cheaper models and show what it saves. Turn it on for Cursor?"), turnOn, notNow).then((choice) => {
-      if (choice === turnOn) {
-        void vscode.commands.executeCommand("cco.installCursorAssets", { scope: "user", confirm: false });
-      }
-    });
+  // Turns itself on at install, once per machine: the user installed a cost optimizer, so it optimizes. One
+  // sentence says so, with Undo. Anyone who removed it is never re-enrolled (the flag stays set).
+  const AUTO_ON_KEY = "cco.autoOnDone";
+  if (combined(firstWorkspace()).mode === "none" && !context.globalState.get<boolean>(AUTO_ON_KEY)) {
+    void context.globalState.update(AUTO_ON_KEY, true);
+    const autoOn = setTimeout(() => {
+      void vscode.commands.executeCommand("cco.installCursorAssets", { scope: "user", confirm: false, firstRun: true });
+    }, 3000);
+    context.subscriptions.push({ dispose: () => clearTimeout(autoOn) });
   }
 
   // ---- commands ----
-  const installCmd = vscode.commands.registerCommand("cco.installCursorAssets", async (args?: { confirm?: boolean; workspace?: string; scope?: "user" | "project" }) => {
+  const installCmd = vscode.commands.registerCommand("cco.installCursorAssets", async (args?: { confirm?: boolean; workspace?: string; scope?: "user" | "project"; firstRun?: boolean }) => {
     const current = combined(firstWorkspace());
     let scope: "user" | "project" | undefined = args?.scope ?? (current.mode === "user" ? "user" : current.mode === "project" ? "project" : undefined);
     if (!scope) {
@@ -297,11 +301,16 @@ export function activate(context: vscode.ExtensionContext) {
         log.info(`[install] cco-init output: ${result.init.stdout.trim()}`);
         refreshStatus();
         // The routing rule arrives through the sessionStart hook, so this window routes from the next chat: no reload.
-        const tiers = (["cco-fast", "cco-balanced", "cco-deep"] as const).map((a) => `${a === "cco-fast" ? "Fast" : a === "cco-balanced" ? "Balanced" : "Deep"} → ${modelDisplayName(result.agents[a] ?? "inherit", loadPricing(null, bundledPricing))}`).join(" · ");
-        const details = vscode.l10n.t("Details");
+        const tiers = (["fast-tier", "balanced-tier", "deep-tier"] as const).map((a) => `${a === "fast-tier" ? "Fast" : a === "balanced-tier" ? "Balanced" : "Deep"} → ${modelDisplayName(result.agents[a] ?? "inherit", loadPricing(null, bundledPricing))}`).join(" · ");
+        const details = args?.firstRun ? vscode.l10n.t("How it works") : vscode.l10n.t("Details");
         const undo = vscode.l10n.t("Undo");
-        void vscode.window.showInformationMessage(vscode.l10n.t("AI Cost Optimizer is on. {0}. Start a new chat.", tiers), details, undo).then((choice) => {
-          if (choice === details) {
+        const text = args?.firstRun
+          ? vscode.l10n.t("AI Cost Optimizer is on: routine work goes to cheaper models and the status bar shows what you save. {0}.", tiers)
+          : vscode.l10n.t("AI Cost Optimizer is on. {0}. Start a new chat.", tiers);
+        void vscode.window.showInformationMessage(text, details, undo).then((choice) => {
+          if (choice === details && args?.firstRun) {
+            void vscode.commands.executeCommand("workbench.action.openWalkthrough", `${EXTENSION_ID}#cco.gettingStarted`, false);
+          } else if (choice === details) {
             log.show(true);
           } else if (choice === undo) {
             void vscode.commands.executeCommand("cco.uninstallCursorAssets", { confirm: false });

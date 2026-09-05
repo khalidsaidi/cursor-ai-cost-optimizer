@@ -59,17 +59,17 @@ test("compiled binary: shell guard denies rm -rf / when enabled in .cursor/cco.j
   }
 });
 
-test("compiled binary: preToolUse Task cco-fast allows with updated_input and logs a decision under .cursor/cco/state", { skip: !available && `binary not built: ${BINARY}` }, async () => {
+test("compiled binary: preToolUse Task fast-tier allows with updated_input and logs a decision under .cursor/cco/state", { skip: !available && `binary not built: ${BINARY}` }, async () => {
   const t = await setup();
   try {
-    const res = t.run("preToolUse", { conversation_id: "conv-1", tool_name: "Task", tool_input: { description: "List commits", prompt: "Show the last 3 commits", subagent_type: "cco-fast" } });
+    const res = t.run("preToolUse", { conversation_id: "conv-1", tool_name: "Task", tool_input: { description: "List commits", prompt: "Show the last 3 commits", subagent_type: "fast-tier" } });
     assert.equal(res.status, 0, res.stderr);
     assert.equal(res.out.permission, "allow");
-    assert.equal(res.out.updated_input?.subagent_type, "cco-fast", JSON.stringify(res.out));
+    assert.equal(res.out.updated_input?.subagent_type, "fast-tier", JSON.stringify(res.out));
     assert.match(res.out.updated_input.prompt, /^CCO-SCORES: /);
     const decisions = fs.readFileSync(path.join(t.p.stateDir, "decisions.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l));
-    assert.equal(decisions[0].final, "cco-fast");
-    assert.equal(decisions[0].model, "composer-2.5", "model read from .cursor/agents/cco-fast.md");
+    assert.equal(decisions[0].final, "fast-tier");
+    assert.equal(decisions[0].model, "composer-2.5", "model read from .cursor/agents/fast-tier.md");
     assert.equal(fs.existsSync(path.join(t.ws, ".ai")), false, "no .ai directory in the workspace");
   } finally {
     fs.rmSync(t.ws, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
@@ -79,8 +79,8 @@ test("compiled binary: preToolUse Task cco-fast allows with updated_input and lo
 test("compiled binary: config from .cursor/cco.json overrides plugin defaults (riskForceDeep=2 reroutes)", { skip: !available && `binary not built: ${BINARY}` }, async () => {
   const t = await setup((cfg) => ({ ...cfg, guardrails: { ...(cfg.guardrails || {}), riskForceDeep: 2, riskNoFast: 2 } }));
   try {
-    const res = t.run("preToolUse", { conversation_id: "conv-2", tool_name: "Task", tool_input: { description: "x", prompt: "CCO-SCORES: complexity=1 risk=3 breadth=0 uncertainty=0 latency=5\nShow the last 3 commits", subagent_type: "cco-fast" } });
-    assert.equal(res.out.updated_input?.subagent_type, "cco-deep", JSON.stringify(res.out));
+    const res = t.run("preToolUse", { conversation_id: "conv-2", tool_name: "Task", tool_input: { description: "x", prompt: "CCO-SCORES: complexity=1 risk=3 breadth=0 uncertainty=0 latency=5\nShow the last 3 commits", subagent_type: "fast-tier" } });
+    assert.equal(res.out.updated_input?.subagent_type, "deep-tier", JSON.stringify(res.out));
   } finally {
     fs.rmSync(t.ws, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
@@ -89,13 +89,13 @@ test("compiled binary: config from .cursor/cco.json overrides plugin defaults (r
 test("compiled binary: paused workspace turns cco-* delegations back into chat work; no tier agents means inert", { skip: !available && `binary not built: ${BINARY}` }, async () => {
   const t = await setup((cfg) => ({ ...cfg, enabled: false }));
   try {
-    const paused = t.run("preToolUse", { conversation_id: "conv-3", tool_name: "Task", tool_input: { prompt: "x", subagent_type: "cco-fast" } }).out;
+    const paused = t.run("preToolUse", { conversation_id: "conv-3", tool_name: "Task", tool_input: { prompt: "x", subagent_type: "fast-tier" } }).out;
     assert.equal(paused.permission, "deny");
     assert.match(paused.agent_message, /paused in this project/);
     assert.deepEqual(t.run("preToolUse", { conversation_id: "conv-3b", tool_name: "Read", tool_input: { path: "x" } }).out, { permission: "allow" }, "ordinary tools stay untouched while paused");
     fs.writeFileSync(t.p.configPath, "{}");
     fs.rmSync(t.p.agentsDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
-    assert.deepEqual(t.run("preToolUse", { conversation_id: "conv-4", tool_name: "Task", tool_input: { prompt: "x", subagent_type: "cco-fast" } }).out, { permission: "allow" });
+    assert.deepEqual(t.run("preToolUse", { conversation_id: "conv-4", tool_name: "Task", tool_input: { prompt: "x", subagent_type: "fast-tier" } }).out, { permission: "allow" });
   } finally {
     fs.rmSync(t.ws, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }

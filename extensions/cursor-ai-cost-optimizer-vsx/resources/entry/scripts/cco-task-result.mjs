@@ -7,8 +7,7 @@
  * Fail-open.
  */
 import { loadSession, saveSession } from "./lib/session.mjs";
-import { tierLabel, modelLabel, footerLine } from "./lib/labels.mjs";
-import { loadPricing } from "./lib/pricing.mjs";
+import { tierLabel } from "./lib/labels.mjs";
 import {
   readStdin,
   safeJsonParse,
@@ -18,7 +17,7 @@ import {
   hookLog,
   emit,
   asNumber,
-  isEnabled, isMain, applyScopeArgs } from "./lib/common.mjs";
+  isEnabled, isMain, applyScopeArgs, agentForTier } from "./lib/common.mjs";
 applyScopeArgs();
 import { loadConfig } from "./lib/config.mjs";
 import { loadJointState, recordOutcome, saveJointState, markModelLimited, limitsPathFor, modelLimitedUntil } from "./lib/state.mjs";
@@ -148,22 +147,22 @@ async function main() {
     const cascade = config?.escalation?.cascade !== false;
     // The cost line is the one thing the user should always see: repeat it right when the delegation returns.
     const sess = workspace && payload.conversation_id ? loadSession(workspace, payload.conversation_id) : null;
-    const footerReminder = sess?.lastFooter ? ` Relay the subagent's final message verbatim and end your reply with exactly this line: ${sess.lastFooter}` : "";
+    const footerReminder = "";
     if (verification && verification.ok) {
       emit({ additional_context: `CCO-VERIFY: pass (${verification.command} exit 0). Relay the result; no further checks needed.${footerReminder}` });
       return;
     }
     if (verification && !verification.ok && cascade && analysis.nextTier) {
-      emit({ additional_context: `CCO-VERIFY: fail (${verification.command}):\n${verification.tail}\nTell the user in one line that the ${analysis.tier.toUpperCase()} attempt failed verification and you are escalating to ${analysis.nextTier.toUpperCase()}, then delegate once to cco-${analysis.nextTier} with this failure and the subagent's summary; do not retry ${analysis.subagentType} and do not fix it here.` });
+      emit({ additional_context: `CCO-VERIFY: fail (${verification.command}):\n${verification.tail}\nTell the user in one line that the ${analysis.tier.toUpperCase()} attempt failed verification and you are escalating to ${analysis.nextTier.toUpperCase()}, then delegate once to ${agentForTier(analysis.nextTier)} with this failure and the subagent's summary; do not retry ${analysis.subagentType} and do not fix it here.` });
       return;
     }
     // The top tier failed (typically a usage limit on the DEEP model): there is nothing to escalate to, so the
     // chat model finishes the task itself and says so honestly instead of leaving a dead subagent card.
     const limitsPath = paths ? limitsPathFor(paths.jointStatePath) : null;
-    const lowerModel = analysis.nextTier && workspace ? readWorkspaceAgentModel(workspace, `cco-${analysis.nextTier}`) : null;
+    const lowerModel = analysis.nextTier && workspace ? readWorkspaceAgentModel(workspace, agentForTier(analysis.nextTier)) : null;
     const lowerUsable = analysis.startupFailure ? Boolean(analysis.nextTier) && lowerModel && lowerModel !== "inherit" && !modelLimitedUntil(limitsPath, lowerModel) : Boolean(analysis.nextTier);
     if (analysis.startupFailure && lowerUsable && cascade) {
-      const message = `CCO: ${analysis.subagentType} could not start (its model ${analysis.failedModel || model} was refused: usage limit or not available on this account; it is skipped for a few hours). Tell the user in one line, then delegate this same task once to cco-${analysis.nextTier} (${lowerModel}); do not retry ${analysis.subagentType}.`;
+      const message = `CCO: ${analysis.subagentType} could not start (its model ${analysis.failedModel || model} was refused: usage limit or not available on this account; it is skipped for a few hours). Tell the user in one line, then delegate this same task once to ${agentForTier(analysis.nextTier)} (${lowerModel}); do not retry ${analysis.subagentType}.`;
       if (hookEvent === "subagentStop") {
         if (config?.escalation?.followupOnSubagentFailure !== false) {
           emit({ followup_message: message });
@@ -178,16 +177,8 @@ async function main() {
     if (analysis.isError && (analysis.tier === "deep" || analysis.startupFailure) && !lowerUsable) {
       const sessionModel = sess?.model || "the chat model";
       const tierName = tierLabel(analysis.tier).toUpperCase();
-      const footer = footerLine([`done in chat on ${modelLabel(sessionModel, loadPricing(paths?.pricingPath))}`, `${tierLabel(analysis.tier)} model unavailable`]);
       const cooldown = analysis.startupFailure ? ` Its model is skipped for the next few hours.` : "";
-      const message = `CCO: ${analysis.subagentType} did not complete (${analysis.status || "error"}; often a usage limit on its model).${cooldown} Do the task directly in this chat on ${sessionModel}, tell the user in one line that the ${tierName} subagent failed, and end with exactly this line: ${footer}`;
-      if (sess && workspace) {
-        // Later postToolUse reminders repeat this footer, so the final reply stays honest even if the follow-up is skimmed.
-        sess.lastFooter = footer;
-        try {
-          saveSession(workspace, sess);
-        } catch {}
-      }
+      const message = `CCO: ${analysis.subagentType} did not complete (${analysis.status || "error"}; often a usage limit on its model).${cooldown} Do the task directly in this chat on ${sessionModel}, tell the user in one line that the ${tierName} subagent failed, and do not add a Cost Optimizer line.`;
       if (hookEvent === "subagentStop") {
         if (config?.escalation?.followupOnSubagentFailure !== false) {
           emit({ followup_message: message });
@@ -200,7 +191,7 @@ async function main() {
       return;
     }
     if (cascade && analysis.nextTier && analysis.nextTier !== analysis.tier) {
-      const message = `CCO cascade: ${analysis.subagentType} ${analysis.requestedEscalation ? "requested escalation" : "did not complete successfully"}. Tell the user in one line that you are escalating to ${analysis.nextTier.toUpperCase()}, then delegate once to cco-${analysis.nextTier} with the findings above; do not retry ${analysis.subagentType}.`;
+      const message = `CCO cascade: ${analysis.subagentType} ${analysis.requestedEscalation ? "requested escalation" : "did not complete successfully"}. Tell the user in one line that you are escalating to ${analysis.nextTier.toUpperCase()}, then delegate once to ${agentForTier(analysis.nextTier)} with the findings above; do not retry ${analysis.subagentType}.`;
       if (hookEvent === "subagentStop") {
         if (config?.escalation?.followupOnSubagentFailure !== false && analysis.status && analysis.status !== "completed") {
           emit({ followup_message: message });

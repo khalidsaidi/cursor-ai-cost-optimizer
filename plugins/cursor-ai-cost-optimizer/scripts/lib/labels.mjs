@@ -1,5 +1,5 @@
 // Human wording for everything a user reads in Cursor (tool cards, footers, notifications).
-// Internal names (cco-fast, FAST, claude-sonnet-5-thinking-high, reason codes) never reach the user.
+// Internal names (fast-tier, FAST, claude-sonnet-5-thinking-high, reason codes) never reach the user.
 import { resolveModelPrice } from "./pricing.mjs";
 
 const TIER_LABELS = { fast: "Fast", balanced: "Balanced", deep: "Deep" };
@@ -44,9 +44,4 @@ export function reasonLabel(reason) {
   if (r === "budget_exceeded_force_fast") return "over the chat budget";
   if (r.startsWith("model_limited")) return "usage limit";
   return r.replace(/_/g, " ");
-}
-
-/** The one line the user reads at the end of a routed task. */
-export function footerLine(parts) {
-  return `Cost Optimizer · ${parts.filter(Boolean).join(" · ")}`;
 }

@@ -199,7 +199,7 @@ export function readTierModels(workspace: string, agentsDir?: string): Record<Ti
   const out = { fast: null, balanced: null, deep: null } as Record<Tier, string | null>;
   for (const tier of TIERS) {
     try {
-      const text = fs.readFileSync(path.join(agentsDir ?? path.join(workspace, ".cursor", "agents"), `cco-${tier}.md`), "utf8");
+      const text = fs.readFileSync(path.join(agentsDir ?? path.join(workspace, ".cursor", "agents"), `${tier}-tier.md`), "utf8");
       const m = text.match(/^model:\s*(.+)$/m);
       out[tier] = m ? m[1].trim() : null;
     } catch {
@@ -296,9 +296,9 @@ export function costStatement(workspace: string, bundledPricingPath: string, opt
     const label = tier.toUpperCase();
     if (!model || model === "inherit") {
       if (!model) {
-        warnings.push(`cco-${tier} agent missing`);
+        warnings.push(`${tier}-tier agent missing`);
       } else {
-        warnings.push(`cco-${tier} is inherit`);
+        warnings.push(`${tier}-tier is inherit`);
       }
       return { tier, model, multiplier: null, price: null, text: `${label} → ${model ?? "(no agent file)"}` };
     }
@@ -331,4 +331,37 @@ export function modelDisplayName(modelId: string, pricing: PricingTable | null):
     .map((w) => (/^\d/.test(w) ? w : w.charAt(0).toUpperCase() + w.slice(1)))
     .join(" ")
     .replace(/\bGpt\b/g, "GPT");
+}
+
+export interface LastDecision {
+  ts: string;
+  tier: string;
+  model: string;
+  estimateUsd: number | null;
+  savedUsd: number | null;
+}
+
+/** The most recent routed task (last line of decisions.jsonl), for the status bar receipt. */
+export function readLastDecision(workspace: string, stateDir?: string): LastDecision | null {
+  let text = "";
+  try {
+    text = fs.readFileSync(path.join(stateDir ?? path.join(workspace, ".cursor", "cco", "state"), "decisions.jsonl"), "utf8");
+  } catch {
+    return null;
+  }
+  const lines = text.trim().split("\n").filter(Boolean);
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    try {
+      const d = JSON.parse(lines[i]) as { ts?: string; final?: string; model?: string; estimateUsd?: number | null; chatEstimateUsd?: number | null };
+      if (!d.final || d.final === "chat") {
+        continue;
+      }
+      const tier = String(d.final).replace(/^cco-/, "").replace(/-tier$/, "");
+      const saved = typeof d.estimateUsd === "number" && typeof d.chatEstimateUsd === "number" && d.chatEstimateUsd > d.estimateUsd ? d.chatEstimateUsd - d.estimateUsd : null;
+      return { ts: String(d.ts ?? ""), tier, model: String(d.model ?? ""), estimateUsd: typeof d.estimateUsd === "number" ? d.estimateUsd : null, savedUsd: saved };
+    } catch {
+      continue;
+    }
+  }
+  return null;
 }

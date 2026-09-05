@@ -11,7 +11,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { parseArgs, workspacePaths, writeJson, readJsonSafe, TIERS, CCO_AGENT_NAMES, isMain, applyScopeArgs, PLUGIN_ROOT, ensureDir } from "./lib/common.mjs";
+import { parseArgs, workspacePaths, writeJson, readJsonSafe, TIERS, CCO_AGENT_NAMES, isMain, applyScopeArgs, PLUGIN_ROOT, ensureDir, LEGACY_AGENT_NAMES } from "./lib/common.mjs";
 applyScopeArgs();
 import { loadConfig } from "./lib/config.mjs";
 import { refreshPricing } from "./cco-refresh-pricing.mjs";
@@ -53,7 +53,7 @@ async function main() {
   if (args.uninstall) {
     const hooks = uninstallHooks({ workspace });
     const removed = [];
-    for (const name of CCO_AGENT_NAMES) {
+    for (const name of [...CCO_AGENT_NAMES, ...LEGACY_AGENT_NAMES]) {
       const file = path.join(paths.agentsDir, `${name}.md`);
       try {
         if (fs.readFileSync(file, "utf8").includes(GENERATED_MARKER)) {

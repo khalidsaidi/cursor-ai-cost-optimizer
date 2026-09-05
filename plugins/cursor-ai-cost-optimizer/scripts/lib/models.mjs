@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { run, stripAnsi, cursorAgentBinary, readJsonSafe, TIERS, asNumber, resolveCommand } from "./common.mjs";
+import { run, stripAnsi, cursorAgentBinary, readJsonSafe, TIERS, asNumber, resolveCommand, TIER_AGENT, agentForTier } from "./common.mjs";
 import { resolveModelPrice, blendedRatePerMillion } from "./pricing.mjs";
 
 export const CLI_CONFIG_PATH = path.join(os.homedir(), ".cursor", "cli-config.json");
@@ -284,7 +284,7 @@ export function currentCliModelId() {
 
 export function tierFor(name) {
   const lower = String(name || "").toLowerCase();
-  return TIERS.find((tier) => lower === tier || lower === `cco-${tier}`) || null;
+  return TIERS.find((tier) => lower === tier || lower === TIER_AGENT[tier] || lower === "cco-" + tier) || null;
 }
 
 export function priceSummary(price) {

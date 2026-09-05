@@ -24,11 +24,11 @@ import {
   emit,
   asNumber,
   TIERS,
-  isEnabled, isMain, applyScopeArgs } from "./lib/common.mjs";
+  isEnabled, isMain, applyScopeArgs, agentForTier } from "./lib/common.mjs";
 applyScopeArgs();
 import { loadConfig } from "./lib/config.mjs";
 import { modelLimitedUntil, limitsPathFor } from "./lib/state.mjs";
-import { tierLabel, modelLabel, footerLine } from "./lib/labels.mjs";
+import { tierLabel, modelLabel } from "./lib/labels.mjs";
 import { loadPricing, resolveModelPrice, blendedRatePerMillion } from "./lib/pricing.mjs";
 import { heuristicScores, decideTier, parseOverride, isQuestionLike, isTinyTask } from "./lib/scorer.mjs";
 import { loadSession, saveSession, userPromptFromTranscript, guessTranscriptPath, refineSessionModel, syncTurnFromTranscript, userPromptFromTranscriptTurn } from "./lib/session.mjs";
@@ -39,7 +39,7 @@ const DEFAULT_WORK_TOOLS = "^(Write|Edit|StrReplace|MultiEdit|Delete|Shell|Bash|
 function tierModels(workspace, runtime, limitsPath = null) {
   const out = {};
   for (const tier of TIERS) {
-    out[tier] = (workspace && readWorkspaceAgentModel(workspace, `cco-${tier}`)) || runtime?.profiles?.[tier]?.model || "inherit";
+    out[tier] = (workspace && readWorkspaceAgentModel(workspace, agentForTier(tier))) || runtime?.profiles?.[tier]?.model || "inherit";
   }
   // A tier whose model is on cooldown (refused to start a subagent: usage limit) runs on the next usable lower tier.
   if (limitsPath) {
@@ -99,10 +99,10 @@ export function gateDecision({ toolName, session, config, pricing, models, promp
     return { action: "allow", reason: "escape_hatch_after_denials" };
   }
 
-  const delegated = Array.isArray(session.delegations) && session.delegations.some((d) => d.agent !== "cco-explore" && d.agent !== "cco-verifier");
+  const delegated = Array.isArray(session.delegations) && session.delegations.some((d) => d.agent !== "fast-research" && d.agent !== "tier-verifier");
   const workTool = new RegExp(enforcement.gatedTools || DEFAULT_WORK_TOOLS, "i").test(tool);
   const readTool = /^(Read|Grep|Glob|ListDir|List|Search|Codebase|SemanticSearch|WebSearch|Fetch)/i.test(tool);
-  const explored = Array.isArray(session.research) && session.research.some((r) => r.agent === "cco-explore");
+  const explored = Array.isArray(session.research) && session.research.some((r) => r.agent === "fast-research");
   const override = prompt ? parseOverride(prompt, config?.overrideTokens || {}) : meta.override || null;
   const decision = session.decision || (prompt ? decideTier({ scores: heuristicScores(prompt), override, config }) : null);
   const questionLike = prompt ? isQuestionLike(prompt) : Boolean(meta.questionLike);
@@ -192,7 +192,7 @@ export function denyMessage({ toolName, verdict, sessionModel }) {
   if (verdict.reason === "read_budget_use_explore") {
     return [
       `CCO: you have used the read budget for research on ${sessionModel || "the chat model"}. Delegate the remaining research to the cheap explorer instead of reading more here.`,
-      `Call the Task tool with subagent_type="cco-explore" (read-only, runs on ${verdict.model}) and a precise question: what to find, which paths or symbols, what to report (paths with line ranges, a short answer). Independent questions can be sent as parallel Task calls in the same turn. Then continue the work here using its summary.`
+      `Call the Task tool with subagent_type="fast-research" (read-only, runs on ${verdict.model}) and a precise question: what to find, which paths or symbols, what to report (paths with line ranges, a short answer). Independent questions can be sent as parallel Task calls in the same turn. Then continue the work here using its summary.`
     ].join("\n");
   }
   if (verdict.phase === "post") {
@@ -206,7 +206,7 @@ export function denyMessage({ toolName, verdict, sessionModel }) {
     : "CCO-SCORES: complexity=<0-10> risk=<0-10> breadth=<0-10> uncertainty=<0-10> latency=<0-10>";
   return [
     `CCO: ${toolName} is not allowed on ${sessionModel || "the chat model"} for this request (${verdict.reason}). Do not gather context or work around this with other tools.`,
-    `Your next action must be one Task call: subagent_type="cco-${verdict.tier}" (runs on ${verdict.model}). The Task prompt must start with \`${scores}\`, then pass the user's request verbatim plus any paths or constraints they gave; the subagent reads what it needs itself. When it returns, relay its final message to the user verbatim with no further tool calls.`
+    `Your next action must be one Task call: subagent_type="${agentForTier(verdict.tier)}" (runs on ${verdict.model}). The Task prompt must start with \`${scores}\`, then pass the user's request verbatim plus any paths or constraints they gave; the subagent reads what it needs itself. When it returns, relay its final message to the user verbatim with no further tool calls.`
   ].join("\n");
 }
 
@@ -316,22 +316,11 @@ async function main() {
       session.footerSent = true;
       saveSession(workspace, session);
       const model = modelLabel(session.model, pricing);
-      const footer = footerLine([`done in chat on ${model}`]);
       emit({
         permission: "allow",
-        agent_message: `CCO: no cco-* delegation was made; this work runs in this chat on ${session.model || "the chat model"}. Do not claim another model. End your final message with exactly this line: ${footer}`,
+        agent_message: `CCO: no tier delegation was made; this work runs in this chat on ${session.model || "the chat model"}. Do not claim another model and do not add a Cost Optimizer line.`,
         user_message: `Working in chat on ${model}.`
       });
-      return;
-    }
-    // Copilot-style footer for work that rightly stays in this chat: say so once per turn.
-    const workTool = new RegExp(config?.enforcement?.gatedTools || DEFAULT_WORK_TOOLS, "i").test(String(payload.tool_name || ""));
-    if (workTool && !session.footerSent && /tier_.*_not_cheaper|session_model_already_matches_tier|no_savings_expected/.test(verdict.reason)) {
-      session.footerSent = true;
-      saveSession(workspace, session);
-      const tier = tierLabel(session.decision?.tier || "deep");
-      const chatFooter = footerLine([`done in chat on ${modelLabel(session.model, pricing)}`]);
-      emit({ permission: "allow", agent_message: `CCO: this ${tier} work stays in this chat (${session.model || "chat model"} is the right price for it). End your final message with exactly this line: ${chatFooter}` });
       return;
     }
     emit({ permission: "allow" });

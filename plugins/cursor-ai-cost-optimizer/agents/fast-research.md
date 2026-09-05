@@ -1,5 +1,5 @@
 ---
-name: cco-explore
+name: fast-research
 description: Read-only research on the cheapest capable model. Use for codebase exploration, finding files and usages, reading docs, reproducing a failure, or answering "where/how does X work" before the expensive work starts.
 model: inherit
 readonly: true

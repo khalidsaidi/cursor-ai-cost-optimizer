@@ -230,7 +230,7 @@ function mainInner() {
           pass = false;
         }
         const { usd, warmUsd, price } = costOf(run, p.model, pricing, config);
-        const delegated = run.tasks.filter((t) => String(t.subagent || "").startsWith("cco-"));
+        const delegated = run.tasks.filter((t) => /^(fast|balanced|deep)-tier$|^(cco-(fast|balanced|deep))$/.test(String(t.subagent || "")));
         const record = {
           repeat,
           scenario: scenario.id,

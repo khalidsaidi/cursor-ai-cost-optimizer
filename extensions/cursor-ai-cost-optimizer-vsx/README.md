@@ -16,7 +16,7 @@ the Cursor plugin marketplace, and ships a self-contained hook binary for machin
 ## Features
 
 - **Tiered routing with real savings**: the routing rule scores each request (complexity, risk, breadth,
-  uncertainty, latency) and delegates to `cco-fast` / `cco-balanced` / `cco-deep` subagents, each pinned to a
+  uncertainty, latency) and delegates to `fast-tier` / `balanced-tier` / `deep-tier` subagents, each pinned to a
   model your account can run. Delegation only happens when the tier model is materially cheaper.
 - **Hooks that enforce it**: the Task guard rewrites mis-routed delegations and applies guardrails (high risk
   never runs FAST); the tool gate keeps expensive chat models from doing cheap work themselves; outcome learning

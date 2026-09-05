@@ -10,8 +10,21 @@ export const PLUGIN_ROOT = process.env.CCO_PLUGIN_ROOT
   ? path.resolve(process.env.CCO_PLUGIN_ROOT)
   : path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 export const TIERS = ["fast", "balanced", "deep"];
-export const CCO_AGENT_NAMES = ["cco-fast", "cco-balanced", "cco-deep", "cco-verifier", "cco-explore"];
-export const CCO_WORK_AGENTS = ["cco-fast", "cco-balanced", "cco-deep"];
+/** Subagent names are what Cursor shows on the card ("Fast Tier"), so they are written for the user. */
+export const TIER_AGENT = { fast: "fast-tier", balanced: "balanced-tier", deep: "deep-tier" };
+export const RESEARCH_AGENT = "fast-research";
+export const VERIFIER_AGENT = "tier-verifier";
+export const CCO_AGENT_NAMES = ["fast-tier", "balanced-tier", "deep-tier", "tier-verifier", "fast-research"];
+export const CCO_WORK_AGENTS = ["fast-tier", "balanced-tier", "deep-tier"];
+/** Names used before 0.3; generated files under these names are removed on setup/update and on uninstall. */
+export const LEGACY_AGENT_NAMES = ["cco-fast", "cco-balanced", "cco-deep", "cco-verifier", "cco-explore"];
+export function agentForTier(tier) {
+  return TIER_AGENT[String(tier || "").toLowerCase()] || null;
+}
+export function isCcoAgent(name) {
+  const n = String(name || "");
+  return CCO_AGENT_NAMES.includes(n) || LEGACY_AGENT_NAMES.includes(n);
+}
 
 export function nowIso() {
   return new Date().toISOString();
@@ -239,14 +252,14 @@ export function isEnabled(workspace) {
   const paths = workspacePaths(workspace);
   // A project-level setup (files in <ws>/.cursor) takes precedence over the user-level one, like Cursor's own
   // project-over-user rule: the user-scope hooks go inert there so nothing runs twice.
-  if (paths.scope === "user" && fs.existsSync(path.join(workspace, ".cursor", "agents", "cco-fast.md")) && fs.existsSync(path.join(workspace, ".cursor", "hooks.json"))) {
+  if (paths.scope === "user" && fs.existsSync(path.join(workspace, ".cursor", "agents", "fast-tier.md")) && fs.existsSync(path.join(workspace, ".cursor", "hooks.json"))) {
     return { enabled: false, reason: "project_scope_active" };
   }
   const cfg = readJsonSafe(paths.configPath);
   if (cfg && cfg.enabled === false) {
     return { enabled: false, reason: "workspace_opt_out" };
   }
-  if (!fs.existsSync(path.join(paths.agentsDir, "cco-fast.md"))) {
+  if (!fs.existsSync(path.join(paths.agentsDir, "fast-tier.md"))) {
     return { enabled: false, reason: paths.scope === "user" ? "user_not_set_up" : "workspace_not_set_up" };
   }
   return { enabled: true, reason: null };

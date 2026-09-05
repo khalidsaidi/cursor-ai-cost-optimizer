@@ -168,11 +168,11 @@ export function discover({ workspace, probe, writeAgents, config: configOverride
   }
 
   const tierModels = {
-    "cco-fast": profiles.fast.model,
-    "cco-balanced": profiles.balanced.model,
-    "cco-deep": profiles.deep.model,
-    "cco-verifier": verifierModel,
-    "cco-explore": profiles.fast.model
+    "fast-tier": profiles.fast.model,
+    "balanced-tier": profiles.balanced.model,
+    "deep-tier": profiles.deep.model,
+    "tier-verifier": verifierModel,
+    "fast-research": profiles.fast.model
   };
   const agentWrites = writeAgents && workspace ? writeWorkspaceAgents(workspace, tierModels) : [];
   for (const write of agentWrites) {

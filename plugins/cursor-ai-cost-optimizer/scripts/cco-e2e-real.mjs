@@ -4,8 +4,8 @@
  *
  * Creates an isolated temporary workspace, loads this plugin with --plugin-dir, and checks that:
  *  1. sessionStart initializes runtime + workspace agents and injects context,
- *  2. an expensive parent model delegates ordinary work to cco-fast (and the subagent runs on the mapped model),
- *  3. a cheap parent model escalates high-risk work to cco-deep,
+ *  2. an expensive parent model delegates ordinary work to fast-tier (and the subagent runs on the mapped model),
+ *  3. a cheap parent model escalates high-risk work to deep-tier,
  *  4. [cco:deep] / [cco:fast] overrides are honored,
  *  5. trivial questions are answered directly (no delegation overhead),
  *  6. decisions are logged.
@@ -47,32 +47,32 @@ export function buildCases(profiles) {
       id: "expensive_parent_delegates_fast",
       parentModel: profiles.deep,
       prompt: 'Create utils/slugify.js exporting slugify(str) (lowercase, spaces to hyphens, strip non-alphanumerics) and utils/slugify.test.mjs using node:test asserting slugify("Hello World!") === "hello-world". Run node --test and report the result.',
-      expect: { delegatedTo: ["cco-fast", "cco-balanced"], subagentModel: [profiles.fast, profiles.balanced], filesExist: ["utils/slugify.js", "utils/slugify.test.mjs"] }
+      expect: { delegatedTo: ["fast-tier", "balanced-tier"], subagentModel: [profiles.fast, profiles.balanced], filesExist: ["utils/slugify.js", "utils/slugify.test.mjs"] }
     },
     {
       id: "cheap_parent_escalates_risky_to_deep",
       parentModel: profiles.fast,
       prompt: "We need to rotate the production OAuth secret and the payment webhook signing key used in config/auth.js. Implement dual-key support during rotation (old+new) with a rollback path and explain the deployment order. Keep it small.",
-      expect: { delegatedTo: ["cco-deep"], subagentModel: [profiles.deep] }
+      expect: { delegatedTo: ["deep-tier"], subagentModel: [profiles.deep] }
     },
     {
       id: "override_deep_forces_deep",
       parentModel: profiles.fast,
       prompt: "[cco:deep] Add a one-line comment at the top of README.md saying this is a fixture.",
-      expect: { delegatedTo: ["cco-deep"], subagentModel: [profiles.deep] }
+      expect: { delegatedTo: ["deep-tier"], subagentModel: [profiles.deep] }
     },
     {
       id: "override_fast_wins_over_risk",
       parentModel: profiles.deep,
       prompt: "[cco:fast] In config/auth.js rename the exported key webhookKey to webhookSigningKey (production auth config; keep behavior).",
-      expect: { delegatedTo: ["cco-fast"], subagentModel: [profiles.fast] }
+      expect: { delegatedTo: ["fast-tier"], subagentModel: [profiles.fast] }
     },
     {
       id: "deep_task_on_frontier_chat_uses_explore_for_research",
       parentModel: profiles.deep,
       seedRepo: true,
       prompt: "Investigate how override tokens like [cco:deep] are parsed across scripts/lib and covered by the tests, then make the parser also accept the tokens when they appear inside inline code spans like `[cco:deep]`, keeping every existing test green. Run node --test test/ at the end.",
-      expect: { researchTo: ["cco-explore"], noWorkDelegation: true }
+      expect: { researchTo: ["fast-research"], noWorkDelegation: true }
     },
     {
       id: "trivial_question_no_delegation",
@@ -86,7 +86,7 @@ export function buildCases(profiles) {
 
 function evaluate(testCase, run, ws) {
   const failures = [];
-  const ccoTasks = run.tasks.filter((t) => String(t.subagent || "").startsWith("cco-"));
+  const ccoTasks = run.tasks.filter((t) => /^(fast|balanced|deep)-tier$|^(cco-(fast|balanced|deep))$/.test(String(t.subagent || "")));
   const expect = testCase.expect;
   if (expect.delegatedTo) {
     if (expect.delegatedTo.length === 0 && ccoTasks.length > 0) {
@@ -94,7 +94,7 @@ function evaluate(testCase, run, ws) {
     }
     if (expect.delegatedTo.length > 0) {
       if (!ccoTasks.length) {
-        failures.push("expected a cco-* delegation, none happened");
+        failures.push("expected a tier delegation, none happened");
       } else if (!expect.delegatedTo.includes(ccoTasks[0].subagent)) {
         failures.push(`expected first delegation to ${expect.delegatedTo.join("|")}, got ${ccoTasks[0].subagent}`);
       }
@@ -119,7 +119,7 @@ function evaluate(testCase, run, ws) {
       failures.push(`expected a research delegation to ${expect.researchTo.join("|")}, none happened`);
     }
   }
-  if (expect.noWorkDelegation && ccoTasks.some((t) => ["cco-fast", "cco-balanced", "cco-deep"].includes(t.subagent))) {
+  if (expect.noWorkDelegation && ccoTasks.some((t) => ["fast-tier", "balanced-tier", "deep-tier"].includes(t.subagent))) {
     failures.push("expected the deep work to stay in the chat (same model), but it was delegated");
   }
   if (expect.resultMatches && !expect.resultMatches.test(run.resultText)) {
@@ -176,8 +176,8 @@ function mainInner() {
       parentModel: testCase.parentModel,
       pass: failures.length === 0,
       failures,
-      delegations: run.tasks.filter((t) => String(t.subagent || "").startsWith("cco-")).map((t) => ({ subagent: t.subagent, model: t.model })),
-      workspaceAgentModels: { fast: agentModel(ws, "cco-fast"), balanced: agentModel(ws, "cco-balanced"), deep: agentModel(ws, "cco-deep") },
+      delegations: run.tasks.filter((t) => /^(fast|balanced|deep)-tier$|^(cco-(fast|balanced|deep))$/.test(String(t.subagent || ""))).map((t) => ({ subagent: t.subagent, model: t.model })),
+      workspaceAgentModels: { fast: agentModel(ws, "fast-tier"), balanced: agentModel(ws, "balanced-tier"), deep: agentModel(ws, "deep-tier") },
       gate: { denials: gate.filter((g) => g.action === "deny").length, allows: gate.filter((g) => g.action === "allow").length },
       decisionsLogged: decisions.length,
       parentUsage: run.usage,

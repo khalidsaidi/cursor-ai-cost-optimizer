@@ -1,5 +1,5 @@
 ---
-name: cco-balanced
+name: balanced-tier
 description: Default effort tier for normal development work. Use for typical features, bug fixes, and multi-step edits that need some context and a verification step.
 model: inherit
 ---
@@ -25,7 +25,7 @@ If verification fails twice, or the task reveals architecture-level, security, o
 followed by findings so far (paths, failing checks, hypotheses). Do not keep retrying.
 
 ## Research
-If the task needs more than a few reads to locate the right code, delegate that research to `cco-explore` (read-only, cheap) and continue with its summary; independent questions can go out as parallel Task calls.
+If the task needs more than a few reads to locate the right code, delegate that research to `fast-research` (read-only, cheap) and continue with its summary; independent questions can go out as parallel Task calls.
 
 ## Output style
 - Final message ≤ 200 words: what changed (files), how it was verified (command + result), open risks. The parent relays it verbatim, so write for the user.

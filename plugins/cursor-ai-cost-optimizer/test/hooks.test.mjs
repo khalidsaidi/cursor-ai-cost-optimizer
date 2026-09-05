@@ -26,7 +26,7 @@ function tmpWorkspace() {
 }
 
 /** A workspace that has been set up for CCO (tier agents present). */
-function readyWorkspace(models = { "cco-fast": "composer-2.5", "cco-balanced": "claude-sonnet-5-thinking-high", "cco-deep": "claude-opus-5-thinking-high", "cco-verifier": "composer-2.5" }) {
+function readyWorkspace(models = { "fast-tier": "composer-2.5", "balanced-tier": "claude-sonnet-5-thinking-high", "deep-tier": "claude-opus-5-thinking-high", "tier-verifier": "composer-2.5" }) {
   const ws = tmpWorkspace();
   writeWorkspaceAgents(ws, models);
   return ws;
@@ -51,68 +51,68 @@ function runHook(script, payload, args = []) {
 
 test("task guard: parent choice within policy is kept and a scores line is prepended", () => {
   const result = evaluateTask({
-    toolInput: { description: "List commits", prompt: "Show the last 3 commits", subagent_type: "cco-fast" },
+    toolInput: { description: "List commits", prompt: "Show the last 3 commits", subagent_type: "fast-tier" },
     config
   });
   assert.equal(result.applies, true);
   assert.equal(result.rewritten, false);
-  assert.equal(result.targetAgent, "cco-fast");
+  assert.equal(result.targetAgent, "fast-tier");
   assert.match(result.updatedPrompt, /^CCO-SCORES: /);
 });
 
-test("task guard: high-risk prompt routed to cco-fast is rewritten to the policy minimum", () => {
+test("task guard: high-risk prompt routed to fast-tier is rewritten to the policy minimum", () => {
   const result = evaluateTask({
     toolInput: {
       description: "Rotate secrets",
       prompt: "CCO-SCORES: complexity=2 risk=8 breadth=1 uncertainty=1 latency=5\nRotate the production OAuth secrets",
-      subagent_type: "cco-fast"
+      subagent_type: "fast-tier"
     },
     config
   });
   assert.equal(result.rewritten, true);
-  assert.equal(result.targetAgent, "cco-balanced");
+  assert.equal(result.targetAgent, "balanced-tier");
   assert.equal(result.reason, "risk_no_fast");
 });
 
 test("task guard: critical risk forces deep, user override wins over guardrails", () => {
   const critical = evaluateTask({
-    toolInput: { prompt: "CCO-SCORES: complexity=1 risk=9 breadth=0 uncertainty=0 latency=9\nDrop the prod table", subagent_type: "cco-balanced" },
+    toolInput: { prompt: "CCO-SCORES: complexity=1 risk=9 breadth=0 uncertainty=0 latency=9\nDrop the prod table", subagent_type: "balanced-tier" },
     config
   });
-  assert.equal(critical.targetAgent, "cco-deep");
+  assert.equal(critical.targetAgent, "deep-tier");
   const overridden = evaluateTask({
-    toolInput: { prompt: "[cco:fast] CCO-SCORES: complexity=1 risk=9 breadth=0 uncertainty=0 latency=9\nDrop the prod table", subagent_type: "cco-deep" },
+    toolInput: { prompt: "[cco:fast] CCO-SCORES: complexity=1 risk=9 breadth=0 uncertainty=0 latency=9\nDrop the prod table", subagent_type: "deep-tier" },
     config
   });
-  assert.equal(overridden.targetAgent, "cco-fast");
+  assert.equal(overridden.targetAgent, "fast-tier");
   assert.equal(overridden.reason, "override_fast");
 });
 
 test("task guard: override token from the captured user prompt is honored for the same conversation", () => {
   const result = evaluateTask({
-    toolInput: { prompt: "CCO-SCORES: complexity=1 risk=1 breadth=0 uncertainty=0 latency=8\nWhat is 2+2", subagent_type: "cco-fast" },
+    toolInput: { prompt: "CCO-SCORES: complexity=1 risk=1 breadth=0 uncertainty=0 latency=8\nWhat is 2+2", subagent_type: "fast-tier" },
     config,
     lastPrompt: { conversation_id: "c1", prompt: "[cco:deep] what is 2+2" },
     conversationId: "c1"
   });
-  assert.equal(result.targetAgent, "cco-deep");
+  assert.equal(result.targetAgent, "deep-tier");
   assert.equal(result.overrideSource, "user_prompt");
   const other = evaluateTask({
-    toolInput: { prompt: "CCO-SCORES: complexity=1 risk=1 breadth=0 uncertainty=0 latency=8\nWhat is 2+2", subagent_type: "cco-fast" },
+    toolInput: { prompt: "CCO-SCORES: complexity=1 risk=1 breadth=0 uncertainty=0 latency=8\nWhat is 2+2", subagent_type: "fast-tier" },
     config,
     lastPrompt: { conversation_id: "c1", prompt: "[cco:deep] what is 2+2" },
     conversationId: "c2"
   });
-  assert.equal(other.targetAgent, "cco-fast");
+  assert.equal(other.targetAgent, "fast-tier");
 });
 
 test("task guard: learning escalation applies when a tier keeps failing", () => {
   const result = evaluateTask({
-    toolInput: { prompt: "CCO-SCORES: complexity=2 risk=1 breadth=0 uncertainty=0 latency=5\nfix typo", subagent_type: "cco-fast" },
+    toolInput: { prompt: "CCO-SCORES: complexity=2 risk=1 breadth=0 uncertainty=0 latency=5\nfix typo", subagent_type: "fast-tier" },
     config,
     state: { tiers: { fast: { count: 4, emaError: 0.6, emaRework: 0.1 } } }
   });
-  assert.equal(result.targetAgent, "cco-balanced");
+  assert.equal(result.targetAgent, "balanced-tier");
   assert.match(result.reason, /^learning:/);
 });
 
@@ -126,15 +126,15 @@ test("task guard hook process: rewrites via updated_input and logs a decision", 
     hook_event_name: "preToolUse",
     conversation_id: "conv-1",
     tool_name: "Task",
-    tool_input: { description: "Payments", prompt: "CCO-SCORES: complexity=3 risk=9 breadth=2 uncertainty=1 latency=0\nChange the refund flow", subagent_type: "cco-fast" },
+    tool_input: { description: "Payments", prompt: "CCO-SCORES: complexity=3 risk=9 breadth=2 uncertainty=1 latency=0\nChange the refund flow", subagent_type: "fast-tier" },
     workspace_roots: [ws]
   });
   assert.equal(out.permission, "allow");
-  assert.equal(out.updated_input.subagent_type, "cco-deep");
+  assert.equal(out.updated_input.subagent_type, "deep-tier");
   assert.match(out.agent_message, /rerouted/);
   const decisions = fs.readFileSync(workspacePaths(ws).decisionsPath, "utf8").trim().split("\n");
   assert.equal(decisions.length, 1);
-  assert.equal(JSON.parse(decisions[0]).final, "cco-deep");
+  assert.equal(JSON.parse(decisions[0]).final, "deep-tier");
 });
 
 test("task guard hook process: malformed input still allows", () => {
@@ -144,16 +144,16 @@ test("task guard hook process: malformed input still allows", () => {
 });
 
 test("task result: escalation request and failures are detected", () => {
-  const esc = analyzeOutcome({ hookEvent: "postToolUse", payload: { tool_name: "Task", tool_input: { subagent_type: "cco-fast" }, tool_output: "CCO-ESCALATE: balanced — needs multi-file change" } });
+  const esc = analyzeOutcome({ hookEvent: "postToolUse", payload: { tool_name: "Task", tool_input: { subagent_type: "fast-tier" }, tool_output: "CCO-ESCALATE: balanced — needs multi-file change" } });
   assert.equal(esc.rework, true);
   assert.equal(esc.nextTier, "balanced");
-  const ok = analyzeOutcome({ hookEvent: "postToolUse", payload: { tool_name: "Task", tool_input: { subagent_type: "cco-fast" }, tool_output: "done, file written" } });
+  const ok = analyzeOutcome({ hookEvent: "postToolUse", payload: { tool_name: "Task", tool_input: { subagent_type: "fast-tier" }, tool_output: "done, file written" } });
   assert.equal(ok.isError, false);
   assert.equal(ok.nextTier, null);
-  const stop = analyzeOutcome({ hookEvent: "subagentStop", payload: { subagent_type: "cco-balanced", status: "error", summary: "" } });
+  const stop = analyzeOutcome({ hookEvent: "subagentStop", payload: { subagent_type: "balanced-tier", status: "error", summary: "" } });
   assert.equal(stop.isError, true);
   assert.equal(stop.nextTier, "deep");
-  assert.equal(analyzeOutcome({ hookEvent: "subagentStop", payload: { subagent_type: "cco-deep", status: "error" } }).nextTier, null);
+  assert.equal(analyzeOutcome({ hookEvent: "subagentStop", payload: { subagent_type: "deep-tier", status: "error" } }).nextTier, null);
   assert.equal(analyzeOutcome({ hookEvent: "postToolUse", payload: { tool_input: { subagent_type: "explore" } } }).applies, false);
 });
 
@@ -161,22 +161,22 @@ test("task result hook process: records EMA state and injects cascade context", 
   const ws = readyWorkspace();
   const out = runHook(
     "cco-task-result.mjs",
-    { hook_event_name: "postToolUse", tool_name: "Task", tool_input: { subagent_type: "cco-fast" }, tool_output: "CCO-ESCALATE: deep — auth flow", workspace_roots: [ws] },
+    { hook_event_name: "postToolUse", tool_name: "Task", tool_input: { subagent_type: "fast-tier" }, tool_output: "CCO-ESCALATE: deep — auth flow", workspace_roots: [ws] },
     ["postToolUse"]
   );
-  assert.match(out.additional_context, /delegate once to cco-deep/i);
+  assert.match(out.additional_context, /delegate once to deep-tier/i);
   const state = JSON.parse(fs.readFileSync(workspacePaths(ws).jointStatePath, "utf8"));
   assert.equal(state.tiers.fast.count, 1);
   assert.equal(state.tiers.fast.emaRework, 1);
   const stop = runHook(
     "cco-task-result.mjs",
-    { hook_event_name: "subagentStop", subagent_type: "cco-balanced", status: "aborted", workspace_roots: [ws] },
+    { hook_event_name: "subagentStop", subagent_type: "balanced-tier", status: "aborted", workspace_roots: [ws] },
     ["subagentStop"]
   );
-  assert.match(stop.followup_message, /cco-deep/);
+  assert.match(stop.followup_message, /deep-tier/);
   const completed = runHook(
     "cco-task-result.mjs",
-    { hook_event_name: "subagentStop", subagent_type: "cco-balanced", status: "completed", summary: "all good", workspace_roots: [ws] },
+    { hook_event_name: "subagentStop", subagent_type: "balanced-tier", status: "completed", summary: "all good", workspace_roots: [ws] },
     ["subagentStop"]
   );
   assert.deepEqual(completed, {});
@@ -189,7 +189,7 @@ test("hooks are inert until enabled and respect a workspace opt-out", () => {
   assert.equal(fs.existsSync(workspacePaths(ws).stateDir), false, "nothing written when the project is not set up");
   fs.mkdirSync(path.join(ws, ".cursor"), { recursive: true });
   fs.writeFileSync(path.join(ws, ".cursor", "cco.json"), JSON.stringify({ enabled: false }));
-  writeWorkspaceAgents(ws, { "cco-fast": "composer-2.5", "cco-balanced": "inherit", "cco-deep": "inherit", "cco-verifier": "inherit" });
+  writeWorkspaceAgents(ws, { "fast-tier": "composer-2.5", "balanced-tier": "inherit", "deep-tier": "inherit", "tier-verifier": "inherit" });
   const out = runHook("cco-tool-gate.mjs", { hook_event_name: "preToolUse", conversation_id: "z", tool_name: "Write", tool_input: {}, workspace_roots: [ws] });
   assert.deepEqual(out, { permission: "allow" }, "workspace opted out via cco.json");
   const fresh = tmpWorkspace();
@@ -208,7 +208,7 @@ test("prompt capture hook stores last prompt with override and heuristic tier, a
   assert.equal(last.prompt, undefined, "no prompt text is stored");
 
   createSession({ workspace: ws, conversationId: "c10", model: "claude-opus-5-thinking-high" });
-  saveSession(ws, { ...loadSession(ws, "c10"), delegations: [{ agent: "cco-fast" }], denials: 2 });
+  saveSession(ws, { ...loadSession(ws, "c10"), delegations: [{ agent: "fast-tier" }], denials: 2 });
   runHook("cco-prompt-capture.mjs", { hook_event_name: "beforeSubmitPrompt", conversation_id: "c10", prompt: "now add tests for the parser", workspace_roots: [ws] });
   const session = loadSession(ws, "c10");
   assert.equal(session.turn, 1);
@@ -244,16 +244,16 @@ test("shell guard classifies destructive commands and allows cleanup", () => {
 
 test("workspace tier agents are generated with models, idempotently, and never clobber user files", () => {
   const ws = tmpWorkspace();
-  const first = writeWorkspaceAgents(ws, { "cco-fast": "composer-2.5", "cco-balanced": "inherit", "cco-deep": "claude-opus-5-thinking-high", "cco-verifier": "composer-2.5" });
+  const first = writeWorkspaceAgents(ws, { "fast-tier": "composer-2.5", "balanced-tier": "inherit", "deep-tier": "claude-opus-5-thinking-high", "tier-verifier": "composer-2.5" });
   assert.deepEqual(first.map((r) => r.action), ["written", "written", "written", "written", "written"]);
-  assert.equal(readWorkspaceAgentModel(ws, "cco-fast"), "composer-2.5");
-  assert.ok(fs.readFileSync(path.join(ws, ".cursor", "agents", "cco-fast.md"), "utf8").includes(GENERATED_MARKER));
-  const second = writeWorkspaceAgents(ws, { "cco-fast": "composer-2.5", "cco-balanced": "inherit", "cco-deep": "claude-opus-5-thinking-high", "cco-verifier": "composer-2.5" });
+  assert.equal(readWorkspaceAgentModel(ws, "fast-tier"), "composer-2.5");
+  assert.ok(fs.readFileSync(path.join(ws, ".cursor", "agents", "fast-tier.md"), "utf8").includes(GENERATED_MARKER));
+  const second = writeWorkspaceAgents(ws, { "fast-tier": "composer-2.5", "balanced-tier": "inherit", "deep-tier": "claude-opus-5-thinking-high", "tier-verifier": "composer-2.5" });
   assert.deepEqual(second.map((r) => r.action), ["unchanged", "unchanged", "unchanged", "unchanged", "unchanged"]);
-  fs.writeFileSync(path.join(ws, ".cursor", "agents", "cco-deep.md"), "---\nname: cco-deep\ndescription: mine\nmodel: gpt-5.6-sol-high\n---\ncustom\n");
-  const third = writeWorkspaceAgents(ws, { "cco-fast": "gemini-3.8-flash-high", "cco-balanced": "inherit", "cco-deep": "x", "cco-verifier": "x" });
-  assert.equal(third.find((r) => r.name === "cco-deep").action, "skipped_user_file");
-  assert.equal(third.find((r) => r.name === "cco-fast").action, "written");
+  fs.writeFileSync(path.join(ws, ".cursor", "agents", "deep-tier.md"), "---\nname: deep-tier\ndescription: mine\nmodel: gpt-5.6-sol-high\n---\ncustom\n");
+  const third = writeWorkspaceAgents(ws, { "fast-tier": "gemini-3.8-flash-high", "balanced-tier": "inherit", "deep-tier": "x", "tier-verifier": "x" });
+  assert.equal(third.find((r) => r.name === "deep-tier").action, "skipped_user_file");
+  assert.equal(third.find((r) => r.name === "fast-tier").action, "written");
 });
 
 test("discovery with injected model list and fake probes picks runnable candidates and restores nothing", () => {
@@ -265,7 +265,7 @@ test("discovery with injected model list and fake probes picks runnable candidat
   assert.equal(runtime.profiles.balanced.model, "claude-sonnet-5-thinking-high", "quality-first: Sonnet 5 outranks Grok for balanced");
   assert.equal(runtime.profiles.deep.model, "gpt-5.6-sol-high");
   assert.equal(runtime.discovery.probes["composer-2.5"].reason, "usage_limit");
-  assert.equal(readWorkspaceAgentModel(ws, "cco-deep"), "gpt-5.6-sol-high");
+  assert.equal(readWorkspaceAgentModel(ws, "deep-tier"), "gpt-5.6-sol-high");
   const strict = discover({
     workspace: ws,
     probe: false,
@@ -278,12 +278,12 @@ test("discovery with injected model list and fake probes picks runnable candidat
 });
 
 test("session start hook injects context and initializes runtime without probes", () => {
-  const ws = readyWorkspace({ "cco-fast": "inherit", "cco-balanced": "inherit", "cco-deep": "inherit", "cco-verifier": "inherit" });
+  const ws = readyWorkspace({ "fast-tier": "inherit", "balanced-tier": "inherit", "deep-tier": "inherit", "tier-verifier": "inherit" });
   fs.mkdirSync(path.join(ws, ".cursor"), { recursive: true });
   fs.writeFileSync(path.join(ws, ".cursor", "cco.json"), JSON.stringify({ pricing: { enabled: false }, discovery: { auto: false } }));
   const out = runHook("cco-session-start.mjs", { hook_event_name: "sessionStart", model: "composer-2.5-fast", workspace_roots: [ws] });
   assert.equal(out.continue, true);
-  assert.match(out.additional_context, /cco-fast → inherit/);
+  assert.match(out.additional_context, /fast-tier → inherit/);
   assert.match(out.additional_context, /Session model: composer-2.5-fast/);
   assert.equal(out.cco.pricing, "disabled");
   assert.equal(out.cco.discovery, "disabled");
@@ -309,7 +309,7 @@ test("install-hooks writes merge-preserving user/project entries pointing at the
 
 test("dispatcher replays the first result when the same hook event is delivered twice", () => {
   const ws = readyWorkspace();
-  const payload = { hook_event_name: "preToolUse", conversation_id: "dup-1", generation_id: "g1", tool_use_id: "t1", tool_name: "Task", tool_input: { description: "d", prompt: "CCO-SCORES: complexity=3 risk=9 breadth=2 uncertainty=1 latency=0\nrefund flow", subagent_type: "cco-fast" }, workspace_roots: [ws] };
+  const payload = { hook_event_name: "preToolUse", conversation_id: "dup-1", generation_id: "g1", tool_use_id: "t1", tool_name: "Task", tool_input: { description: "d", prompt: "CCO-SCORES: complexity=3 risk=9 breadth=2 uncertainty=1 latency=0\nrefund flow", subagent_type: "fast-tier" }, workspace_roots: [ws] };
   const first = runHook("cco-hook.mjs", payload, ["preToolUse"]);
   const second = runHook("cco-hook.mjs", payload, ["preToolUse"]);
   assert.deepEqual(second, first);
@@ -320,7 +320,7 @@ test("dispatcher replays the first result when the same hook event is delivered 
 test("dispatcher: two concurrent deliveries of the same event act once and both return the same result", async () => {
   const { spawn } = await import("node:child_process");
   const ws = readyWorkspace();
-  const payload = JSON.stringify({ hook_event_name: "preToolUse", conversation_id: "dup-2", generation_id: "g2", tool_use_id: "t2", tool_name: "Task", tool_input: { description: "d", prompt: "CCO-SCORES: complexity=3 risk=9 breadth=2 uncertainty=1 latency=0\nrefund flow", subagent_type: "cco-fast" }, workspace_roots: [ws] });
+  const payload = JSON.stringify({ hook_event_name: "preToolUse", conversation_id: "dup-2", generation_id: "g2", tool_use_id: "t2", tool_name: "Task", tool_input: { description: "d", prompt: "CCO-SCORES: complexity=3 risk=9 breadth=2 uncertainty=1 latency=0\nrefund flow", subagent_type: "fast-tier" }, workspace_roots: [ws] });
   const run = () => new Promise((resolve) => {
     const child = spawn(process.execPath, [path.join(scripts, "cco-hook.mjs"), "preToolUse"], { env: { ...process.env, CCO_CURSOR_AGENT_BIN: "cco-nonexistent-binary" } });
     let out = "";
@@ -330,7 +330,7 @@ test("dispatcher: two concurrent deliveries of the same event act once and both 
   });
   const [a, b] = await Promise.all([run(), run()]);
   assert.equal(a, b);
-  assert.equal(JSON.parse(a).updated_input.subagent_type, "cco-deep");
+  assert.equal(JSON.parse(a).updated_input.subagent_type, "deep-tier");
   const decisions = fs.readFileSync(workspacePaths(ws).decisionsPath, "utf8").trim().split("\n");
   assert.equal(decisions.length, 1, "the guard acted exactly once");
 });
@@ -340,12 +340,12 @@ test("agents generated by an older CCO version are refreshed on upgrade; user-au
   const ws = fs.mkdtempSync(path.join(os.tmpdir(), "cco-upgrade-"));
   const dir = path.join(ws, ".cursor", "agents");
   fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, "cco-fast.md"), "---\nname: cco-fast\nmodel: old-model\n---\n<!-- generated by cursor-ai-cost-optimizer (CCO). Edit ~/.cursor/cco/config.json and re-run cco-init instead of editing this file. -->\nold body\n");
-  fs.writeFileSync(path.join(dir, "cco-deep.md"), "---\nname: cco-deep\nmodel: my-model\n---\nmine\n");
-  const result = writeWorkspaceAgents(ws, { "cco-fast": "composer-2.5", "cco-balanced": "claude-sonnet-5-thinking-high", "cco-deep": "claude-opus-5-thinking-high" });
-  assert.match(fs.readFileSync(path.join(dir, "cco-fast.md"), "utf8"), /model: composer-2\.5/, "older generated file refreshed");
-  assert.equal(fs.readFileSync(path.join(dir, "cco-deep.md"), "utf8").includes("mine"), true, "user file untouched");
-  assert.equal(result.some((r) => r.name === "cco-deep" && r.action === "skipped_user_file"), true);
+  fs.writeFileSync(path.join(dir, "fast-tier.md"), "---\nname: fast-tier\nmodel: old-model\n---\n<!-- generated by cursor-ai-cost-optimizer (CCO). Edit ~/.cursor/cco/config.json and re-run cco-init instead of editing this file. -->\nold body\n");
+  fs.writeFileSync(path.join(dir, "deep-tier.md"), "---\nname: deep-tier\nmodel: my-model\n---\nmine\n");
+  const result = writeWorkspaceAgents(ws, { "fast-tier": "composer-2.5", "balanced-tier": "claude-sonnet-5-thinking-high", "deep-tier": "claude-opus-5-thinking-high" });
+  assert.match(fs.readFileSync(path.join(dir, "fast-tier.md"), "utf8"), /model: composer-2\.5/, "older generated file refreshed");
+  assert.equal(fs.readFileSync(path.join(dir, "deep-tier.md"), "utf8").includes("mine"), true, "user file untouched");
+  assert.equal(result.some((r) => r.name === "deep-tier" && r.action === "skipped_user_file"), true);
   fs.rmSync(ws, { recursive: true, force: true });
 });
 
@@ -360,7 +360,7 @@ test("cco-init installs the agents from a CRLF checkout of the plugin (Windows a
   const ws = fs.mkdtempSync(path.join(os.tmpdir(), "cco-crlf-ws-"));
   const res = spawnSync(process.execPath, [path.join(pluginCopy, "scripts", "cco-init.mjs"), "--workspace", ws, "--json"], { encoding: "utf8", env: { ...process.env, CCO_PLUGIN_ROOT: pluginCopy, CCO_CURSOR_AGENT_BIN: "cco-nonexistent-binary" }, timeout: 60_000 });
   assert.equal(res.status, 0, res.stderr);
-  const agent = fs.readFileSync(path.join(ws, ".cursor", "agents", "cco-fast.md"), "utf8");
+  const agent = fs.readFileSync(path.join(ws, ".cursor", "agents", "fast-tier.md"), "utf8");
   assert.match(agent, /^model: composer-2\.5$/m);
   assert.equal(agent.includes("\r"), false, "written agents use LF");
   fs.rmSync(pluginCopy, { recursive: true, force: true });
@@ -383,7 +383,7 @@ test("user scope: nothing in the repo; ~/.cursor hooks + agents, private state r
   const hooks = JSON.parse(fs.readFileSync(path.join(home, ".cursor", "hooks.json"), "utf8"));
   const cmd = hooks.hooks.preToolUse[0].command;
   assert.match(cmd, /cco-hook\.mjs" preToolUse --scope user --state-root "/);
-  assert.match(fs.readFileSync(path.join(home, ".cursor", "agents", "cco-fast.md"), "utf8"), /^model: composer-2\.5$/m);
+  assert.match(fs.readFileSync(path.join(home, ".cursor", "agents", "fast-tier.md"), "utf8"), /^model: composer-2\.5$/m);
   assert.ok(fs.existsSync(path.join(root, "plugin", ".cursor-plugin", "plugin.json")), "runtime plugin for pluginPaths");
   assert.equal(fs.existsSync(path.join(root, "plugin", "rules")), false, "the rule rides the sessionStart context, not the plugin path (no reload needed)");
   assert.equal(fs.existsSync(path.join(root, "plugin", "agents")), false, "runtime plugin carries no agents (user agents win)");
@@ -394,16 +394,15 @@ test("user scope: nothing in the repo; ~/.cursor hooks + agents, private state r
   };
   const start = run("sessionStart", { hook_event_name: "sessionStart", conversation_id: "u0", workspace_roots: [ws] });
   assert.match(start.additional_context, /# CCO routing/, "user scope: the routing rule is delivered through the session context");
-  assert.match(start.additional_context, /Cost Optimizer · Fast on Composer 2\.5/, "the rule shows the footer format the hooks produce");
   const open = run("workspaceOpen", { hook_event_name: "workspaceOpen", workspace_roots: [ws] });
   assert.deepEqual(open.pluginPaths, [path.join(root, "plugin")]);
-  const task = run("preToolUse", { hook_event_name: "preToolUse", tool_name: "Task", conversation_id: "u1", tool_input: { description: "d", prompt: "CCO-SCORES: complexity=2 risk=9 breadth=1 uncertainty=0 latency=0\nrefund flow", subagent_type: "cco-fast" }, workspace_roots: [ws] });
-  assert.equal(task.updated_input.subagent_type, "cco-deep", "guard reroutes in user scope");
+  const task = run("preToolUse", { hook_event_name: "preToolUse", tool_name: "Task", conversation_id: "u1", tool_input: { description: "d", prompt: "CCO-SCORES: complexity=2 risk=9 breadth=1 uncertainty=0 latency=0\nrefund flow", subagent_type: "fast-tier" }, workspace_roots: [ws] });
+  assert.equal(task.updated_input.subagent_type, "deep-tier", "guard reroutes in user scope");
   assert.ok(fs.existsSync(path.join(root, "workspaces")), "state lives under the private root");
   assert.equal(fs.existsSync(path.join(ws, ".cursor")), false, "still nothing in the repo after hooks ran");
   // precedence: a project-level setup in the workspace makes the user-scope hooks inert there
   fs.mkdirSync(path.join(ws, ".cursor", "agents"), { recursive: true });
-  fs.writeFileSync(path.join(ws, ".cursor", "agents", "cco-fast.md"), "---\nname: cco-fast\nmodel: composer-2.5\n---\nx\n");
+  fs.writeFileSync(path.join(ws, ".cursor", "agents", "fast-tier.md"), "---\nname: fast-tier\nmodel: composer-2.5\n---\nx\n");
   fs.writeFileSync(path.join(ws, ".cursor", "hooks.json"), JSON.stringify({ version: 1, hooks: { preToolUse: [{ command: "node .cursor/cco-hook.mjs preToolUse" }] } }));
   assert.deepEqual(run("workspaceOpen", { hook_event_name: "workspaceOpen", workspace_roots: [ws] }), {}, "project scope wins: no plugin path from the user scope");
   fs.rmSync(path.join(ws, ".cursor"), { recursive: true, force: true });
@@ -413,7 +412,7 @@ test("user scope: nothing in the repo; ~/.cursor hooks + agents, private state r
   const un = spawnSync(process.execPath, [path.join(scripts, "cco-init.mjs"), "--workspace", ws, "--scope", "user", "--state-root", root, "--uninstall"], { encoding: "utf8", env, timeout: 60_000 });
   assert.equal(un.status, 0, un.stderr);
   assert.equal(fs.existsSync(path.join(home, ".cursor", "hooks.json")), false, "hooks file removed when only CCO entries were in it");
-  assert.equal(fs.existsSync(path.join(home, ".cursor", "agents", "cco-fast.md")), false);
+  assert.equal(fs.existsSync(path.join(home, ".cursor", "agents", "fast-tier.md")), false);
   assert.equal(fs.existsSync(root), false, "private state root removed");
   fs.rmSync(home, { recursive: true, force: true });
   fs.rmSync(ws, { recursive: true, force: true });
@@ -516,7 +515,7 @@ test("paused project: a cco-* delegation is turned back into in-chat work and th
   fs.writeFileSync(path.join(ws, ".cursor", "cco.json"), JSON.stringify({ enabled: false }));
   const guard = runHook("cco-task-guard.mjs", {
     hook_event_name: "preToolUse", conversation_id: "p1", tool_name: "Task",
-    tool_input: { subagent_type: "cco-fast", prompt: "CCO-SCORES: complexity=1 risk=1 breadth=1 uncertainty=0 latency=0\nAdd x" }, workspace_roots: [ws]
+    tool_input: { subagent_type: "fast-tier", prompt: "CCO-SCORES: complexity=1 risk=1 breadth=1 uncertainty=0 latency=0\nAdd x" }, workspace_roots: [ws]
   });
   assert.equal(guard.permission, "deny");
   assert.match(guard.agent_message, /paused/);
@@ -531,18 +530,17 @@ test("a failed DEEP subagent (usage limit) hands the task back to the chat with 
   const ws = readyWorkspace();
   createSession({ workspace: ws, conversationId: "deep-fail", model: "cursor-grok-4.6-high" });
   const out = runHook("cco-task-result.mjs", {
-    hook_event_name: "subagentStop", conversation_id: "deep-fail", subagent_type: "cco-deep", model: "claude-opus-5-thinking-high",
+    hook_event_name: "subagentStop", conversation_id: "deep-fail", subagent_type: "deep-tier", model: "claude-opus-5-thinking-high",
     status: "error", summary: "ActionRequiredError: You've hit your usage limit for Opus", workspace_roots: [ws]
   });
-  assert.match(out.followup_message, /cco-deep did not complete/);
-  assert.match(out.followup_message, /Cost Optimizer · done in chat on Grok 4\.6 · Deep model unavailable/);
+  assert.match(out.followup_message, /deep-tier did not complete/);
+  assert.match(out.followup_message, /do the task directly in this chat on cursor-grok-4\.6-high/i);
   // A DEEP subagent that ran and then errored (not a startup refusal) has nothing above it: the chat finishes.
   const ran = runHook("cco-task-result.mjs", {
-    hook_event_name: "subagentStop", conversation_id: "deep-fail", subagent_type: "cco-deep", model: "claude-opus-5-thinking-high",
+    hook_event_name: "subagentStop", conversation_id: "deep-fail", subagent_type: "deep-tier", model: "claude-opus-5-thinking-high",
     status: "error", message_count: 4, tool_call_count: 3, summary: "crashed midway", workspace_roots: [ws]
   });
-  assert.match(ran.followup_message, /Cost Optimizer · done in chat on Grok 4\.6 · Deep model unavailable/);
-  assert.match(String(loadSession(ws, "deep-fail")?.lastFooter), /model unavailable$/, "later reminders repeat the honest footer");
+  assert.match(ran.followup_message, /do the task directly in this chat on cursor-grok-4\.6-high/i);
 });
 
 test("a subagent that dies at startup puts its model on cooldown; later delegations step down a tier", async () => {
@@ -551,7 +549,7 @@ test("a subagent that dies at startup puts its model on cooldown; later delegati
   const paths = workspacePaths(ws);
   createSession({ workspace: ws, conversationId: "cool-1", model: "cursor-grok-4.6-high" });
   runHook("cco-task-result.mjs", {
-    hook_event_name: "subagentStop", conversation_id: "cool-1", subagent_type: "cco-deep", model: "claude-opus-5-thinking-high",
+    hook_event_name: "subagentStop", conversation_id: "cool-1", subagent_type: "deep-tier", model: "claude-opus-5-thinking-high",
     status: "error", duration_ms: 1163, message_count: 0, tool_call_count: 0, workspace_roots: [ws]
   });
   const limitsFile = path.join(path.dirname(paths.jointStatePath), "model-limits.json");
@@ -559,13 +557,13 @@ test("a subagent that dies at startup puts its model on cooldown; later delegati
   assert.ok(limits["claude-opus-5-thinking-high"], "the failed model is recorded as limited");
   const guard = runHook("cco-task-guard.mjs", {
     hook_event_name: "preToolUse", conversation_id: "cool-2", tool_name: "Task",
-    tool_input: { subagent_type: "cco-deep", prompt: "CCO-SCORES: complexity=4 risk=8 breadth=3 uncertainty=2 latency=0\n[cco:deep]\nRotate the production signing key" }, workspace_roots: [ws]
+    tool_input: { subagent_type: "deep-tier", prompt: "CCO-SCORES: complexity=4 risk=8 breadth=3 uncertainty=2 latency=0\n[cco:deep]\nRotate the production signing key" }, workspace_roots: [ws]
   });
   assert.equal(guard.permission, "allow");
-  assert.equal(guard.updated_input.subagent_type, "cco-balanced", "DEEP steps down to BALANCED while its model is limited");
+  assert.equal(guard.updated_input.subagent_type, "balanced-tier", "DEEP steps down to BALANCED while its model is limited");
   assert.match(guard.user_message, /usage limit/);
   // A completed run does not mark anything.
-  runHook("cco-task-result.mjs", { hook_event_name: "subagentStop", conversation_id: "cool-3", subagent_type: "cco-fast", model: "composer-2.5", status: "completed", message_count: 3, tool_call_count: 2, workspace_roots: [ws] });
+  runHook("cco-task-result.mjs", { hook_event_name: "subagentStop", conversation_id: "cool-3", subagent_type: "fast-tier", model: "composer-2.5", status: "completed", message_count: 3, tool_call_count: 2, workspace_roots: [ws] });
   assert.equal(JSON.parse(fs.readFileSync(limitsFile, "utf8"))["composer-2.5"], undefined);
 });
 
@@ -573,14 +571,14 @@ test("a DEEP subagent refused at startup retries once on BALANCED; when that is 
   const ws = readyWorkspace();
   const paths = workspacePaths(ws);
   createSession({ workspace: ws, conversationId: "down-1", model: "cursor-grok-4.6-high" });
-  const first = runHook("cco-task-result.mjs", { hook_event_name: "subagentStop", conversation_id: "down-1", subagent_type: "cco-deep", model: "claude-opus-5-thinking-high", status: "error", duration_ms: 900, message_count: 0, tool_call_count: 0, workspace_roots: [ws] });
-  assert.match(first.followup_message, /delegate this same task once to cco-balanced \(claude-sonnet-5-thinking-high\)/);
+  const first = runHook("cco-task-result.mjs", { hook_event_name: "subagentStop", conversation_id: "down-1", subagent_type: "deep-tier", model: "claude-opus-5-thinking-high", status: "error", duration_ms: 900, message_count: 0, tool_call_count: 0, workspace_roots: [ws] });
+  assert.match(first.followup_message, /delegate this same task once to balanced-tier \(claude-sonnet-5-thinking-high\)/);
   assert.doesNotMatch(first.followup_message, /escalating to DEEP/);
-  const second = runHook("cco-task-result.mjs", { hook_event_name: "subagentStop", conversation_id: "down-1", subagent_type: "cco-balanced", model: "claude-sonnet-5-thinking-high", status: "error", duration_ms: 500, message_count: 0, tool_call_count: 0, workspace_roots: [ws] });
-  assert.match(second.followup_message, /delegate this same task once to cco-fast \(composer-2\.5\)/, "BALANCED refused: try FAST, never escalate up");
-  const third = runHook("cco-task-result.mjs", { hook_event_name: "subagentStop", conversation_id: "down-1", subagent_type: "cco-fast", model: "composer-2.5", status: "error", duration_ms: 500, message_count: 0, tool_call_count: 0, workspace_roots: [ws] });
-  assert.match(third.followup_message, /Cost Optimizer · done in chat on Grok 4\.6 · Fast model unavailable/, "nothing lower: the chat finishes it");
-  const guard = runHook("cco-task-guard.mjs", { hook_event_name: "preToolUse", conversation_id: "down-2", tool_name: "Task", tool_input: { subagent_type: "cco-deep", prompt: "CCO-SCORES: complexity=4 risk=8 breadth=3 uncertainty=2 latency=0\n[cco:deep]\nRotate the production signing key" }, workspace_roots: [ws] });
+  const second = runHook("cco-task-result.mjs", { hook_event_name: "subagentStop", conversation_id: "down-1", subagent_type: "balanced-tier", model: "claude-sonnet-5-thinking-high", status: "error", duration_ms: 500, message_count: 0, tool_call_count: 0, workspace_roots: [ws] });
+  assert.match(second.followup_message, /delegate this same task once to fast-tier \(composer-2\.5\)/, "BALANCED refused: try FAST, never escalate up");
+  const third = runHook("cco-task-result.mjs", { hook_event_name: "subagentStop", conversation_id: "down-1", subagent_type: "fast-tier", model: "composer-2.5", status: "error", duration_ms: 500, message_count: 0, tool_call_count: 0, workspace_roots: [ws] });
+  assert.match(third.followup_message, /do the task directly in this chat on cursor-grok-4\.6-high/i, "nothing lower: the chat finishes it");
+  const guard = runHook("cco-task-guard.mjs", { hook_event_name: "preToolUse", conversation_id: "down-2", tool_name: "Task", tool_input: { subagent_type: "deep-tier", prompt: "CCO-SCORES: complexity=4 risk=8 breadth=3 uncertainty=2 latency=0\n[cco:deep]\nRotate the production signing key" }, workspace_roots: [ws] });
   assert.equal(guard.permission, "allow", "all tiers limited: the delegation is left alone");
   assert.equal(paths.jointStatePath.endsWith("joint-state.json"), true);
 });
@@ -598,4 +596,19 @@ test("gate messages name the model that will actually run while a tier model is 
   assert.equal(out.permission, "deny");
   assert.match(out.agent_message, /runs on claude-sonnet-5-thinking-high/, "DEEP is limited: the message names BALANCED's model");
   assert.doesNotMatch(String(out.user_message), /claude-opus/);
+});
+
+test("legacy cco-* names: old rules still route, and generated cco-*.md files are replaced on setup", async () => {
+  const { tierFor } = await import("../scripts/lib/models.mjs");
+  assert.equal(tierFor("cco-fast"), "fast");
+  assert.equal(tierFor("fast-tier"), "fast");
+  const ws = tmpWorkspace();
+  const dir = path.join(ws, ".cursor", "agents");
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, "cco-fast.md"), `---\nname: cco-fast\nmodel: composer-2.5\n---\n${GENERATED_MARKER}\nold`);
+  fs.writeFileSync(path.join(dir, "cco-mine.md"), "---\nname: cco-mine\n---\nmine");
+  writeWorkspaceAgents(ws, { "fast-tier": "composer-2.5", "balanced-tier": "inherit", "deep-tier": "inherit", "tier-verifier": "inherit", "fast-research": "composer-2.5" });
+  assert.equal(fs.existsSync(path.join(dir, "cco-fast.md")), false, "generated legacy agent removed");
+  assert.equal(fs.existsSync(path.join(dir, "cco-mine.md")), true, "user file kept");
+  assert.equal(fs.existsSync(path.join(dir, "fast-tier.md")), true);
 });

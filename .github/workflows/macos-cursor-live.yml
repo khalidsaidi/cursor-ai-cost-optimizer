@@ -39,7 +39,7 @@ jobs:
           echo '{"name":"live","version":"1.0.0"}' > "$ws/package.json"
           node plugins/cursor-ai-cost-optimizer/scripts/cco-init.mjs --workspace "$ws" --scope user --state-root "$root" --json | head -20
           test ! -e "$ws/.cursor"
-          test -f "$HOME/.cursor/hooks.json" && test -f "$HOME/.cursor/agents/cco-fast.md"
+          test -f "$HOME/.cursor/hooks.json" && test -f "$HOME/.cursor/agents/fast-tier.md"
           cd "$ws"
           cursor-agent --trust -f -p "Read package.json and tell me the package name and version, then create notes.txt containing the word hello." --output-format text | tail -5
           test -f notes.txt

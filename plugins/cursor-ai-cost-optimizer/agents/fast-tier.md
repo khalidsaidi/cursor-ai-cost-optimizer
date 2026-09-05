@@ -1,5 +1,5 @@
 ---
-name: cco-fast
+name: fast-tier
 description: Cheapest sufficient effort. Use for quick answers, lookups, small single-file edits, formatting, and other low-risk tasks. Minimal tool use, terse output.
 model: inherit
 ---
