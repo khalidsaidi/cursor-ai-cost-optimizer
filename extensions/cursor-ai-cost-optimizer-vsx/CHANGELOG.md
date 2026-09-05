@@ -4,6 +4,20 @@ All notable changes to this extension are documented here. The format is based o
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- Fresh IDE-only users (no logged-in Cursor CLI) ended up with every tier on `inherit`, i.e. no savings: setup probed each candidate through the CLI, every probe failed with "authentication required", and all candidates were discarded. Probing is skipped when the model list itself came from the bundled catalogue, and an account-level probe failure stops probing and keeps the ranked candidates unverified. Found in a fresh-user UI run on Cursor 3.17.
+- **Pause / Resume in This Project** only silenced the hooks; the routing rule and the user-level subagents still delegated, and the chat then invented a cost footer. A paused project now tells the chat to work normally and turns `cco-*` delegations back into in-chat work.
+- Chat start waited on the network: the `sessionStart` hook refreshed the price table inline (20 s behind a blackholing proxy) and ran `cursor-agent --version` on every chat (0.65 s). Refreshes now run in a detached worker; the CLI version is cached per binary identity; chat start answers in about 0.1 s.
+- A tier model at its usage limit (seen with Opus on a Pro account) failed every DEEP task the same way; the model is now put on a 6-hour cooldown, delegations step down a tier with a one-line note, and the chat finishes the task itself when nothing lower is usable.
+- Honest footers: when the chat never delegated (escape hatch) or a subagent died, the hook now gives the exact in-chat footer instead of letting the model name a model it never used.
+- Windows: `.cmd`/`.bat` launchers of `cursor-agent` are spawned through a shell (Node 18+ refuses them directly).
+- Status bar reads `AI Cost: set up` until the extension is set up.
+
+### Changed
+- An empty window (no folder) is no longer treated as a workspace by the user-level hooks.
+
 ## [0.2.0] - 2026-09-02
 
 ### Fixed

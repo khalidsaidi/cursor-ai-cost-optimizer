@@ -61,7 +61,7 @@ pins models; `shellGuard.enabled` turns on the destructive-command guard).
 ## Requirements
 
 - Cursor 3.13 or newer (project hooks, subagents).
-- The Cursor CLI (`cursor-agent`) logged in, for model discovery and probing.
+- Optional: the Cursor CLI (`cursor-agent`) logged in. With it, setup maps the tiers from your account's real model list and verifies each one; without it, the tiers come from the bundled catalogue (FAST composer-2.5, BALANCED Sonnet, DEEP Opus) and Cursor applies your plan's access rules when a subagent runs.
 - **Node.js >= 18 on the PATH Cursor sees.** The hook entries in `.cursor/hooks.json` run `node .cursor/cco-hook.mjs`,
   so the file stays portable for every teammate who clones the repo. On a machine without Node, the bundled
   `cco-hook` binary is used instead (`cco.hookRuntime`), which makes the hook entries point at a machine-local path.
@@ -93,8 +93,8 @@ Measured against the bar set by the big first-party extensions (Copilot Chat, Am
 | --- | --- | --- |
 | On install | Registers commands and a status bar item. No toast, no files, no settings changed. | same |
 | On setup (you confirm first) | CCO entries merged into `~/.cursor/hooks.json`, five subagents in `~/.cursor/agents/`, state in the extension's storage. **No project files.** | 8 files under the project's `.cursor/` plus a git-ignored state folder; they show up in git status. |
-| While you chat | One hook process per tool call: about 0.05 s (44 ms measured with Node, 37 ms with the binary); a hung hook is killed after 5 s and the call proceeds (measured in Cursor: a failed or hung hook never blocks the chat, it costs at most its timeout). One footer line per routed task. Nothing blocked by default. | same |
-| Projects you paused / did not set up | Paused projects get no rule and inert hooks. | Untouched: no files, no messages, no hooks. |
+| While you chat | Chat start answers from cache in about 0.1 s (price and model refreshes run in a detached worker, never on the chat path). One hook process per tool call: about 0.05 s (44 ms measured with Node, 37 ms with the binary); a hung hook is killed after 5 s and the call proceeds (measured in Cursor: a failed or hung hook never blocks the chat, it costs at most its timeout). One footer line per routed task. Nothing blocked by default. | same |
+| Projects you paused / did not set up | Paused projects: the chat is told to work normally and any `cco-*` delegation is turned back into in-chat work (the rule and subagents are user-level and cannot be unloaded per project). | Untouched: no files, no messages, no hooks. |
 | On extension update | Hook entries are repointed silently. | The pinned plugin path and binary are refreshed silently. |
 | On every activation | 1.5 s after startup, off the extension host thread: a repair pass, then a self-check that runs the real hook command once. If it fails or does not answer in 6 s, the hooks are turned off and you get one message. | same |
 | If you want it off right now | Status menu → **Turn hooks off now**: hook entries removed, nothing else touched; Set Up / Update restores. | same |

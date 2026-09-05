@@ -321,8 +321,11 @@ async function main() {
           prompt: result.updatedPrompt
         }
       };
+      const limitedLine = result.limited
+        ? ` Tell the user in one line that ${result.limited.model} (${result.limited.tier.toUpperCase()}) hit its usage limit and the task ran on ${result.targetTier.toUpperCase()} (${result.model}); do not present it as ${result.limited.tier.toUpperCase()} work.`
+        : "";
       output.agent_message = result.rewritten
-        ? `CCO rerouted this delegation from ${result.requestedAgent} to ${result.targetAgent} (${result.reason}; model ${result.model}). Continue with the ${result.targetTier.toUpperCase()} result; do not re-delegate to ${result.requestedAgent}. When it returns, relay its final message verbatim without re-reading files or re-running its checks, then end with exactly this line: ${footer}`
+        ? `CCO rerouted this delegation from ${result.requestedAgent} to ${result.targetAgent} (${result.reason}; model ${result.model}).${limitedLine} Continue with the ${result.targetTier.toUpperCase()} result; do not re-delegate to ${result.requestedAgent}. When it returns, relay its final message verbatim without re-reading files or re-running its checks, then end with exactly this line: ${footer}`
         : `CCO: delegation to ${result.targetAgent} (${result.model}) logged. When it returns, relay its final message to the user verbatim (do not summarize, re-read files, or re-run its checks), then end with exactly this line: ${footer}`;
       const sessForHint = workspace && payload.conversation_id ? loadSession(workspace, payload.conversation_id) : null;
       const hint = sessForHint && !sessForHint.hintShown ? " · prefix a prompt with [cco:deep] or [cco:fast] to force a tier" : "";

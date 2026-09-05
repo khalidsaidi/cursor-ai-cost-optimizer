@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- Discovery without a usable Cursor CLI mapped every tier to `inherit` when probing was requested; the bundled catalogue is now used unverified, and an account-level probe failure (`auth_required`, `workspace_trust`) ends probing instead of discarding every candidate.
+- `sessionStart`/`workspaceOpen` never wait on the network or CLI startup: stale price tables and model maps are refreshed by a detached `cco-hook refresh` worker (lock-guarded, 10 min cadence); `cliVersion()` is cached per binary identity; an empty `workspace_roots` array is not a workspace.
+- A paused workspace (`enabled: false`) turns `cco-*` delegations back into in-chat work and tells the session so (the routing rule and subagents stay loaded in the IDE).
+- Usage limits: a subagent refused at startup (error, zero messages, zero tool calls) puts its model on cooldown (`model-limits.json`, `learning.limitCooldownMinutes`, default 360); the Task guard and the tool gate step down to the next usable tier; the retry after a refusal goes down a tier, never up; when nothing lower is usable the chat finishes with an honest footer.
+- The tool gate's escape hatch states the in-chat outcome once with an exact footer; the rerouted-delegation message carries the footer.
+- Windows: `run()` spawns `.cmd`/`.bat` launchers through a shell.
+
 ## 0.2.0 - 2026-09-02
 Rebuilt around what the Cursor platform actually supports today (verified against `cursor-agent` 2026.08.31).
 
