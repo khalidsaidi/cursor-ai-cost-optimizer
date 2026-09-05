@@ -5,7 +5,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { decideHookMode, doctorWorkspace, findBundledBinary, findNode, installWorkspace, plannedFiles, runPluginScriptAsync, stripCcoHooks, uninstallWorkspace, workspacePaths, workspaceStatus, type HookRuntimePreference, type HooksFile, type Options, hasProjectLeftovers } from "./install";
-import { costStatement, formatUsd, readSavings, readLastDecision, readTierModels, loadPricing, modelDisplayName, resolveModelPrice } from "./pricing";
+import { costStatement, formatUsd, readSavings, readLastDecision, readTierModels, loadPricing, modelDisplayName, resolveModelPrice, pickerModels } from "./pricing";
 import { syncSettingsToPluginConfig } from "./settings";
 import { hooksLoadedInWindow } from "./hooksLog";
 import { doctorUser, installUser, pauseWorkspace, stripUserHooks, uninstallUser, userHookCommand, userStatus, workspacePaused, workspaceStateDir } from "./userScope";
@@ -49,6 +49,16 @@ interface Settings {
  * each (re)mapping is rendered into the next of three files and a context key switches the step that shows it.
  */
 let tiersPage = 0;
+/**
+ * A remote window (WSL, SSH, containers) lists subagents only when it opens: after a setup or a re-map made in
+ * that window, routing works through the names it already knows (aliases), but a first setup needs one reload.
+ */
+let reloadHint: "finish" | "names" | null = null;
+function noteReload(kind: "finish" | "names"): void {
+  if (vscode.env.remoteName && reloadHint !== "finish") {
+    reloadHint = kind;
+  }
+}
 function writeWalkthroughMapping(extensionPath: string, agents: Record<string, string | null>, pricing: ReturnType<typeof loadPricing>): void {
   try {
     const row = (role: string, label: string) => {
@@ -224,7 +234,10 @@ export function activate(context: vscode.ExtensionContext) {
       md.appendMarkdown(`${vscode.l10n.t("Routes routine work to cheaper models and shows what it saves.")} [${vscode.l10n.t("Turn on")}](command:cco.installCursorAssets?%7B%22scope%22%3A%22user%22%2C%22confirm%22%3Afalse%7D)\n`);
     }
     const savedText = savedUsd >= 0.01 && vscode.workspace.getConfiguration("costOptimizer").get<boolean>("showSavingsInStatusBar", true) ? vscode.l10n.t("Saved {0}", formatUsd(savedUsd)) : "AI Cost";
-    status.text = hooksState.known && !hooksState.loaded ? `$(warning) ${vscode.l10n.t("AI Cost: hooks off")}` : warn ? "$(warning) AI Cost" : c.mode === "none" ? `$(zap) ${vscode.l10n.t("AI Cost: Off")}` : c.enabled ? `$(zap) ${savedText}` : `$(zap) ${vscode.l10n.t("AI Cost: Paused")}`;
+    if (reloadHint && c.mode === "user" && c.enabled) {
+      md.appendMarkdown(`\n${reloadHint === "finish" ? vscode.l10n.t("Cursor lists subagents when a window opens: reload this window once to start routing here.") : vscode.l10n.t("Cursor lists subagents when a window opens: this window keeps routing under the previous names until it is reloaded.")}\n`);
+    }
+    status.text = hooksState.known && !hooksState.loaded ? `$(warning) ${vscode.l10n.t("AI Cost: hooks off")}` : warn ? "$(warning) AI Cost" : c.mode === "none" ? `$(zap) ${vscode.l10n.t("AI Cost: Off")}` : c.enabled ? (reloadHint === "finish" ? `$(zap) ${vscode.l10n.t("AI Cost: reload to finish")}` : `$(zap) ${savedText}`) : `$(zap) ${vscode.l10n.t("AI Cost: Paused")}`;
     status.tooltip = md;
     status.show();
     // context keys drive command enablement (package.json "enablement"), like the first-party extensions
@@ -296,6 +309,9 @@ export function activate(context: vscode.ExtensionContext) {
       const u = await doctorUser(options(), stateRoot);
       if (u.installed) {
         log.info(`[doctor] everywhere: ${u.changed ? `repaired (${u.actions.join(", ")})` : "ok"}`);
+        if (u.changed && u.actions.some((a) => a === "legacy_agents_replaced" || a === "repointed_after_update")) {
+          noteReload("names");
+        }
       }
     } catch (error) {
       log.error(`[doctor] everywhere: ${String((error as Error)?.message ?? error)}`);
@@ -411,6 +427,8 @@ export function activate(context: vscode.ExtensionContext) {
         // The routing rule arrives through the sessionStart hook, so this window routes from the next chat: no reload.
         const tiers = (["fast-tier", "balanced-tier", "deep-tier"] as const).map((a) => `${a === "fast-tier" ? "Fast" : a === "balanced-tier" ? "Balanced" : "Deep"} → ${modelDisplayName(result.agents[a] ?? "inherit", loadPricing(null, bundledPricing))}`).join(" · ");
         flash(args?.firstRun ? vscode.l10n.t("AI Cost Optimizer is on") : vscode.l10n.t("AI Cost Optimizer: {0}", tiers));
+        noteReload(args?.firstRun ? "finish" : "names");
+        refreshStatus();
         writeWalkthroughMapping(context.extensionPath, result.agents, loadPricing(null, bundledPricing));
         if (args?.firstRun && !context.globalState.get<boolean>("cco.walkthroughShown")) {
           void context.globalState.update("cco.walkthroughShown", true);
@@ -543,7 +561,7 @@ export function activate(context: vscode.ExtensionContext) {
       const now = current[tier] ?? "inherit";
       const items: Array<vscode.QuickPickItem & { id: string }> = [
         { label: vscode.l10n.t("$(sparkle) Automatic"), description: vscode.l10n.t("cheapest sufficient model for this tier (now {0})", modelDisplayName(now, pricing)), id: "" },
-        ...ids.map((id) => ({ label: modelDisplayName(id, pricing), description: priceLabel(id, pricing), detail: id === now ? vscode.l10n.t("current") : undefined, id })),
+        ...pickerModels(ids, pricing).map((row) => ({ label: row.label, description: priceLabel(row.id, pricing), detail: row.label === modelDisplayName(now, pricing) ? vscode.l10n.t("current") : undefined, id: row.id })),
       ];
       const pick = await vscode.window.showQuickPick(items, { placeHolder: vscode.l10n.t("{0} tier: which model should run it?", label), ignoreFocusOut: true });
       if (!pick) {
@@ -587,6 +605,9 @@ export function activate(context: vscode.ExtensionContext) {
     const ws = firstWorkspace();
     const c = combined(ws);
     const items: Array<vscode.QuickPickItem & { run: () => unknown }> = [];
+    if (reloadHint && c.mode === "user") {
+      items.push({ label: vscode.l10n.t("$(refresh) Reload window"), description: reloadHint === "finish" ? vscode.l10n.t("finishes the setup in this window (Cursor lists subagents when a window opens)") : vscode.l10n.t("shows the new subagent names in this window"), run: () => vscode.commands.executeCommand("workbench.action.reloadWindow") });
+    }
     if (c.mode === "none") {
       items.push({ label: vscode.l10n.t("$(zap) Turn on"), description: vscode.l10n.t("for all projects (nothing written into them), or this project only"), run: () => vscode.commands.executeCommand("cco.installCursorAssets") });
     } else {

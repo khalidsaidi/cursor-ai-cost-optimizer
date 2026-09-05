@@ -20,7 +20,7 @@ import {
   hookLog,
   emit,
   nowIso,
-  asNumber, isMain, applyScopeArgs, scopeArgs, PLUGIN_ROOT } from "./lib/common.mjs";
+  asNumber, isMain, applyScopeArgs, scopeArgs, PLUGIN_ROOT, windowLacksAgents } from "./lib/common.mjs";
 applyScopeArgs();
 import fs from "node:fs";
 import path from "node:path";
@@ -191,6 +191,9 @@ export function refreshDiscoveryIfStale({ workspace, paths, config, background =
  * a sessionStart (the chat panel Cursor opens with the window, on every version tested).
  */
 export function fullSessionContext({ workspace, paths, config, sessionModel }) {
+  if (windowLacksAgents(workspace)) {
+    return "AI Cost Optimizer: its tier subagents were set up after this window opened, and Cursor lists subagents only when a window opens. Work normally in this chat (no delegation, no cost or tier lines); routing starts after the window is reloaded.";
+  }
   let context = buildSessionContext({ workspace, config, sessionModel });
   if (paths.scope === "user") {
     // A cheap chat model (Composer, Auto) rarely needs routing: it gets the short rule (risk escalation and

@@ -19,7 +19,34 @@ export const CCO_WORK_AGENTS = ["fast-tier", "balanced-tier", "deep-tier"];
 /** Names used before 0.3; generated files under these names are removed on setup/update and on uninstall. */
 export const LEGACY_AGENT_NAMES = ["cco-fast", "cco-balanced", "cco-deep", "cco-verifier", "cco-explore"];
 /** The subagent name to delegate to for a tier: the current model-named agent when a workspace is known. */
-export function agentForTier(tier, workspace = null) {
+/**
+ * Cursor's Task tool lists the subagents it found when the window opened (a remote window never refreshes the
+ * list). window-agents.json records what this window accepts (workspaceOpen, or the Task tool's own error), so
+ * the name handed to the model is one that works now; the file under that name is kept as an alias.
+ */
+export function windowAgentName(dir, role, current) {
+  const win = readJsonSafe(path.join(dir, "window-agents.json"));
+  const names = Array.isArray(win?.names) ? win.names : null;
+  if (!names || names.includes(current)) return current;
+  const suffix = { "fast-tier": "fast", "balanced-tier": "balanced", "deep-tier": "deep", "fast-research": "research", "tier-verifier": "verifier" }[role];
+  const legacy = { "fast-tier": "cco-fast", "balanced-tier": "cco-balanced", "deep-tier": "cco-deep", "fast-research": "cco-explore", "tier-verifier": "cco-verifier" }[role];
+  const alt = names.find((n) => n === role || n === legacy || (suffix && String(n).endsWith(`-${suffix}`)));
+  return alt || current;
+}
+
+/** True when this window's Task tool lists none of the CCO subagents (set up after the window opened). */
+export function windowLacksAgents(workspace) {
+  try {
+    const p = workspacePaths(workspace);
+    const win = readJsonSafe(path.join(p.scope === "user" ? p.root : p.ccoDir, "window-agents.json"));
+    return Boolean(win && win.noneOfOurs);
+  } catch {
+    return false;
+  }
+}
+
+/** The subagent file currently written for a tier (rewrite target); see agentForTier for what the model is told. */
+export function currentAgentForTier(tier, workspace = null) {
   const role = TIER_AGENT[String(tier || "").toLowerCase()] || null;
   if (!role) return null;
   if (!workspace) return role;
@@ -27,6 +54,21 @@ export function agentForTier(tier, workspace = null) {
     const p = workspacePaths(workspace);
     const stored = readJsonSafe(path.join(p.scope === "user" ? p.root : p.ccoDir, "agent-names.json"));
     return typeof stored?.[role] === "string" && stored[role] ? stored[role] : role;
+  } catch {
+    return role;
+  }
+}
+
+export function agentForTier(tier, workspace = null) {
+  const role = TIER_AGENT[String(tier || "").toLowerCase()] || null;
+  if (!role) return null;
+  if (!workspace) return role;
+  try {
+    const p = workspacePaths(workspace);
+    const dir = p.scope === "user" ? p.root : p.ccoDir;
+    const stored = readJsonSafe(path.join(dir, "agent-names.json"));
+    const current = typeof stored?.[role] === "string" && stored[role] ? stored[role] : role;
+    return windowAgentName(dir, role, current);
   } catch {
     return role;
   }

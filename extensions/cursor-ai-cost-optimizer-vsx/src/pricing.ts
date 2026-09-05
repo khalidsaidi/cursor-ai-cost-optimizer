@@ -373,3 +373,32 @@ export function readLastDecision(workspace: string, stateDir?: string): LastDeci
   }
   return null;
 }
+
+/**
+ * One row per model for the pickers. An account lists every effort level and fast variant as its own id
+ * (a real account: 250 ids, eight of them "GPT-5.3 Codex"); the picker shows each model once, on its plain
+ * id (no effort suffix, never the 2x "fast" variant), cheapest first.
+ */
+export function pickerModels(ids: string[], pricing: PricingTable | null): Array<{ id: string; label: string; rate: number | null }> {
+  const groups = new Map<string, string[]>();
+  for (const id of ids) {
+    if (!id || /^auto$/i.test(id)) {
+      continue;
+    }
+    const label = modelDisplayName(id, pricing);
+    groups.set(label, [...(groups.get(label) ?? []), id]);
+  }
+  const rank = (id: string): number => {
+    const parts = String(id).toLowerCase().split("-");
+    const effort = parts.filter((t) => /^(none|minimal|low|medium|high|xhigh|extra|max|thinking)$/.test(t));
+    let score = modelIdTokens(id).fast ? 100 : 0;
+    score += effort.length === 0 ? 0 : effort.includes("high") && !effort.includes("xhigh") ? 1 : effort.includes("medium") ? 2 : 3;
+    return score;
+  };
+  const rows: Array<{ id: string; label: string; rate: number | null }> = [];
+  for (const [label, members] of groups) {
+    const id = [...members].sort((a, b) => rank(a) - rank(b) || a.length - b.length || a.localeCompare(b))[0];
+    rows.push({ id, label, rate: blendedRatePerMillion(resolveModelPrice(id, pricing)) });
+  }
+  return rows.sort((a, b) => (a.rate ?? Number.MAX_VALUE) - (b.rate ?? Number.MAX_VALUE) || a.label.localeCompare(b.label));
+}

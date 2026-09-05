@@ -113,7 +113,7 @@
       },
       {
         "command": "cco.hooksOff",
-        "title": "Turn Hooks Off Now",
+        "title": "Emergency Stop",
         "category": "AI Cost Optimizer",
         "enablement": "cco.mode != 'none'"
       }

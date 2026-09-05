@@ -25,7 +25,7 @@ import {
   emit,
   asNumber,
   TIERS,
-  isEnabled, isMain, applyScopeArgs, agentForTier } from "./lib/common.mjs";
+  isEnabled, isMain, applyScopeArgs, agentForTier, windowLacksAgents } from "./lib/common.mjs";
 applyScopeArgs();
 import { loadConfig } from "./lib/config.mjs";
 import { modelLimitedUntil } from "./lib/state.mjs";
@@ -33,7 +33,7 @@ import { tierLabel, modelLabel } from "./lib/labels.mjs";
 import { loadPricing, resolveModelPrice, blendedRatePerMillion } from "./lib/pricing.mjs";
 import { heuristicScores, decideTier, parseOverride, isQuestionLike, isTinyTask } from "./lib/scorer.mjs";
 import { loadSession, saveSession, userPromptFromTranscript, guessTranscriptPath, refineSessionModel, syncTurnFromTranscript, userPromptFromTranscriptTurn } from "./lib/session.mjs";
-import { agentNames, readWorkspaceAgentModel } from "./lib/agents.mjs";
+import { agentNames, readWorkspaceAgentModel, agentNamesForWindow } from "./lib/agents.mjs";
 
 const DEFAULT_WORK_TOOLS = "^(Write|Edit|StrReplace|MultiEdit|Delete|Shell|Bash|NotebookEdit|ApplyPatch|CreateFile|EditFile|DeleteFile)$";
 
@@ -79,7 +79,7 @@ export function isRouterMode({ session, config, pricing, models }) {
 /**
  * Pure decision. Returns { action: "allow"|"deny", reason, tier, model, decision, phase }.
  */
-export function gateDecision({ toolName, session, config, pricing, models, prompt }) {
+export function gateDecision({ toolName, session, config, pricing, models, prompt, workspace = null }) {
   const enforcement = config?.enforcement || {};
   const mode = String(enforcement.requireDelegation || "auto");
   const tool = String(toolName || "");
@@ -102,6 +102,10 @@ export function gateDecision({ toolName, session, config, pricing, models, promp
   const maxDenials = asNumber(enforcement.maxDenialsPerConversation, 2);
   if (asNumber(session.denials, 0) >= maxDenials) {
     return { action: "allow", reason: "escape_hatch_after_denials" };
+  }
+  // This window's Task tool lists none of the tier subagents (set up after it opened): nothing to route to.
+  if (workspace && windowLacksAgents(workspace)) {
+    return { action: "allow", reason: "no_subagents_in_window" };
   }
 
   const delegated = Array.isArray(session.delegations) && session.delegations.some((d) => d.agent !== "fast-research" && d.agent !== "tier-verifier");
@@ -198,7 +202,7 @@ export function denyMessage({ toolName, verdict, sessionModel, workspace = null 
   if (verdict.reason === "read_budget_use_explore") {
     return [
       `CCO: you have used the read budget for research on ${sessionModel || "the chat model"}. Delegate the remaining research to the cheap explorer instead of reading more here.`,
-      `Call the Task tool with subagent_type="${agentNames(workspace)["fast-research"]}" (read-only, runs on ${verdict.model}) and a precise question: what to find, which paths or symbols, what to report (paths with line ranges, a short answer). Independent questions can be sent as parallel Task calls in the same turn. Then continue the work here using its summary.`
+      `Call the Task tool with subagent_type="${agentNamesForWindow(workspace)["fast-research"]}" (read-only, runs on ${verdict.model}) and a precise question: what to find, which paths or symbols, what to report (paths with line ranges, a short answer). Independent questions can be sent as parallel Task calls in the same turn. Then continue the work here using its summary.`
     ].join("\n");
   }
   if (verdict.phase === "post") {
@@ -252,7 +256,7 @@ async function main() {
         session.promptMeta = { override: /\[cco:off\]|\[cco:direct\]/i.test(prompt) ? "off" : override, questionLike: isQuestionLike(prompt), tiny: isTinyTask(prompt), chars: prompt.length };
       }
     }
-    const verdict = gateDecision({ toolName: payload.tool_name, session, config, pricing, models, prompt });
+    const verdict = gateDecision({ toolName: payload.tool_name, session, config, pricing, models, prompt, workspace });
     hookLog(paths, {
       event: "preToolUse:gate",
       conversation_id: conversationId,

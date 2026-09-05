@@ -77,3 +77,19 @@ test("readLastDecision: the tier comes from the subagent name suffix, whatever t
   assert.ok(Math.abs(last.savedUsd - 0.09) < 1e-9);
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test("pickerModels: one row per model, plain id preferred, never a fast variant, cheapest first", () => {
+  const { pickerModels, loadPricing } = require("../../dist/pricing.js");
+  const pricing = loadPricing(null, path.join(__dirname, "..", "..", "resources", "plugin", "config", "pricing.json"));
+  const ids = ["auto", "gpt-5.3-codex-low", "gpt-5.3-codex-low-fast", "gpt-5.3-codex", "gpt-5.3-codex-fast", "gpt-5.3-codex-high", "gpt-5.3-codex-xhigh-fast",
+    "claude-opus-5-thinking-high", "claude-opus-5-thinking-high-fast", "claude-opus-5-low", "composer-2.5", "composer-2.5-fast", "cursor-grok-4.6-high-fast", "cursor-grok-4.6-high", "claude-sonnet-5-thinking-high"];
+  const rows = pickerModels(ids, pricing);
+  const byLabel = Object.fromEntries(rows.map((r) => [r.label, r.id]));
+  assert.equal(byLabel["GPT-5.3 Codex"], "gpt-5.3-codex");
+  assert.equal(byLabel["Composer 2.5"], "composer-2.5");
+  assert.equal(byLabel["Grok 4.6"], "cursor-grok-4.6-high");
+  assert.equal(rows.filter((r) => r.label === "GPT-5.3 Codex").length, 1);
+  assert.equal(byLabel["Claude Opus 5"], "claude-opus-5-thinking-high", "the high effort variant when there is no plain id");
+  assert.equal(byLabel["Composer 2.5 Fast"], "composer-2.5-fast", "fast variants are their own (2x) row");
+  assert.equal(rows[0].label, "Composer 2.5", "cheapest first");
+});

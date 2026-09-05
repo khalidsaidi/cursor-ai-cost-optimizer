@@ -24,7 +24,7 @@ import { loadJointState, recordOutcome, saveJointState, markModelLimited, modelL
 import { scheduleBackgroundRefresh } from "./cco-session-start.mjs";
 import { escalateTier } from "./lib/scorer.mjs";
 import { tierFor } from "./lib/models.mjs";
-import { readWorkspaceAgentModel } from "./lib/agents.mjs";
+import { readWorkspaceAgentModel, recordWindowAgents, agentNamesForWindow, roleOf } from "./lib/agents.mjs";
 import { detectTestCommand } from "./lib/project.mjs";
 import { spawnSync } from "node:child_process";
 
@@ -40,6 +40,16 @@ export function extractText(value) {
   } catch {
     return String(value);
   }
+}
+
+/** Cursor's "Invalid enum value. Expected 'a' | 'b', received 'x'" for subagent_type → { accepted, received }. */
+export function parseEnumError(message) {
+  const text = String(message || "");
+  if (!/subagent_type[\s\S]*Invalid enum value/i.test(text)) return null;
+  const m = text.match(/Expected ([\s\S]*?),\s*received '([^']*)'/);
+  if (!m) return null;
+  const accepted = [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1]);
+  return { accepted, received: m[2] };
 }
 
 export function analyzeOutcome({ hookEvent, payload }) {
@@ -88,6 +98,24 @@ async function main() {
     return;
   }
   try {
+    // The Task tool rejected the subagent name: this window still lists the subagents it found when it opened
+    // (a remote window never refreshes the list). Its error names what it does accept: record that, and either
+    // point the model at the alias this window knows or, when it knows none of ours, keep the work in the chat.
+    const enumError = hookEvent === "subagentStop" ? parseEnumError(payload.error_message) : null;
+    if (enumError) {
+      const record = recordWindowAgents(workspace, enumError.accepted, "enum_error");
+      const role = roleOf(enumError.received);
+      const alt = role ? agentNamesForWindow(workspace)[role] : null;
+      const usable = alt && alt !== enumError.received && enumError.accepted.includes(alt);
+      const model = usable ? readWorkspaceAgentModel(workspace, alt) : null;
+      hookLog(paths, { event: hookEvent, enumError: { received: enumError.received, alternative: usable ? alt : null, noneOfOurs: record.noneOfOurs } });
+      emit({
+        additional_context: usable
+          ? `CCO: this window's Task tool still lists the subagents it had when the window opened. Retry the same Task call with subagent_type="${alt}" (same tier${model && model !== "inherit" ? `, runs on ${model}` : ""}); the new names apply once the window is reloaded.`
+          : "CCO: the tier subagents were set up after this window opened, and Cursor lists subagents only when a window opens. Do this task in this chat now, without delegating; routing resumes after the window is reloaded."
+      });
+      return;
+    }
     const analysis = analyzeOutcome({ hookEvent, payload });
     if (!analysis.applies) {
       emit({});
