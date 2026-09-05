@@ -614,9 +614,14 @@ export function activate(context: vscode.ExtensionContext) {
       const items: Array<vscode.QuickPickItem & { id: string }> = [
         { label: vscode.l10n.t("$(sparkle) Automatic"), description: vscode.l10n.t("cheapest sufficient model for this tier (now {0})", modelDisplayName(now, pricing)), id: "" },
         ...pickerModels(ids, pricing).map((row) => ({ label: row.label, description: priceLabel(row.id, pricing), detail: row.label === modelDisplayName(now, pricing) ? vscode.l10n.t("current") : undefined, id: row.id })),
+        { label: `$(edit) ${vscode.l10n.t("Another model id…")}`, description: (readJson(runtimePath) as { health?: { degraded?: boolean } } | null)?.health?.degraded ? vscode.l10n.t("type it in Settings (this list is the bundled catalogue; your plan may offer more)") : vscode.l10n.t("type it in Settings"), id: "__settings__" },
       ];
       const pick = await vscode.window.showQuickPick(items, { placeHolder: vscode.l10n.t("{0} tier: which model should run it?", label), ignoreFocusOut: true });
       if (!pick) {
+        return;
+      }
+      if (pick.id === "__settings__") {
+        await vscode.commands.executeCommand("workbench.action.openSettings", `costOptimizer.tierModels.${tier}`);
         return;
       }
       chosen[tier] = pick.id;
