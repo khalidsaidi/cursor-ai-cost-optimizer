@@ -80,3 +80,19 @@ test("plain-language steering counts as an override; explicit tokens still win",
   assert.equal(parseOverride("use the best model [cco:fast]"), "fast", "a token beats a phrase");
   assert.equal(parseOverride("add a function"), null);
 });
+
+test("plain-language 'do it yourself' requests switch routing off for that prompt", () => {
+  for (const p of [
+    "Edit calc.mjs yourself right now, no subagents: add a sq(a) function",
+    "no subagent please, just add the helper",
+    "Add the helper directly in this chat",
+    "fix the typo yourself",
+    "stay in the chat for this one",
+    "don't delegate this"
+  ]) {
+    assert.equal(parseOverride(p), "off", p);
+  }
+  for (const p of ["subagents are great, use the fast one", "add a helper to calc.mjs", "write tests for the parser"]) {
+    assert.equal(parseOverride(p), null, p);
+  }
+});

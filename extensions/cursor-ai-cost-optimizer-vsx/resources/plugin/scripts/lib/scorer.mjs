@@ -23,7 +23,7 @@ export function normalizeScores(raw) {
 const PHRASES = [
   ["deep", /\b(use|with|on|pick|prefer)\s+(the\s+)?(best|strongest|smartest|most capable|top|strong|big|frontier)\s+model\b|\bbest model\b|\bthink hard(er)?\b/],
   ["fast", /\b(use|with|on|pick|prefer)\s+(the\s+)?(cheapest|fastest|cheap|fast|small|quick)\s+model\b|\bquick and cheap\b|\bcheaply\b/],
-  ["off", /\b(don'?t|do not|no)\s+(route|delegate|routing|delegation)\b|\bwithout (routing|delegating|subagents?)\b|\bdo it (yourself|here|in this chat)\b/],
+  ["off", /\b(don'?t|do not|no)\s+(route|delegate|routing|delegation|delegating|sub-?agents?)\b|\bwithout (routing|delegating|sub-?agents?)\b|\bdo it (yourself|here|in this chat)\b|\b(do|edit|write|fix|handle|change|make|apply|implement|update|add)\b[^.?!\n]{0,40}\b(yourself|directly|in this chat|inline)\b|\bstay in (this |the )?chat\b/],
   ["auto", /\b(back to|resume|restore)\s+(auto(matic)?\s+)?routing\b/]
 ];
 
