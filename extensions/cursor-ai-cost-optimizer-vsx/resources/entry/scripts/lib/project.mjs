@@ -42,6 +42,18 @@ export function detectTestCommand(workspace) {
  * system context (rules, tool schemas, ~38k tokens measured) to the cache once, so its estimate carries that
  * start-up cost; the chat's own session already has it and pays nothing extra.
  */
+/** Output-token multiplier for a model id's effort level and thinking variant (config `budgets.effortOutputFactor`). */
+export function effortOutputFactor(modelId, config) {
+  const table = { low: 0.7, medium: 1.0, high: 1.5, xhigh: 2.0, max: 3.0, thinking: 1.3, ...(config?.budgets?.effortOutputFactor || {}) };
+  const id = String(modelId || "").toLowerCase();
+  const m = id.match(/-(low|medium|high|xhigh|max)(?:-fast)?$/);
+  let factor = m ? asNumber(table[m[1]], 1) : 1;
+  if (/thinking/.test(id)) {
+    factor *= asNumber(table.thinking, 1);
+  }
+  return factor;
+}
+
 export function estimateTaskCostUsd({ tier, model, pricing, config, delegation = false }) {
   const price = resolveModelPrice(model, pricing, { overrides: config?.pricing?.overrides });
   const expected = config?.budgets?.[tier]?.expectedTokens;
@@ -49,7 +61,9 @@ export function estimateTaskCostUsd({ tier, model, pricing, config, delegation =
     return null;
   }
   const input = asNumber(expected.input, 0);
-  const output = asNumber(expected.output, 0);
+  // Reasoning effort is paid in output tokens: the same model at "high" writes about 1.5x the tokens of "medium",
+  // "thinking" variants more still. That is the lever Auto never pulls: Balanced work runs at medium.
+  const output = asNumber(expected.output, 0) * effortOutputFactor(model, config);
   // Most input is cache reads in a multi-turn subagent session.
   let usd = (input * (0.2 * price.input + 0.8 * price.cacheRead) + output * price.output) / 1_000_000;
   if (delegation) {

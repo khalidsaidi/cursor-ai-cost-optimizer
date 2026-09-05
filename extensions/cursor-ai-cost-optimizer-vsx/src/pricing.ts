@@ -342,6 +342,23 @@ export function modelDisplayName(modelId: string, pricing: PricingTable | null):
   if (/^auto$/i.test(modelId)) {
     return "Auto";
   }
+  return `${modelBaseName(modelId, pricing)}${effortSuffix(modelId)}`;
+}
+
+/** " (medium effort)" for ids that name a non-default effort level; "high" is the usual default and stays silent. */
+export function effortSuffix(modelId: string): string {
+  const m = String(modelId || "").toLowerCase().match(/-(low|medium|xhigh|max)(?:-fast)?$/);
+  return m ? ` (${m[1]} effort)` : "";
+}
+
+/** The model's name without its effort level: what the picker groups by and the subagent card shows. */
+export function modelBaseName(modelId: string, pricing: PricingTable | null): string {
+  if (!modelId || modelId === "inherit") {
+    return "the chat model";
+  }
+  if (/^auto$/i.test(modelId)) {
+    return "Auto";
+  }
   const price = resolveModelPrice(modelId, pricing);
   if (price.matchedRow) {
     return price.matchedRow.replace(/\s*\(Fast\)\s*$/i, " Fast");
@@ -401,7 +418,7 @@ export function pickerModels(ids: string[], pricing: PricingTable | null): Array
     if (!id || /^auto$/i.test(id)) {
       continue;
     }
-    const label = modelDisplayName(id, pricing);
+    const label = modelBaseName(id, pricing);
     groups.set(label, [...(groups.get(label) ?? []), id]);
   }
   const rank = (id: string): number => {

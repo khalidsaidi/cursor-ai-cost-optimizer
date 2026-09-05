@@ -5,7 +5,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { decideHookMode, doctorWorkspace, findBundledBinary, findNode, installWorkspace, plannedFiles, runPluginScriptAsync, stripCcoHooks, uninstallWorkspace, workspacePaths, workspaceStatus, type HookRuntimePreference, type HooksFile, type Options, hasProjectLeftovers } from "./install";
-import { costStatement, formatUsd, readSavings, readLastDecision, readTierModels, loadPricing, modelDisplayName, resolveModelPrice, pickerModels, overrideMismatches } from "./pricing";
+import { costStatement, formatUsd, readSavings, readLastDecision, readTierModels, loadPricing, modelDisplayName, resolveModelPrice, pickerModels, overrideMismatches, modelBaseName } from "./pricing";
 import { syncSettingsToPluginConfig } from "./settings";
 import { hooksLoadedInWindow } from "./hooksLog";
 import { doctorUser, installUser, pauseWorkspace, stripUserHooks, uninstallUser, userHookCommand, userStatus, workspacePaused, workspaceStateDir, findPluginCopies, retirePluginCopies, recordAgentsWrittenAfterOpen, generatedAgentNames } from "./userScope";
@@ -641,7 +641,7 @@ export function activate(context: vscode.ExtensionContext) {
       const now = current[tier] ?? "inherit";
       const items: Array<vscode.QuickPickItem & { id: string }> = [
         { label: vscode.l10n.t("$(sparkle) Automatic"), description: vscode.l10n.t("cheapest sufficient model for this tier (now {0})", modelDisplayName(now, pricing)), id: "" },
-        ...pickerModels(ids, pricing).map((row) => ({ label: row.label, description: priceLabel(row.id, pricing), detail: row.label === modelDisplayName(now, pricing) ? vscode.l10n.t("current") : undefined, id: row.id })),
+        ...pickerModels(ids, pricing).map((row) => ({ label: row.label, description: priceLabel(row.id, pricing), detail: row.label === modelBaseName(now, pricing) ? vscode.l10n.t("current") : undefined, id: row.id })),
         { label: `$(edit) ${vscode.l10n.t("Another model id…")}`, description: (readJson(runtimePath) as { health?: { degraded?: boolean } } | null)?.health?.degraded ? vscode.l10n.t("type it in Settings (this list is the bundled catalogue; your plan may offer more)") : vscode.l10n.t("type it in Settings"), id: "__settings__" },
       ];
       const pick = await vscode.window.showQuickPick(items, { placeHolder: vscode.l10n.t("{0} tier: which model should run it?", label), ignoreFocusOut: true });

@@ -26,10 +26,12 @@ export function modelLabel(id, pricing = null) {
   if (/^auto$/i.test(id)) {
     return "Auto";
   }
+  const effort = (String(id).toLowerCase().match(/-(low|medium|xhigh|max)(?:-fast)?$/) || [])[1];
+  const suffix = effort ? ` (${effort} effort)` : "";
   try {
     const price = pricing ? resolveModelPrice(id, pricing) : null;
     if (price?.matchedRow) {
-      return String(price.matchedRow).replace(/\s*\(Fast\)\s*$/i, " Fast");
+      return `${String(price.matchedRow).replace(/\s*\(Fast\)\s*$/i, " Fast")}${suffix}`;
     }
   } catch {}
   return prettify(id);

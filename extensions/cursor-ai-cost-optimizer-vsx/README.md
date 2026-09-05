@@ -28,6 +28,7 @@ the Cursor plugin marketplace, and ships a self-contained hook binary for machin
 - **Tiered routing with real savings**: the routing rule scores each request (complexity, risk, breadth,
   uncertainty, latency) and delegates to `fast-tier` / `balanced-tier` / `deep-tier` subagents, each pinned to a
   model your account can run. Delegation only happens when a typical task costs at least 20% less on the tier's model once the subagent's own session start (about 38k cached tokens, configurable) is paid. On **Composer** that is never the case, so routine work stays in the chat and only risky work is routed; on **Auto** the optimizer prices the model Auto actually picked for the chat (often Grok or Claude) and delegates when that saves; a pricier chat model (Claude, GPT, Grok) is where the routing saves most.
+- **Effort matched to the tier**: reasoning effort is paid in output tokens, and Cursor's Auto never turns it down. The Balanced tier runs its model at medium effort (`claude-sonnet-5-medium` when the account lists it), Deep at high; the estimates price effort (high ≈ 1.5x the output of medium, thinking variants more), and the tooltip shows it: `Balanced → Claude Sonnet 5 (medium effort)`.
 - **Hooks that enforce it**: the Task guard rewrites mis-routed delegations and applies guardrails (high risk
   never runs FAST); the tool gate keeps expensive chat models from doing cheap work themselves; outcome learning
   escalates tiers that keep failing; every decision is logged to `.cursor/cco/state/decisions.jsonl`.

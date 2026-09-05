@@ -48,7 +48,7 @@ export function discover({ workspace, probe, writeAgents, config: configOverride
   const notes = [];
   if (!listing.ok) {
     // No Cursor CLI (or not logged in): fall back to the bundled catalogue so tiers still get real models.
-    const fallback = ["composer-2.5", "claude-sonnet-5-thinking-high", "claude-opus-5-thinking-high", "gpt-5.6-sol-high", "cursor-grok-4.6-high", "gemini-3.8-flash-high"].map((id) => ({ id, label: id, current: false, default: false }));
+    const fallback = ["composer-2.5", "claude-sonnet-5-medium", "claude-sonnet-5-thinking-high", "claude-opus-5-thinking-high", "gpt-5.6-sol-high", "cursor-grok-4.6-high", "gemini-3.8-flash-high"].map((id) => ({ id, label: id, current: false, default: false }));
     notes.push(`Cursor CLI unavailable (${listing.error}); using the bundled model catalogue. Install the CLI (https://cursor.com/install) and re-run /cco-init to map from your account's real model list.`);
     listing = { ok: true, models: fallback, current: null, defaultModel: null, fallback: true };
   }

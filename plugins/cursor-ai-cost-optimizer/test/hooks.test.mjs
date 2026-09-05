@@ -606,9 +606,9 @@ test("gate messages name the model that will actually run while a tier model is 
   runHook("cco-prompt-capture.mjs", { hook_event_name: "beforeSubmitPrompt", conversation_id: "gate-lim", prompt: "[cco:deep] rotate the production signing key", workspace_roots: [ws] });
   const out = runHook("cco-tool-gate.mjs", { hook_event_name: "preToolUse", conversation_id: "gate-lim", tool_name: "Write", tool_input: { file_path: "x" }, workspace_roots: [ws] });
   assert.equal(out.permission, "deny");
-  assert.match(out.agent_message, /runs on claude-sonnet-5-thinking-high/, "DEEP is limited: the message names BALANCED's model");
+  assert.match(out.agent_message, /runs on claude-sonnet-5-(medium|thinking-high)/, "DEEP is limited: the message names BALANCED's model");
   assert.doesNotMatch(String(out.user_message), /claude-opus/);
-  assert.match(String(out.user_message), /Deep model at its usage limit: routing to Balanced \(Claude Sonnet 5\)/, "the card says why Balanced runs a Deep-scored task");
+  assert.match(String(out.user_message), /Deep model at its usage limit: routing to Balanced \(Claude Sonnet 5( \(\w+ effort\))?\)/, "the card says why Balanced runs a Deep-scored task");
 });
 
 test("legacy cco-* names: old rules still route, and generated cco-*.md files are replaced on setup", async () => {
@@ -788,7 +788,7 @@ test("risky work whose DEEP and BALANCED models are both refused ends in the cha
   assert.match(deepStop.additional_context, /claude-sonnet-5-balanced/);
   const held = runHook("cco-tool-gate.mjs", { hook_event_name: "preToolUse", conversation_id: "risk2", model: "grok-4.6", tool_name: "Write", tool_input: { file_path: "a.js", content: "x" }, workspace_roots: [ws] });
   assert.equal(held.permission, "deny");
-  assert.match(held.user_message, /Deep model at its usage limit: retrying on Balanced \(Claude Sonnet 5\)/);
+  assert.match(held.user_message, /Deep model at its usage limit: retrying on Balanced \(Claude Sonnet 5( \(\w+ effort\))?\)/);
   runHook("cco-task-guard.mjs", { hook_event_name: "preToolUse", conversation_id: "risk2", model: "grok-4.6", tool_name: "Task", tool_input: { subagent_type: "claude-sonnet-5-balanced", prompt: "CCO-SCORES: complexity=3 risk=10 breadth=1 uncertainty=0 latency=0\nrotate it" }, workspace_roots: [ws] });
   const balStop = runHook("cco-task-result.mjs", { hook_event_name: "subagentStop", conversation_id: "risk2", subagent_type: "claude-sonnet-5-balanced", model: "claude-sonnet-5-thinking-high", status: "error", duration_ms: 700, message_count: 0, tool_call_count: 0, workspace_roots: [ws] });
   assert.match(balStop.additional_context, /Do the task directly in this chat/, "no step-down to FAST for risky work");
