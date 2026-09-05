@@ -58,3 +58,29 @@ test("everywhere scope: nothing in the repo, ~/.cursor hooks + agents, pause per
     fs.rmSync(ws, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 });
+
+test("plugin copies next to the extension: a local copy is retired (moved under the state root), a marketplace one is reported", () => {
+  const { findPluginCopies, retirePluginCopies } = require("../../dist/userScope.js");
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "cco-home-"));
+  const local = path.join(home, ".cursor", "plugins", "local", "cursor-ai-cost-optimizer");
+  fs.mkdirSync(path.join(local, ".cursor-plugin"), { recursive: true });
+  fs.writeFileSync(path.join(local, ".cursor-plugin", "plugin.json"), JSON.stringify({ name: "cursor-ai-cost-optimizer", version: "0.2.0" }));
+  const other = path.join(home, ".cursor", "plugins", "local", "someone-else");
+  fs.mkdirSync(path.join(other, ".cursor-plugin"), { recursive: true });
+  fs.writeFileSync(path.join(other, ".cursor-plugin", "plugin.json"), JSON.stringify({ name: "someone-else" }));
+  const market = path.join(home, ".cursor", "plugins", "cache", "cursor-public", "cursor-ai-cost-optimizer");
+  fs.mkdirSync(path.join(market, "agents"), { recursive: true });
+  fs.mkdirSync(path.join(market, "hooks"), { recursive: true });
+  fs.writeFileSync(path.join(market, "agents", "cco-fast.md"), "---\nname: cco-fast\n---\n");
+  fs.writeFileSync(path.join(market, "hooks", "hooks.json"), "{}");
+  const copies = findPluginCopies(home);
+  assert.deepEqual(copies.map((c) => [c.kind, c.version]).sort(), [["local", "0.2.0"], ["marketplace", null]]);
+  const stateRoot = path.join(home, "state");
+  const r = retirePluginCopies(stateRoot, copies);
+  assert.deepEqual(r.retired, [local]);
+  assert.deepEqual(r.marketplace, [market]);
+  assert.equal(fs.existsSync(local), false);
+  assert.equal(fs.readdirSync(path.join(stateRoot, "retired-plugins")).length, 1);
+  assert.equal(findPluginCopies(home).length, 1, "only the marketplace copy is left");
+  fs.rmSync(home, { recursive: true, force: true });
+});

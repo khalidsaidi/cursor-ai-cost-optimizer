@@ -260,3 +260,86 @@ export function userHookCommand(stateRoot: string): string | null {
   const entry = (hooks?.hooks?.preToolUse || []).find((e) => String(e.command || "").includes("cco-hook"));
   return entry?.command ?? null;
 }
+
+// ---------------------------------------------------------------------------------------------
+// copies of the Cursor plugin next to the extension
+// ---------------------------------------------------------------------------------------------
+
+export interface PluginCopy {
+  path: string;
+  kind: "local" | "marketplace";
+  version: string | null;
+}
+
+function isOurPluginDir(dir: string): { yes: boolean; version: string | null } {
+  try {
+    const manifest = JSON.parse(fs.readFileSync(path.join(dir, ".cursor-plugin", "plugin.json"), "utf8")) as { name?: string; version?: string };
+    if (String(manifest.name || "").toLowerCase() === "cursor-ai-cost-optimizer") {
+      return { yes: true, version: manifest.version ? String(manifest.version) : null };
+    }
+  } catch {}
+  // an unpacked copy without a manifest: our tier subagents and our hook dispatcher
+  if (fs.existsSync(path.join(dir, "agents", "cco-fast.md")) && fs.existsSync(path.join(dir, "hooks", "hooks.json"))) {
+    return { yes: true, version: null };
+  }
+  return { yes: false, version: null };
+}
+
+/**
+ * The same product installed as a Cursor plugin (a `~/.cursor/plugins/local` copy from the CLI, or the marketplace
+ * cache) next to this extension: its `cco-*` subagents run on the chat model (plugin agents cannot set a model), its
+ * hooks run a second time, and Cursor's subagent list then keeps those names and rejects ours.
+ */
+export function findPluginCopies(home: string = os.homedir()): PluginCopy[] {
+  const out: PluginCopy[] = [];
+  const root = path.join(home, ".cursor", "plugins");
+  const visit = (dir: string, kind: PluginCopy["kind"], depth: number) => {
+    let entries: fs.Dirent[] = [];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      if (!e.isDirectory()) {
+        continue;
+      }
+      const candidate = path.join(dir, e.name);
+      const probe = isOurPluginDir(candidate);
+      if (probe.yes) {
+        out.push({ path: candidate, kind, version: probe.version });
+      } else if (depth > 0) {
+        visit(candidate, kind, depth - 1);
+      }
+    }
+  };
+  visit(path.join(root, "local"), "local", 1);
+  visit(path.join(root, "cache"), "marketplace", 2);
+  return out;
+}
+
+/** Local copies are moved under the state root (reversible); marketplace copies are reported for the user to uninstall. */
+export function retirePluginCopies(stateRoot: string, copies: PluginCopy[]): { retired: string[]; marketplace: string[] } {
+  const retired: string[] = [];
+  const marketplace: string[] = [];
+  for (const c of copies) {
+    if (c.kind !== "local") {
+      marketplace.push(c.path);
+      continue;
+    }
+    const dest = path.join(stateRoot, "retired-plugins", `${path.basename(c.path)}-${new Date().toISOString().replace(/[:.]/g, "-")}`);
+    try {
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      try {
+        fs.renameSync(c.path, dest);
+      } catch {
+        fs.cpSync(c.path, dest, { recursive: true });
+        fs.rmSync(c.path, { recursive: true, force: true });
+      }
+      retired.push(c.path);
+    } catch {
+      marketplace.push(c.path);
+    }
+  }
+  return { retired, marketplace };
+}

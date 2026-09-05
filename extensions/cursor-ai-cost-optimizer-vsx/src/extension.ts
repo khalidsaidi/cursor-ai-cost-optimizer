@@ -8,7 +8,7 @@ import { decideHookMode, doctorWorkspace, findBundledBinary, findNode, installWo
 import { costStatement, formatUsd, readSavings, readLastDecision, readTierModels, loadPricing, modelDisplayName, resolveModelPrice, pickerModels } from "./pricing";
 import { syncSettingsToPluginConfig } from "./settings";
 import { hooksLoadedInWindow } from "./hooksLog";
-import { doctorUser, installUser, pauseWorkspace, stripUserHooks, uninstallUser, userHookCommand, userStatus, workspacePaused, workspaceStateDir } from "./userScope";
+import { doctorUser, installUser, pauseWorkspace, stripUserHooks, uninstallUser, userHookCommand, userStatus, workspacePaused, workspaceStateDir, findPluginCopies, retirePluginCopies } from "./userScope";
 import { runHookCommand } from "./selfcheck";
 import { decideTier, heuristicScores, overrideToken, parseOverride, DEFAULT_CONFIG } from "./scorer";
 
@@ -54,6 +54,8 @@ let tiersPage = 0;
  * that window, routing works through the names it already knows (aliases), but a first setup needs one reload.
  */
 let reloadHint: "finish" | "names" | null = null;
+/** A marketplace copy of the Cursor plugin is installed next to the extension (only the user can uninstall it). */
+let pluginCopyHint: string | null = null;
 function noteReload(kind: "finish" | "names"): void {
   if (vscode.env.remoteName && reloadHint !== "finish") {
     reloadHint = kind;
@@ -234,6 +236,9 @@ export function activate(context: vscode.ExtensionContext) {
       md.appendMarkdown(`${vscode.l10n.t("Routes routine work to cheaper models and shows what it saves.")} [${vscode.l10n.t("Turn on")}](command:cco.installCursorAssets?%7B%22scope%22%3A%22user%22%2C%22confirm%22%3Afalse%7D)\n`);
     }
     const savedText = savedUsd >= 0.01 && vscode.workspace.getConfiguration("costOptimizer").get<boolean>("showSavingsInStatusBar", true) ? vscode.l10n.t("Saved {0}", formatUsd(savedUsd)) : "AI Cost";
+    if (pluginCopyHint && c.mode !== "none") {
+      md.appendMarkdown(`\n$(warning) ${vscode.l10n.t("The Cost Optimizer plugin is also installed in Cursor (Settings → Plugins): uninstall it, the extension replaces it. Its subagents run on your chat model and its hooks run a second time.")}\n`);
+    }
     if (reloadHint && c.mode === "user" && c.enabled) {
       md.appendMarkdown(`\n${reloadHint === "finish" ? vscode.l10n.t("Cursor lists subagents when a window opens: reload this window once to start routing here.") : vscode.l10n.t("Cursor lists subagents when a window opens: this window keeps routing under the previous names until it is reloaded.")}\n`);
     }
@@ -305,6 +310,25 @@ export function activate(context: vscode.ExtensionContext) {
     return true;
   };
   const runDoctor = async () => {
+    try {
+      const copies = findPluginCopies();
+      if (copies.length) {
+        const r = retirePluginCopies(stateRoot, copies);
+        if (r.retired.length) {
+          log.info(`[doctor] retired plugin copies (moved under ${path.join(stateRoot, "retired-plugins")}): ${r.retired.join(", ")}`);
+          flash(vscode.l10n.t("An older copy of the Cost Optimizer plugin was retired; the extension replaces it"));
+          noteReload("names");
+        }
+        pluginCopyHint = r.marketplace[0] ?? null;
+        if (pluginCopyHint) {
+          log.warn(`[doctor] the Cursor plugin is also installed (${pluginCopyHint}); its cco-* subagents run on the chat model and its hooks run twice: uninstall it in Cursor Settings → Plugins`);
+        }
+      } else {
+        pluginCopyHint = null;
+      }
+    } catch (error) {
+      log.error(`[doctor] plugin copies: ${String((error as Error)?.message ?? error)}`);
+    }
     try {
       const u = await doctorUser(options(), stateRoot);
       if (u.installed) {
@@ -605,6 +629,9 @@ export function activate(context: vscode.ExtensionContext) {
     const ws = firstWorkspace();
     const c = combined(ws);
     const items: Array<vscode.QuickPickItem & { run: () => unknown }> = [];
+    if (pluginCopyHint && c.mode !== "none") {
+      items.push({ label: vscode.l10n.t("$(extensions) Uninstall the Cursor plugin"), description: vscode.l10n.t("the extension replaces it; its subagents run on your chat model"), run: () => vscode.commands.executeCommand("aiSettings.action.open").then(undefined, () => flash(vscode.l10n.t("Cursor Settings → Plugins → AI Cost Optimizer → Uninstall"))) });
+    }
     if (reloadHint && c.mode === "user") {
       items.push({ label: vscode.l10n.t("$(refresh) Reload window"), description: reloadHint === "finish" ? vscode.l10n.t("finishes the setup in this window (Cursor lists subagents when a window opens)") : vscode.l10n.t("shows the new subagent names in this window"), run: () => vscode.commands.executeCommand("workbench.action.reloadWindow") });
     }
