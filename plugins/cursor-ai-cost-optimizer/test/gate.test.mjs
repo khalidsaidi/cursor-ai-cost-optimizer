@@ -163,7 +163,7 @@ test("gate refines a placeholder session model from a later hook payload; Auto i
   createSession({ workspace: ws, conversationId: "conv-ide", model: "auto" });
   const first = runHook("cco-tool-gate.mjs", { hook_event_name: "preToolUse", conversation_id: "conv-ide", model: "", tool_name: "Write", tool_input: {}, workspace_roots: [ws] });
   assert.equal(first.permission, "allow");
-  assert.equal(first.agent_message, undefined, "a typical FAST task on Auto (est.) costs about what the Composer subagent costs with its session start: nothing to gain, no advice");
+  assert.equal(first.agent_message, undefined, "on Auto the chat's price is a guess: no routing advice either way");
   const refined = runHook("cco-tool-gate.mjs", { hook_event_name: "preToolUse", conversation_id: "conv-ide", model: "composer-2.5", tool_name: "Write", tool_input: {}, workspace_roots: [ws] });
   assert.equal(loadSession(ws, "conv-ide").model, "composer-2.5");
   assert.equal(refined.permission, "allow", "once the concrete cheap model is known, ordinary work stays in the chat");
@@ -192,8 +192,8 @@ test("IDE replay: workspaceOpen + first prompt on Auto → no FAST delegation (n
   assert.equal(grep.permission, "allow");
   assert.equal(grep.agent_message, undefined, "on Auto a typical FAST task costs about what the subagent costs with its session start: no routing advice");
   const task = runHook("cco-task-guard.mjs", { hook_event_name: "preToolUse", conversation_id: "ide-A", model: "default", tool_name: "Task", tool_input: { description: "slugify", prompt: "CCO-SCORES: complexity=3 risk=0 breadth=1 uncertainty=0 latency=2\nCreate utils/slugify.js ...", subagent_type: "fast-tier" }, workspace_roots: [ws] });
-  assert.equal(task.permission, "deny", "a FAST delegation from Auto is turned back into in-chat work");
-  assert.match(task.agent_message, /directly in this chat/);
+  assert.equal(task.permission, "allow", "on Auto the price is a guess: the parent's own routing choice stands");
+  assert.match(task.user_message, /Fast on Composer 2\.5/);
 
   // Cheap chat model: a FAST delegation is pointless, the guard keeps the work in the chat.
   runHook("cco-prompt-capture.mjs", { hook_event_name: "beforeSubmitPrompt", conversation_id: "ide-B", model: "composer-2.5", prompt: "add a helper", workspace_roots: [ws] });

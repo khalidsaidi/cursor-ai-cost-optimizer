@@ -56,6 +56,8 @@ let tiersPage = 0;
 let reloadHint: "finish" | "names" | null = null;
 /** A marketplace copy of the Cursor plugin is installed next to the extension (only the user can uninstall it). */
 let pluginCopyHint: string | null = null;
+/** The hooks were turned off because their command did not run (shown in the status bar, never as a popup). */
+let hooksFailure: string | null = null;
 function noteReload(kind: "finish" | "names"): void {
   if (vscode.env.remoteName && reloadHint !== "finish") {
     reloadHint = kind;
@@ -246,13 +248,17 @@ export function activate(context: vscode.ExtensionContext) {
       md.appendMarkdown(`${vscode.l10n.t("Routes routine work to cheaper models and shows what it saves.")} [${vscode.l10n.t("Turn on")}](command:cco.installCursorAssets?%7B%22scope%22%3A%22user%22%2C%22confirm%22%3Afalse%7D)\n`);
     }
     const savedText = savedUsd >= 0.01 && vscode.workspace.getConfiguration("costOptimizer").get<boolean>("showSavingsInStatusBar", true) ? vscode.l10n.t("Saved {0}", formatUsd(savedUsd)) : "AI Cost";
+    if (hooksFailure) {
+      warn = true;
+      md.appendMarkdown(`\n$(warning) ${vscode.l10n.t("The hooks were turned off: their command did not run here ({0}). Cursor works normally without them. Fix the cause (Node.js 18+ on PATH usually) and choose Turn on again.", hooksFailure)}\n`);
+    }
     if (pluginCopyHint && c.mode !== "none") {
       md.appendMarkdown(`\n$(warning) ${vscode.l10n.t("The Cost Optimizer plugin is also installed in Cursor (Settings → Plugins): uninstall it, the extension replaces it. Its subagents run on your chat model and its hooks run a second time.")}\n`);
     }
     if (reloadHint && c.mode === "user" && c.enabled) {
       md.appendMarkdown(`\n${reloadHint === "finish" ? vscode.l10n.t("Cursor lists subagents when a window opens: reload this window once to start routing here.") : vscode.l10n.t("Cursor lists subagents when a window opens: this window keeps the previous tier mapping (names and models) until it is reloaded; the new one applies after that.")}\n`);
     }
-    status.text = hooksState.known && !hooksState.loaded ? `$(warning) ${vscode.l10n.t("AI Cost: hooks off")}` : warn ? "$(warning) AI Cost" : c.mode === "none" ? `$(zap) ${vscode.l10n.t("AI Cost: Off")}` : c.enabled ? (reloadHint === "finish" ? `$(zap) ${vscode.l10n.t("AI Cost: reload to finish")}` : `$(zap) ${savedText}`) : `$(zap) ${vscode.l10n.t("AI Cost: Paused")}`;
+    status.text = (hooksState.known && !hooksState.loaded) || hooksFailure ? `$(warning) ${vscode.l10n.t("AI Cost: hooks off")}` : warn ? "$(warning) AI Cost" : c.mode === "none" ? `$(zap) ${vscode.l10n.t("AI Cost: Off")}` : c.enabled ? (reloadHint === "finish" ? `$(zap) ${vscode.l10n.t("AI Cost: reload to finish")}` : `$(zap) ${savedText}`) : `$(zap) ${vscode.l10n.t("AI Cost: Paused")}`;
     status.tooltip = md;
     status.show();
     // context keys drive command enablement (package.json "enablement"), like the first-party extensions
@@ -292,16 +298,29 @@ export function activate(context: vscode.ExtensionContext) {
       return;
     }
     log.error(`[self-check] hook command failed (${r.ms} ms): ${r.error}\ncommand: ${command}\noutput: ${r.output}`);
-    const stripped = u.installed ? stripUserHooks(stateRoot) : ws ? stripProjectHooks(ws) : false;
-    refreshStatus();
-    if (stripped && !context.globalState.get<boolean>(SELF_CHECK_KEY)) {
-      await context.globalState.update(SELF_CHECK_KEY, true);
-      void notify("warn", vscode.l10n.t("AI Cost Optimizer turned its hooks off: the hook command did not answer ({0}). Cursor works normally without it. Fix the cause (usually Node.js >= 18 on PATH) and run Set Up / Update.", String(r.error)), [vscode.l10n.t("Set Up / Update")]).then((choice) => {
-        if (choice === vscode.l10n.t("Set Up / Update")) {
-          void vscode.commands.executeCommand("cco.installCursorAssets");
+    // The compiled binary could not run here (a quarantined download on macOS, a noexec mount, a libc it was not
+    // built for): Node.js is the fallback, either from PATH or Cursor's own runtime, before anything is turned off.
+    if (u.installed && u.hookMode === "binary" && settings().hookRuntime !== "binary" && findNode(settings().nodePath)) {
+      try {
+        log.warn("[self-check] the hook binary did not run; switching the hooks to Node.js");
+        await installUser({ ...options(), hookRuntime: "node", probe: false }, stateRoot);
+        const r2 = await runHookCommand(userHookCommand(stateRoot) as string, cwd, payload);
+        if (r2.ok) {
+          log.info(`[self-check] hooks answer on Node.js in ${r2.ms} ms`);
+          hooksFailure = null;
+          flash(vscode.l10n.t("The hook binary could not run on this machine; the hooks now run on Node.js"));
+          refreshStatus();
+          return;
         }
-      });
+        log.error(`[self-check] Node.js hooks failed too (${r2.ms} ms): ${r2.error}`);
+      } catch (error) {
+        log.error(`[self-check] switching to Node.js failed: ${String((error as Error)?.message ?? error)}`);
+      }
     }
+    const stripped = u.installed ? stripUserHooks(stateRoot) : ws ? stripProjectHooks(ws) : false;
+    hooksFailure = stripped ? String(r.error || "the hook command did not answer") : null;
+    await context.globalState.update(SELF_CHECK_KEY, Boolean(stripped));
+    refreshStatus();
   };
   const stripProjectHooks = (ws: string): boolean => {
     const p = workspacePaths(ws);

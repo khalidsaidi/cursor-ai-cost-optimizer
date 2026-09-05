@@ -66,6 +66,12 @@ export function estimateTaskCostUsd({ tier, model, pricing, config, delegation =
  * savings factor. Returns nulls when a price is unknown.
  */
 export function delegationWorth({ tier, tierModel, sessionModel, pricing, config }) {
+  // Auto (or an unknown chat model) has no price of its own: Cursor bills whatever it picked. Until a hook payload
+  // names that model, the parent's own routing choice stands (nothing is denied on a guess).
+  const sessionPrice = sessionModel ? resolveModelPrice(sessionModel, pricing, { overrides: config?.pricing?.overrides }) : null;
+  if (!sessionPrice || sessionPrice.confidence === "estimate" || sessionPrice.confidence === "unknown") {
+    return { known: false, worth: null, tierCost: null, chatCost: null, factor: null };
+  }
   const tierCost = tierModel && tierModel !== "inherit" ? estimateTaskCostUsd({ tier, model: tierModel, pricing, config, delegation: true }) : null;
   const chatCost = sessionModel ? estimateTaskCostUsd({ tier, model: sessionModel, pricing, config }) : null;
   const minSavings = asNumber(config?.enforcement?.minSavingsFactor, 1.3);
