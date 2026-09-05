@@ -362,7 +362,9 @@ export function readLastDecision(workspace: string, stateDir?: string): LastDeci
       if (!d.final || d.final === "chat") {
         continue;
       }
-      const tier = String(d.final).replace(/^cco-/, "").replace(/-tier$/, "");
+      // model-named subagents (composer-2.5-fast), role names (fast-tier) and pre-0.3 names (cco-fast) all end in the tier
+      const m = /(fast|balanced|deep)(?:-tier)?$/.exec(String(d.final));
+      const tier = m ? m[1] : String(d.final);
       const saved = typeof d.estimateUsd === "number" && typeof d.chatEstimateUsd === "number" && d.chatEstimateUsd > d.estimateUsd ? d.chatEstimateUsd - d.estimateUsd : null;
       return { ts: String(d.ts ?? ""), tier, model: String(d.model ?? ""), estimateUsd: typeof d.estimateUsd === "number" ? d.estimateUsd : null, savedUsd: saved };
     } catch {

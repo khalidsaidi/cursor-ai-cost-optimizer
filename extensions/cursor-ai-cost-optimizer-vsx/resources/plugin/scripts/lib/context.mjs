@@ -38,9 +38,12 @@ export function buildSessionContext({ workspace, config, sessionModel }) {
     if (sessionBlended && fastBlended && fastBlended > 0) {
       const factor = sessionBlended / fastBlended;
       if (factor >= 1.5) {
-        ratio = ` Delegating FAST-tier work to fast-tier costs about ${factor.toFixed(1)}x less per token than doing it here.`;
-      } else if (factor <= 0.67) {
+        ratio = ` Delegating FAST-tier work to the FAST subagent costs about ${factor.toFixed(1)}x less per token than doing it here.`;
+      } else if (factor <= 0.67 && !config?.modelOverrides?.fast) {
+        // Only when the Fast model was picked automatically: a model the user chose for the tier is used as chosen.
         ratio = ` This session model is already cheaper than the FAST tier; answer simple requests directly.`;
+      } else if (factor <= 0.67) {
+        ratio = ` The FAST tier's model was chosen by the user: delegate FAST work to it as usual.`;
       }
     }
     if (/^auto/i.test(sessionModel)) {
@@ -56,7 +59,7 @@ export function buildSessionContext({ workspace, config, sessionModel }) {
         return rate && sessionBlended / rate >= minSavings;
       });
       const keep = TIERS.filter((tier) => !worth.includes(tier));
-      lines.push(`ROUTER MODE is on for this chat: for any request that needs tools and scores ${worth.map((t) => t.toUpperCase()).join("/") || "(none)"}, your FIRST action is one Task call to cco-<tier> (no reading or editing here), and after it returns you relay the result in at most 5 short lines with no further tool calls. Exception: a simple question (explain/what/why) is answered directly with at most a couple of reads.${keep.length ? ` ${keep.map((t) => t.toUpperCase()).join("/")} work stays in this chat (its model is not cheaper than yours).` : ""} Hooks enforce this.`);
+      lines.push(`ROUTER MODE is on for this chat: for any request that needs tools and scores ${worth.map((t) => t.toUpperCase()).join("/") || "(none)"}, your FIRST action is one Task call to that tier's subagent named above (no reading or editing here), and after it returns you relay the result in at most 5 short lines with no further tool calls. Exception: a simple question (explain/what/why) is answered directly with at most a couple of reads.${keep.length ? ` ${keep.map((t) => t.toUpperCase()).join("/")} work stays in this chat (its model is not cheaper than yours).` : ""} Hooks enforce this.`);
     }
   }
 

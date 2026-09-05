@@ -227,3 +227,18 @@ test("mergeHooks is idempotent with foreign entries (repeated merges never dupli
   assert.deepEqual(once.extra, { keep: true });
   assert.equal(stripCcoHooks(once).hooks.preToolUse.length, 1);
 });
+
+test("hasProjectLeftovers: our hook entries, the project shim, or the state folder count; a foreign hooks.json does not", () => {
+  const { hasProjectLeftovers } = require("../../dist/install.js");
+  const ws = fs.mkdtempSync(path.join(os.tmpdir(), "cco-left-"));
+  assert.equal(hasProjectLeftovers(ws), false);
+  fs.mkdirSync(path.join(ws, ".cursor"), { recursive: true });
+  fs.writeFileSync(path.join(ws, ".cursor", "hooks.json"), JSON.stringify({ version: 1, hooks: { preToolUse: [{ command: "node ./their-hook.mjs" }] } }));
+  assert.equal(hasProjectLeftovers(ws), false, "someone else's hooks are not ours");
+  fs.writeFileSync(path.join(ws, ".cursor", "hooks.json"), JSON.stringify({ version: 1, hooks: { preToolUse: [{ command: "node .cursor/cco-hook.mjs preToolUse" }] } }));
+  assert.equal(hasProjectLeftovers(ws), true);
+  fs.rmSync(path.join(ws, ".cursor", "hooks.json"));
+  fs.mkdirSync(path.join(ws, ".cursor", "cco"));
+  assert.equal(hasProjectLeftovers(ws), true);
+  fs.rmSync(ws, { recursive: true, force: true });
+});

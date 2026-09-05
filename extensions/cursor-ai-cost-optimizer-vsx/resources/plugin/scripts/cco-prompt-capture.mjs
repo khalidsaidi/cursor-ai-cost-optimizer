@@ -10,7 +10,7 @@ import { loadConfig } from "./lib/config.mjs";
 import { parseOverride, heuristicScores, decideTier, isQuestionLike, isTinyTask } from "./lib/scorer.mjs";
 import { updateSession, loadSession, createSession, normalizeModelId } from "./lib/session.mjs";
 import { readJsonSafe } from "./lib/common.mjs";
-import { refreshDiscoveryIfStale } from "./cco-session-start.mjs";
+import { refreshDiscoveryIfStale, fullSessionContext } from "./cco-session-start.mjs";
 
 async function main() {
   const payload = safeJsonParse((await readStdin()).trim() || "{}");
@@ -44,8 +44,17 @@ async function main() {
     writeJson(paths.lastPromptPath, record);
     // In the IDE, sessionStart is not delivered per chat; the first user prompt is where the parent
     // conversation becomes known. Create the session here if sessionStart did not.
-    if (payload.conversation_id && !loadSession(workspace, payload.conversation_id)) {
-      createSession({ workspace, conversationId: payload.conversation_id, model: normalizeModelId(payload.model), payload });
+    let briefing = null;
+    if (payload.conversation_id) {
+      const existing = loadSession(workspace, payload.conversation_id);
+      if (!existing) {
+        createSession({ workspace, conversationId: payload.conversation_id, model: normalizeModelId(payload.model), payload });
+      }
+      // The chat panel Cursor opens with the window never gets a sessionStart: without this, that chat (the
+      // first one most users type into) would have no routing rule at all. Sent once per conversation.
+      if (!existing?.briefed) {
+        briefing = fullSessionContext({ workspace, paths, config, sessionModel: normalizeModelId(payload.model) }) || null;
+      }
     }
     // Each user turn is a new task: reset per-turn gate state so routing applies again.
     updateSession(workspace, payload.conversation_id, (s) => ({
@@ -57,12 +66,21 @@ async function main() {
       delegations: [],
       denials: 0,
       footerSent: false,
+      briefed: s.briefed || Boolean(briefing),
       readCount: 0,
       readNudged: false,
       previousTurns: [...(s.previousTurns || []).slice(-9), { delegations: (s.delegations || []).length, denials: s.denials || 0, directWork: s.directWork || 0 }]
     }));
-    appendJsonl(paths.hooksLogPath, { ...record, event: "beforeSubmitPrompt" });
-  } catch {}
+    appendJsonl(paths.hooksLogPath, { ...record, event: "beforeSubmitPrompt", briefed: Boolean(briefing) });
+    if (briefing) {
+      emit({ continue: true, additional_context: briefing });
+      return;
+    }
+  } catch (error) {
+    if (process.env.CCO_DEBUG) {
+      console.error(error);
+    }
+  }
   emit({ continue: true });
 }
 

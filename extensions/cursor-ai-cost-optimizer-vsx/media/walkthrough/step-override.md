@@ -4,4 +4,4 @@ In the prompt, in plain words: "use the best model for this", "use the cheapest 
 
 From the status bar menu: **Choose tier models** (which model runs Fast, Balanced and Deep, from the models your account can use), **Pause here** (this project works as before), **Savings and tier rates**, **Remove from Cursor**.
 
-In Settings (search "cco"): the same tier models, enforce instead of advise, always delegate, a per-chat budget, cooldown hours, auto-enable, and the status bar figure. User settings apply to every project; workspace settings to one.
+In Settings (search "cost optimizer"): the same tier models, enforce instead of advise, always delegate, a per-chat budget, cooldown hours, auto-enable, and the status bar figure. User settings apply to every project; workspace settings to one.

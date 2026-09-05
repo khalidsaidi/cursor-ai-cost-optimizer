@@ -63,6 +63,10 @@ export function isRouterMode({ session, config, pricing, models }) {
   if (mode === "always") {
     return { router: true, factor: null, reason: "always" };
   }
+  // The user picked the Fast tier's model (Settings / Choose tier models): Fast work goes there, cheaper or not.
+  if (String(config?.modelOverrides?.fast || "").trim()) {
+    return { router: true, factor: null, reason: "fast_model_chosen_by_user" };
+  }
   const sessionModel = session?.model || null;
   const sessionPrice = sessionModel ? resolveModelPrice(sessionModel, pricing, { overrides: config?.pricing?.overrides }) : null;
   const sessionRate = blendedRatePerMillion(sessionPrice);
@@ -153,7 +157,8 @@ export function gateDecision({ toolName, session, config, pricing, models, promp
         }
         return { action: "deny", reason: `quality_${decision?.guardrail || "deep"}`, tier: t, model: models[t], decision, phase: "pre" };
       }
-      if (tierRate && sessionRate && sessionRate / tierRate < minSavings) {
+      const userChosen = Boolean(String(config?.modelOverrides?.[t] || "").trim());
+      if (!userChosen && tierRate && sessionRate && sessionRate / tierRate < minSavings) {
         if (readTool && !explored && asNumber(session.readCount, 0) >= readBudget && models.fast !== "inherit" && models.fast !== sessionModel && !session.readNudged) {
           return { action: "deny", reason: "read_budget_use_explore", phase: "pre", tier: "explore", model: models.fast, decision };
         }
@@ -199,7 +204,7 @@ export function denyMessage({ toolName, verdict, sessionModel, workspace = null 
   if (verdict.phase === "post") {
     return [
       `CCO: ${toolName} is not allowed here after delegation. The subagent already did the work; do not re-read files or re-run its checks on ${sessionModel || "the chat model"}.`,
-      "Reply to the user now by relaying the subagent's final message verbatim (it is written for them), then the footer. If the subagent returned CCO-ESCALATE or CCO-VERIFY: fail, make exactly one more Task call to the next tier up; otherwise no more tool calls."
+      "Reply to the user now by relaying the subagent's final message verbatim (it is written for them), with no cost or tier line of your own. If the subagent returned CCO-ESCALATE or CCO-VERIFY: fail, make exactly one more Task call to the next tier up; otherwise no more tool calls."
     ].join("\n");
   }
   const scores = verdict.decision?.scores

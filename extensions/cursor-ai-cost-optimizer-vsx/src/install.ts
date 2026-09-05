@@ -6,7 +6,7 @@
  * the home directory. The plugin's own `cco-init.mjs --workspace <ws> --no-probe` produces the layout the
  * marketplace plugin would (run with CCO_PLUGIN_ROOT = the extension's bundled plugin copy):
  *   .cursor/hooks.json          merge-preserving entries `node .cursor/cco-hook.mjs <event>` (the shim is committed next to it)
- *   .cursor/agents/*-tier.md     four tier subagents with real models (generated marker; user files never overwritten)
+ *   .cursor/agents/<model>-<tier>.md     four tier subagents with real models (generated marker; user files never overwritten)
  *   .cursor/cco.json            settings, optional ("enabled": false opts the project out); created only when a setting is changed
  *   .cursor/cco-hook.mjs        shim (a no-op for teammates without the plugin)
  *   .cursor/cco/                plugin-path.txt (-> bundled plugin), runtime.json, pricing.json, state/ (git-ignored)
@@ -164,7 +164,7 @@ export function listFiles(dir: string, prefix = ""): string[] {
 function sha256File(filePath: string): string {
   return crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
 }
-function sameFile(a: string, b: string): boolean {
+export function sameFile(a: string, b: string): boolean {
   try {
     const sa = fs.statSync(a);
     const sb = fs.statSync(b);
@@ -244,7 +244,7 @@ export interface NodeRuntime {
   env: Record<string, string>;
   label: string;
 }
-/** cco.nodePath / CCO_NODE, then `node` on PATH, then the current executable run as node (Cursor's own node). */
+/** costOptimizer.nodePath / CCO_NODE, then `node` on PATH, then the current executable run as node (Cursor's own node). */
 const nodeCache = new Map<string, NodeRuntime | null>();
 export function findNode(nodePath?: string | null): NodeRuntime | null {
   const key = `${nodePath ?? ""}|${process.env.CCO_NODE ?? ""}`;
@@ -488,7 +488,7 @@ export function decideHookMode(opts: Options): HookMode {
   const hasBinary = Boolean(opts.binaryPath && fs.existsSync(opts.binaryPath));
   if (pref === "binary") {
     if (!hasBinary) {
-      throw new Error(`cco.hookRuntime is "binary" but this extension build has no hook binary for ${hostTarget()}.`);
+      throw new Error(`costOptimizer.hookRuntime is "binary" but this extension build has no hook binary for ${hostTarget()}.`);
     }
     return "binary";
   }
@@ -523,6 +523,16 @@ export function workspaceStatus(workspace: string): WorkspaceStatus {
 // ---------------------------------------------------------------------------------------------
 
 /** Files earlier (pre-release) extension versions put under .cursor/cco that the plugin layout does not use. */
+/** CCO project-scope files in this workspace: our hook entries, the project hook shim, or the state folder. */
+export function hasProjectLeftovers(workspace: string): boolean {
+  const p = workspacePaths(workspace);
+  const hooks = readJsonOr<HooksFile | null>(p.hooksPath, null);
+  if (hooks && Object.keys(ccoHookEntries(hooks)).length) {
+    return true;
+  }
+  return fs.existsSync(path.join(p.cursorDir, "cco-hook.mjs")) || fs.existsSync(p.ccoDir);
+}
+
 export function cleanupLegacyWorkspace(workspace: string): string[] {
   const p = workspacePaths(workspace);
   const removed: string[] = [];
@@ -704,7 +714,7 @@ export async function uninstallWorkspace(workspace: string, opts: Options): Prom
   if (fs.existsSync(p.ccoDir)) {
     fs.rmSync(p.ccoDir, { recursive: true, force: true });
   }
-  removed.push(".cursor/cco/", ".cursor/cco-hook.mjs", ".cursor/cco.json", ".cursor/agents/*-tier.md (generated)");
+  removed.push(".cursor/cco/", ".cursor/cco-hook.mjs", ".cursor/cco.json", ".cursor/agents/<model>-<tier>.md (generated)");
   const files = manifest?.files || extensionAssetList(opts.pluginRoot);
   for (const rel of files) {
     if (rel.startsWith(".cursor/cco/")) {

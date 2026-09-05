@@ -62,3 +62,18 @@ test("rate multipliers, staleness, savings and the cost statement", () => {
     fs.rmSync(ws, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 });
+
+test("readLastDecision: the tier comes from the subagent name suffix, whatever the naming scheme", () => {
+  const { readLastDecision } = require("../../dist/pricing.js");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cco-last-"));
+  const rows = [
+    { ts: "1", final: "cco-deep", model: "claude-opus-5-thinking-high", estimateUsd: 0.5, chatEstimateUsd: 0.4 },
+    { ts: "2", final: "composer-2.5-fast", model: "composer-2.5", estimateUsd: 0.02, chatEstimateUsd: 0.11 },
+  ];
+  fs.writeFileSync(path.join(dir, "decisions.jsonl"), rows.map((r) => JSON.stringify(r)).join("\n"));
+  const last = readLastDecision(dir, dir);
+  assert.equal(last.tier, "fast");
+  assert.equal(last.model, "composer-2.5");
+  assert.ok(Math.abs(last.savedUsd - 0.09) < 1e-9);
+  fs.rmSync(dir, { recursive: true, force: true });
+});

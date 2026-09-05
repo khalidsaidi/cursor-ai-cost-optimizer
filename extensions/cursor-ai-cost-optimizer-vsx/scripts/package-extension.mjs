@@ -43,6 +43,11 @@ const argv = process.argv.slice(2);
 }
 const all = argv.includes("--all");
 const skipCompile = argv.includes("--skip-compile");
+// The binaries are built from resources/entry (a copy of the plugin): refresh that copy first, so a dev-machine
+// package can never ship hooks older than the plugin sources next to it.
+if (!skipCompile) {
+  run(process.execPath, [path.join(root, "scripts", "sync-assets.mjs")]);
+}
 const noBinaries = argv.includes("--no-binaries");
 const targetFlag = argv.indexOf("--target");
 const targets = noBinaries ? ["universal"] : all ? Object.keys(TARGETS) : [targetFlag !== -1 ? argv[targetFlag + 1] : hostTarget()];

@@ -201,11 +201,15 @@ test("hooks are inert until enabled and respect a workspace opt-out", () => {
 test("prompt capture hook stores last prompt with override and heuristic tier, and resets per-turn gate state", () => {
   const ws = readyWorkspace();
   const out = runHook("cco-prompt-capture.mjs", { hook_event_name: "beforeSubmitPrompt", conversation_id: "c9", prompt: "[cco:deep] refactor auth", workspace_roots: [ws] });
-  assert.deepEqual(out, { continue: true });
+  assert.equal(out.continue, true);
+  // a chat that never had a sessionStart (the panel Cursor opens with the window) is briefed on its first prompt, once
+  assert.match(out.additional_context, /composer-2\.5-fast/);
   const last = JSON.parse(fs.readFileSync(workspacePaths(ws).lastPromptPath, "utf8"));
   assert.equal(last.override, "deep");
   assert.equal(last.conversation_id, "c9");
   assert.equal(last.prompt, undefined, "no prompt text is stored");
+  const again = runHook("cco-prompt-capture.mjs", { hook_event_name: "beforeSubmitPrompt", conversation_id: "c9", prompt: "and now the tests", workspace_roots: [ws] });
+  assert.deepEqual(again, { continue: true });
 
   createSession({ workspace: ws, conversationId: "c10", model: "claude-opus-5-thinking-high" });
   saveSession(ws, { ...loadSession(ws, "c10"), delegations: [{ agent: "fast-tier" }], denials: 2 });
@@ -672,4 +676,17 @@ test("dispatcher: two subagents stopping in the same generation are two events, 
   assert.match(String(second.followup_message), /deep-tier could not start/, "the second stop must be processed on its own");
   const replay = JSON.parse(await dispatch("subagentStop", JSON.stringify({ ...base, subagent_id: "b", subagent_type: "deep-tier", model: "claude-opus-5-thinking-high", status: "error" })));
   assert.match(String(replay.followup_message), /deep-tier could not start/, "an exact duplicate replays the same answer");
+});
+
+test("a tier model the user picked is used as chosen, even when it is not cheaper than the chat model", () => {
+  const ws = readyWorkspace({ "fast-tier": "claude-opus-5-thinking-high", "balanced-tier": "claude-sonnet-5-thinking-high", "deep-tier": "claude-opus-5-thinking-high", "tier-verifier": "composer-2.5", "fast-research": "composer-2.5" });
+  fs.mkdirSync(path.join(ws, ".cursor"), { recursive: true });
+  fs.writeFileSync(path.join(ws, ".cursor", "cco.json"), JSON.stringify({ modelOverrides: { fast: "claude-opus-5-thinking-high" } }));
+  createSession({ workspace: ws, conversationId: "pick-1", model: "cursor-grok-4.6-high" });
+  const out = runHook("cco-task-guard.mjs", { hook_event_name: "preToolUse", conversation_id: "pick-1", model: "cursor-grok-4.6-high", tool_name: "Task", tool_input: { subagent_type: "claude-opus-5-fast", prompt: "CCO-SCORES: complexity=1 risk=1 breadth=1 uncertainty=0 latency=0\nAdd sub()" }, workspace_roots: [ws] });
+  assert.equal(out.permission, "allow", "not turned into in-chat work");
+  assert.doesNotMatch(String(out.user_message), /Staying in chat/);
+  const start = runHook("cco-session-start.mjs", { hook_event_name: "sessionStart", conversation_id: "pick-2", model: "cursor-grok-4.6-high", workspace_roots: [ws] });
+  assert.doesNotMatch(start.additional_context, /answer simple requests directly/);
+  assert.match(start.additional_context, /chosen by the user/);
 });

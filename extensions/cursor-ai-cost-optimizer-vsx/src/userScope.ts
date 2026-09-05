@@ -1,7 +1,7 @@
 /**
  * User scope ("Everywhere"): the Copilot-style footprint. Nothing is written into any repository.
  *   ~/.cursor/hooks.json          CCO entries merged in (absolute commands carrying --scope user --state-root)
- *   ~/.cursor/agents/*-tier.md     the five tier subagents (Cursor honors `model:` at user level)
+ *   ~/.cursor/agents/<model>-<tier>.md     the five tier subagents (Cursor honors `model:` at user level)
  *   <globalStorage>/cco/          private state root: runtime.json, pricing.json, plugin/ (rule + commands +
  *                                 skills handed to Cursor per workspace via workspaceOpen.pluginPaths),
  *                                 workspaces/<slug>/ (per-project state, pause flag), bin/ (optional binary)
@@ -11,7 +11,7 @@ import * as crypto from "crypto";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { binaryFileName, findNode, readAgentNames, runPluginScriptAsync, type HookMode, type Options, type RunResult } from "./install";
+import { binaryFileName, findNode, readAgentNames, runPluginScriptAsync, type HookMode, type Options, type RunResult, sameFile } from "./install";
 
 export interface UserPaths {
   root: string;
@@ -112,7 +112,7 @@ export function decideUserHookMode(opts: Options): HookMode {
   const hasBinary = Boolean(opts.binaryPath && fs.existsSync(opts.binaryPath));
   if (pref === "binary") {
     if (!hasBinary) {
-      throw new Error("cco.hookRuntime is \"binary\" but this extension build has no hook binary for this platform.");
+      throw new Error("costOptimizer.hookRuntime is \"binary\" but this extension build has no hook binary for this platform.");
     }
     return "binary";
   }
@@ -168,12 +168,24 @@ export async function doctorUser(opts: Options, stateRoot: string): Promise<{ in
   if (!s.manifest) {
     return { installed: false, changed: false, actions: [] };
   }
-  const stale = s.manifest.pluginRoot !== opts.pluginRoot || (opts.extensionVersion && s.manifest.extensionVersion !== opts.extensionVersion) || !s.installed;
-  if (!stale) {
+  const p = userPaths(stateRoot);
+  const actions: string[] = [];
+  if (s.manifest.pluginRoot !== opts.pluginRoot || (opts.extensionVersion && s.manifest.extensionVersion !== opts.extensionVersion) || !s.installed) {
+    actions.push("repointed_after_update");
+  }
+  // Same version reinstalled with a different bundled binary (a rebuilt VSIX): the copy under the state root is what runs.
+  if (s.manifest.hookMode === "binary" && opts.binaryPath && fs.existsSync(opts.binaryPath) && !sameFile(opts.binaryPath, p.binaryPath)) {
+    actions.push("binary_refreshed");
+  }
+  // Pre-0.3 tier subagents (cco-fast, cco-deep, …) still present: the model-named ones replace them.
+  if (fs.existsSync(p.agentsDir) && fs.readdirSync(p.agentsDir).some((f) => /^cco-(fast|balanced|deep|explore|verifier)\.md$/.test(f))) {
+    actions.push("legacy_agents_replaced");
+  }
+  if (!actions.length) {
     return { installed: true, changed: false, actions: [] };
   }
   await installUser({ ...opts, probe: false }, stateRoot);
-  return { installed: true, changed: true, actions: ["repointed_after_update"] };
+  return { installed: true, changed: true, actions };
 }
 
 export function pauseWorkspace(opts: Options, stateRoot: string, workspace: string, paused: boolean): Promise<RunResult> {
@@ -211,7 +223,7 @@ export async function uninstallUser(opts: Options, stateRoot: string): Promise<{
     }
     fs.rmSync(p.root, { recursive: true, force: true });
   }
-  return { init, removed: [p.hooksPath, `${p.agentsDir}/*-tier.md`, p.root] };
+  return { init, removed: [p.hooksPath, `${p.agentsDir}/<model>-<tier>.md`, p.root] };
 }
 
 /** Kill switch: strip CCO's entries from ~/.cursor/hooks.json only (agents, state and manifest stay; Set Up / Update restores). */

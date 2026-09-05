@@ -35,7 +35,7 @@ describe('AI Cost Optimizer extension', () => {
     assert.ok(api && api.stateRoot, 'activate() exposes the state root');
     const file = path.join(api.stateRoot, 'cco.json');
     assert.ok(fs.existsSync(file), 'settings are mirrored at activation');
-    const cfg = vscode.workspace.getConfiguration('cco');
+    const cfg = vscode.workspace.getConfiguration('costOptimizer');
     await cfg.update('chatBudgetUsd', 3, vscode.ConfigurationTarget.Global);
     await new Promise((r) => setTimeout(r, 1500));
     const written = JSON.parse(fs.readFileSync(file, 'utf8'));

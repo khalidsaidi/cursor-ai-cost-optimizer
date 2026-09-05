@@ -135,8 +135,8 @@ async function main() {
     `  DEEP      → ${tiers.deep.model}  (${tiers.deep.pricePerMillion})`,
     "",
     user
-      ? `Files: ${hooks.file} (CCO entries merged), ${paths.agentsDir}/cco-*.md, and a private state folder at ${paths.root}. No project files.`
-      : `Files (all inside ${rel(paths.cursorDir)}/): hooks.json + cco-hook.mjs (commit together; a no-op for teammates without the plugin), agents/cco-*.md, cco/ (state; ignores itself in git). Settings live in cco.json only if you create one (/cco-models writes it).`
+      ? `Files: ${hooks.file} (CCO entries merged), ${paths.agentsDir}/<model>-<tier>.md, and a private state folder at ${paths.root}. No project files.`
+      : `Files (all inside ${rel(paths.cursorDir)}/): hooks.json + cco-hook.mjs (commit together; a no-op for teammates without the plugin), agents/<model>-<tier>.md, cco/ (state; ignores itself in git). Settings live in cco.json only if you create one (/cco-models writes it).`
   ];
   if (runtime.health.notes.length) {
     lines.push("", `Notes: ${runtime.health.notes.join("; ")}`);

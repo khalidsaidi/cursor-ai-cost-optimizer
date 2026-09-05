@@ -34,7 +34,7 @@ function valuesFrom(cfg: vscode.WorkspaceConfiguration, level: "global" | "works
  * values go to the project's .cursor/cco.json only when the user set one at that level.
  */
 export function syncSettingsToPluginConfig(stateRoot: string, workspace: string | null): { tierModelsChanged: boolean } {
-  const cfg = vscode.workspace.getConfiguration("cco");
+  const cfg = vscode.workspace.getConfiguration("costOptimizer");
   let tierModelsChanged = false;
   const global = valuesFrom(cfg, "global");
   tierModelsChanged = mergeConfigFile(path.join(stateRoot, "cco.json"), settingsToPluginConfig(global.values)).tierModelsChanged || tierModelsChanged;

@@ -213,7 +213,9 @@ async function main() {
     const session = workspace && payload.conversation_id ? loadSession(workspace, payload.conversation_id) : null;
     const sessionModel = session?.model || normalizeModelId(payload.model);
     const qualityDriven = Boolean(result.override && result.override !== "auto") || Boolean(result.guardrail && String(result.guardrail).startsWith("risk")) || result.learning?.escalated;
-    if (config?.enforcement?.requireDelegation !== "always" && !qualityDriven && sessionModel && result.model !== "inherit") {
+    // A tier model the user picked (Settings / Choose tier models) is used as chosen, cheaper or not.
+    const userChosen = Boolean(String(config?.modelOverrides?.[result.targetTier] || "").trim());
+    if (config?.enforcement?.requireDelegation !== "always" && !qualityDriven && !userChosen && sessionModel && result.model !== "inherit") {
       const pricing = loadPricing(paths?.pricingPath);
       const sessionRate = blendedRatePerMillion(resolveModelPrice(sessionModel, pricing, { overrides: config?.pricing?.overrides }));
       const tierRate = blendedRatePerMillion(resolveModelPrice(result.model, pricing, { overrides: config?.pricing?.overrides }));

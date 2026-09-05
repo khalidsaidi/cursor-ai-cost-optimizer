@@ -72,7 +72,7 @@ export function scheduleBackgroundRefresh({ workspace, paths, force = false }) {
 
 /** True when delegating FAST work would not save materially over the session model (Composer, Auto, …). */
 export function sessionIsCheap({ workspace, config, sessionModel }) {
-  if (!sessionModel || config?.enforcement?.requireDelegation === "always") {
+  if (!sessionModel || config?.enforcement?.requireDelegation === "always" || String(config?.modelOverrides?.fast || "").trim()) {
     return false;
   }
   try {
@@ -184,6 +184,24 @@ export function refreshDiscoveryIfStale({ workspace, paths, config, background =
   }
 }
 
+/**
+ * Everything a chat needs to route: the tier list with prices, and (user scope, which has no rule file in the
+ * project) the routing rule itself. Sent by sessionStart, or by beforeSubmitPrompt for a chat that never got
+ * a sessionStart (the chat panel Cursor opens with the window, on every version tested).
+ */
+export function fullSessionContext({ workspace, paths, config, sessionModel }) {
+  let context = buildSessionContext({ workspace, config, sessionModel });
+  if (paths.scope === "user") {
+    // A cheap chat model (Composer, Auto) rarely needs routing: it gets the short rule (risk escalation and
+    // overrides only) instead of paying for the full one on every turn.
+    const rule = sessionIsCheap({ workspace, config, sessionModel }) ? compactRuleText() : routingRuleText();
+    if (rule) {
+      context += `\n\n${rule}`;
+    }
+  }
+  return context;
+}
+
 async function main() {
   const payload = safeJsonParse((await readStdin()).trim() || "{}");
   const workspace = workspaceFromPayload(payload);
@@ -220,17 +238,7 @@ async function main() {
   }
   let additionalContext = "";
   try {
-    additionalContext = buildSessionContext({ workspace, config, sessionModel });
-    // User scope has no rule file in the project: the routing rule rides along here, for this very window,
-    // every Cursor version with hooks, and the CLI alike (no plugin path, no reload).
-    if (paths.scope === "user") {
-      // A cheap chat model (Composer, Auto) rarely needs routing: it gets the short rule (risk escalation and
-      // overrides only) instead of paying for the full one on every turn.
-      const rule = sessionIsCheap({ workspace, config, sessionModel }) ? compactRuleText() : routingRuleText();
-      if (rule) {
-        additionalContext += `\n\n${rule}`;
-      }
-    }
+    additionalContext = fullSessionContext({ workspace, paths, config, sessionModel });
   } catch (error) {
     additionalContext = "";
     hookLog(paths, { event: "sessionStart", contextError: String(error?.message || error) });
@@ -252,6 +260,11 @@ async function main() {
   const output = { continue: true, cco: { pricing: pricing.action, discovery: discovery.action, at: nowIso() } };
   if (additionalContext) {
     output.additional_context = additionalContext;
+    if (payload.conversation_id) {
+      try {
+        updateSession(workspace, payload.conversation_id, () => ({ briefed: true }));
+      } catch {}
+    }
   }
   emit(output);
 }

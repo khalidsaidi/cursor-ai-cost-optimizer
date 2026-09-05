@@ -8,7 +8,7 @@ the Cursor plugin marketplace, and ships a self-contained hook binary for machin
 
 ## Getting started
 
-1. **Install it.** It turns itself on, quietly: the status bar item switches to `⚡ AI Cost` and a Get Started page shows your three tiers with a **Choose tier models** button; no popup, no question, no reload, nothing written into any project: the Cost Optimizer registers in Cursor's own user-level config (`~/.cursor/hooks.json` entries, `~/.cursor/agents/*-tier.md`) and keeps its state in the extension's storage, the way Copilot keeps its state in the editor. **Remove** in the status menu takes it all back out.
+1. **Install it.** It turns itself on, quietly: the status bar item switches to `⚡ AI Cost` and a Get Started page shows your three tiers with a **Choose tier models** link; no popup, no question, no reload, nothing written into any project: the Cost Optimizer registers in Cursor's own user-level config (`~/.cursor/hooks.json` entries, `~/.cursor/agents/<model>-<tier>.md`) and keeps its state in the extension's storage, the way Copilot keeps its state in the editor. **Remove** in the status menu takes it all back out.
    - Prefer repo files? `AI Cost Optimizer: Turn On / Update Models` also offers **This project only**: 8 files under the project's `.cursor/`, shown to you before anything is written.
 2. **Work normally.** Keep your usual chat model. A routed task shows a **Fast Tier** (or Balanced / Deep) subagent card whose line reads `Fast on Composer 2.5 · ~$0.02, saves ~$0.04`; risky work goes to the strong tier and says so. The status bar shows what you have saved in the project; its tooltip shows the tiers, the last task and the total.
 3. **Steer when you want to.** **Choose tier models** in the status menu picks which model runs Fast, Balanced and Deep. `[cco:fast]`, `[cco:balanced]`, `[cco:deep]` in a prompt force a tier for one request; `[cco:off]` bypasses routing once. **Pause here** switches a project off without removing anything.
@@ -42,19 +42,19 @@ the Cursor plugin marketplace, and ships a self-contained hook binary for machin
 
 ## Settings
 
-Everything a user is expected to touch is in Cursor's Settings UI under **AI Cost Optimizer** (search "cco"). User settings apply to every project; the same keys set at workspace level apply to that project only (and only then does a `.cursor/cco.json` appear there). Changes take effect on the next hook call; tier model changes re-map the tiers at once.
+Everything a user is expected to touch is in Cursor's Settings UI under **AI Cost Optimizer** (search "cost optimizer"). User settings apply to every project; the same keys set at workspace level apply to that project only (and only then does a `.cursor/cco.json` appear there). Changes take effect on the next hook call; tier model changes re-map the tiers at once.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| `cco.autoEnable` | on | Turn the optimizer on automatically after install (once per machine; Undo is on the notification). |
-| `cco.tierModels.fast` / `.balanced` / `.deep` | empty (automatic) | Model id that runs each tier, e.g. `composer-2.5`, `claude-sonnet-5-thinking-high`. **Choose tier models** in the status menu writes these from the list of models your account can use. |
-| `cco.enforceRouting` | off | Enforce cost routing instead of advising it: a chat model materially pricier than the tier's model may not edit or run commands itself. |
-| `cco.alwaysDelegate` | off | Route every request that needs tools through a tier subagent, even when it is not cheaper (keeps costs logged per tier). |
-| `cco.chatBudgetUsd` | 0 (off) | Estimated spend per chat after which you are warned (80%) and routing is forced to Fast beyond twice the budget. |
-| `cco.modelCooldownHours` | 6 | How long a model that refused to start (usage limit) is skipped; tasks step down a tier meanwhile. |
-| `cco.showSavingsInStatusBar` | on | `⚡ Saved ~$4.12` in the status bar, or just `AI Cost`. |
-| `cco.hookRuntime` | auto | Node.js when available, else the bundled binary. |
-| `cco.nodePath` | empty | Node.js executable for the setup scripts. |
+| `costOptimizer.autoEnable` | on | Turn the optimizer on automatically after install (once per machine; Remove from Cursor turns it off). |
+| `costOptimizer.tierModels.fast` / `.balanced` / `.deep` | empty (automatic) | Model id that runs each tier, e.g. `composer-2.5`, `claude-sonnet-5-thinking-high`. **Choose tier models** in the status menu writes these from the list of models your account can use. |
+| `costOptimizer.enforceRouting` | off | Enforce cost routing instead of advising it: a chat model materially pricier than the tier's model may not edit or run commands itself. |
+| `costOptimizer.alwaysDelegate` | off | Route every request that needs tools through a tier subagent, even when it is not cheaper (keeps costs logged per tier). |
+| `costOptimizer.chatBudgetUsd` | 0 (off) | Estimated spend per chat after which you are warned (80%) and routing is forced to Fast beyond twice the budget. |
+| `costOptimizer.modelCooldownHours` | 6 | How long a model that refused to start (usage limit) is skipped; tasks step down a tier meanwhile. |
+| `costOptimizer.showSavingsInStatusBar` | on | `⚡ Saved ~$4.12` in the status bar, or just `AI Cost`. |
+| `costOptimizer.hookRuntime` | auto | Node.js when available, else the bundled binary. |
+| `costOptimizer.nodePath` | empty | Node.js executable for the setup scripts. |
 
 Advanced routing knobs (scoring weights, thresholds, per-tier tool budgets) stay in the plugin's `cco.json` (`plugins/cursor-ai-cost-optimizer/config/defaults.json` documents them) and are not needed day to day.
 
@@ -64,7 +64,7 @@ Advanced routing knobs (scoring weights, thresholds, per-tier tool budgets) stay
 - Optional: the Cursor CLI (`cursor-agent`) logged in. With it, setup maps the tiers from your account's real model list and verifies each one; without it, the tiers come from the bundled catalogue (FAST composer-2.5, BALANCED Sonnet, DEEP Opus) and Cursor applies your plan's access rules when a subagent runs.
 - **Node.js >= 18 on the PATH Cursor sees.** The hook entries in `.cursor/hooks.json` run `node .cursor/cco-hook.mjs`,
   so the file stays portable for every teammate who clones the repo. On a machine without Node, the bundled
-  `cco-hook` binary is used instead (`cco.hookRuntime`), which makes the hook entries point at a machine-local path.
+  `cco-hook` binary is used instead (`costOptimizer.hookRuntime`), which makes the hook entries point at a machine-local path.
 - A trusted, local workspace (the extension writes `.cursor/` files and installs hooks that execute code).
 
 ## Platform support
@@ -97,7 +97,7 @@ Measured against the bar set by the big first-party extensions (Copilot Chat, Am
 | Projects you paused / did not set up | Paused projects: the chat is told to work normally and any `cco-*` delegation is turned back into in-chat work (the rule and subagents are user-level and cannot be unloaded per project). | Untouched: no files, no messages, no hooks. |
 | On extension update | Hook entries are repointed silently. | The pinned plugin path and binary are refreshed silently. |
 | On every activation | 1.5 s after startup, off the extension host thread: a repair pass, then a self-check that runs the real hook command once. If it fails or does not answer in 6 s, the hooks are turned off and you get one message. | same |
-| If you want it off right now | Status menu → **Turn hooks off now**: hook entries removed, nothing else touched; Update models restores. | same |
+| If you want it off right now | Status menu → **Emergency stop**: hook entries removed, nothing else touched; Update models restores. | same |
 | On Remove | Hook entries, subagents and state removed. Other tools' entries kept. Nothing left. | Everything under `.cursor/` that CCO wrote is removed; other tools' hook entries and your files are kept. |
 | If you uninstall the extension | Its uninstall hook removes the hook entries, the subagents and its storage. Nothing left. | Project files stay until you run Remove; the shim retires its own hook entries after 7 days. |
 
@@ -109,7 +109,7 @@ The same conventions the first-party extensions (Copilot Chat, Amazon Q, Gemini 
 - Every command is wrapped; errors go to the **AI Cost Optimizer** log channel and surface as one message with **View Logs**.
 - Long operations run under a cancellable progress notification; cancelling kills the child process.
 - Commands declare `enablement` on context keys (`cco.mode`, `cco.paused`), so the palette only offers what applies.
-- Setting changes (`cco.hookRuntime`, `cco.nodePath`) take effect immediately through a repair pass.
+- Setting changes (`costOptimizer.hookRuntime`, `costOptimizer.nodePath`) take effect immediately through a repair pass.
 - Self-check on activation turns the hooks off if the real hook command fails; kill switch in the status menu.
 - Strict TypeScript plus type-aware ESLint (unhandled promises are errors) gate CI; user-facing strings go through `vscode.l10n` with an exported bundle.
 - Workspace trust and virtual workspaces are declared; state lives in the extension's storage, never in your repo (Everywhere) or only under `.cursor/` (project scope).

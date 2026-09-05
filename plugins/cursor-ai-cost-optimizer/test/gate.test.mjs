@@ -344,3 +344,14 @@ test("tiny one-file edits stay in the chat even in router mode; new CLI turns re
   assert.equal(sess.denials, 0);
   assert.equal(userPromptFromTranscriptTurn(transcript, -1), "second task");
 });
+
+test("a Fast model the user picked switches routing on even when it is pricier than the chat model", () => {
+  const ws = fs.mkdtempSync(path.join(os.tmpdir(), "cco-pick-"));
+  writeWorkspaceAgents(ws, { "fast-tier": "claude-opus-5-thinking-high", "balanced-tier": "claude-sonnet-5-thinking-high", "deep-tier": "claude-opus-5-thinking-high", "tier-verifier": "composer-2.5", "fast-research": "composer-2.5" });
+  fs.mkdirSync(path.join(ws, ".cursor"), { recursive: true });
+  fs.writeFileSync(path.join(ws, ".cursor", "cco.json"), JSON.stringify({ modelOverrides: { fast: "claude-opus-5-thinking-high" } }));
+  createSession({ workspace: ws, conversationId: "pick-g", model: "cursor-grok-4.6-high" });
+  runHook("cco-prompt-capture.mjs", { hook_event_name: "beforeSubmitPrompt", conversation_id: "pick-g", model: "cursor-grok-4.6-high", prompt: "Add a sub(a, b) function to calc.mjs and export it", workspace_roots: [ws] });
+  const write = runHook("cco-tool-gate.mjs", { hook_event_name: "preToolUse", conversation_id: "pick-g", model: "cursor-grok-4.6-high", tool_name: "Write", tool_input: {}, workspace_roots: [ws] });
+  assert.match(String(write.agent_message), /subagent_type="claude-opus-5-fast"/, "the chat is told to delegate to the model the user chose");
+});

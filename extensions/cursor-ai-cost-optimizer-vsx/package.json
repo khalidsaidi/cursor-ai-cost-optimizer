@@ -39,7 +39,7 @@
       "supported": false,
       "description": "Writes .cursor/ files and installs hooks that execute a binary.",
       "restrictedConfigurations": [
-        "cco.nodePath"
+        "costOptimizer.nodePath"
       ]
     },
     "virtualWorkspaces": {
@@ -140,7 +140,7 @@
     "configuration": {
       "title": "AI Cost Optimizer",
       "properties": {
-        "cco.hookRuntime": {
+        "costOptimizer.hookRuntime": {
           "type": "string",
           "enum": [
             "auto",
@@ -157,56 +157,56 @@
           "markdownDescription": "How the hook entries are executed. `auto` uses Node.js >= 18 when available and falls back to the bundled `cco-hook` binary. Changing this takes effect on the next **Turn On / Update Models** or activation-time repair pass.",
           "order": 20
         },
-        "cco.nodePath": {
+        "costOptimizer.nodePath": {
           "type": "string",
           "default": "",
           "scope": "machine",
-          "markdownDescription": "Absolute path of the Node.js executable used to run the plugin's setup scripts (`cco-init`, discovery). Default: `node` on PATH, then Cursor's own Node runtime. Ignored when `#cco.hookRuntime#` is `binary`.",
+          "markdownDescription": "Absolute path of the Node.js executable used to run the plugin's setup scripts (`cco-init`, discovery). Default: `node` on PATH, then Cursor's own Node runtime. Ignored when `#costOptimizer.hookRuntime#` is `binary`.",
           "order": 21
         },
-        "cco.autoEnable": {
+        "costOptimizer.autoEnable": {
           "type": "boolean",
           "default": true,
           "scope": "application",
           "order": 1,
-          "markdownDescription": "Turn the Cost Optimizer on for Cursor automatically after it is installed (once per machine; **Undo** is on the notification). Off: nothing happens until you run **AI Cost Optimizer: Turn On / Update Models**."
+          "markdownDescription": "Turn the Cost Optimizer on automatically after it is installed (once per machine; **Remove from Cursor** in the status menu turns it off). Off: nothing happens until you run **AI Cost Optimizer: Turn On / Update Models**."
         },
-        "cco.tierModels.fast": {
+        "costOptimizer.tierModels.fast": {
           "type": "string",
           "default": "",
           "scope": "resource",
           "order": 2,
           "markdownDescription": "Model id that runs the **Fast** tier (quick answers, small edits), e.g. `composer-2.5`. Empty = the cheapest sufficient model on your account. The status menu's **Choose tier models** lists what your account can use."
         },
-        "cco.tierModels.balanced": {
+        "costOptimizer.tierModels.balanced": {
           "type": "string",
           "default": "",
           "scope": "resource",
           "order": 3,
           "markdownDescription": "Model id that runs the **Balanced** tier (typical implementation work), e.g. `claude-sonnet-5-thinking-high`. Empty = automatic."
         },
-        "cco.tierModels.deep": {
+        "costOptimizer.tierModels.deep": {
           "type": "string",
           "default": "",
           "scope": "resource",
           "order": 4,
           "markdownDescription": "Model id that runs the **Deep** tier (risky or complex work), e.g. `claude-opus-5-thinking-high`. Empty = automatic."
         },
-        "cco.enforceRouting": {
+        "costOptimizer.enforceRouting": {
           "type": "boolean",
           "default": false,
           "scope": "resource",
           "order": 5,
           "markdownDescription": "Enforce cost routing instead of advising it. Off (default): the chat model is advised to delegate routine work and only your `[cco:…]` overrides and risk escalations are enforced. On: a chat model that is materially pricier than the tier's model may not edit or run commands itself; it must delegate."
         },
-        "cco.alwaysDelegate": {
+        "costOptimizer.alwaysDelegate": {
           "type": "boolean",
           "default": false,
           "scope": "resource",
           "order": 6,
           "markdownDescription": "Route every request that needs tools through a tier subagent, even when the tier's model is not cheaper than your chat model (useful to keep costs logged per tier)."
         },
-        "cco.chatBudgetUsd": {
+        "costOptimizer.chatBudgetUsd": {
           "type": "number",
           "default": 0,
           "minimum": 0,
@@ -214,7 +214,7 @@
           "order": 7,
           "markdownDescription": "Estimated spend per chat, in USD, after which you are warned (at 80%) and routing is forced to the Fast tier beyond twice the budget. `0` = no budget."
         },
-        "cco.modelCooldownHours": {
+        "costOptimizer.modelCooldownHours": {
           "type": "number",
           "default": 6,
           "minimum": 1,
@@ -223,7 +223,7 @@
           "order": 8,
           "markdownDescription": "How long a model that refused to start a subagent (usage limit) is skipped before it is tried again. Tasks step down a tier meanwhile."
         },
-        "cco.showSavingsInStatusBar": {
+        "costOptimizer.showSavingsInStatusBar": {
           "type": "boolean",
           "default": true,
           "scope": "application",
@@ -241,7 +241,8 @@
           {
             "id": "cco.step.on",
             "title": "It is on. These are your tiers",
-            "description": "Fast, Balanced and Deep each run on a model from your account; the table shows the mapping as of opening this page (hover **AI Cost** in the status bar for the current one). To change it: [Choose tier models](command:cco.chooseTierModels), or Settings (search \"cco\").",
+            "description": "Fast, Balanced and Deep each run on a model from your account; the table shows the mapping as of opening this page (hover **AI Cost** in the status bar for the current one). To change it: [Choose tier models](command:cco.chooseTierModels), or [Settings](command:workbench.action.openSettings?%5B%22cost%20optimizer%22%5D).",
+            "when": "!cco.tiersPage",
             "media": {
               "markdown": "media/walkthrough/step-install.md"
             },
@@ -250,9 +251,45 @@
             ]
           },
           {
+            "id": "cco.step.on1",
+            "title": "It is on. These are your tiers",
+            "description": "Fast, Balanced and Deep each run on a model from your account; the table shows the mapping as of opening this page (hover **AI Cost** in the status bar for the current one). To change it: [Choose tier models](command:cco.chooseTierModels), or [Settings](command:workbench.action.openSettings?%5B%22cost%20optimizer%22%5D).",
+            "when": "cco.tiersPage == 1",
+            "media": {
+              "markdown": "media/walkthrough/step-tiers-1.md"
+            },
+            "completionEvents": [
+              "onCommand:cco.chooseTierModels"
+            ]
+          },
+          {
+            "id": "cco.step.on2",
+            "title": "It is on. These are your tiers",
+            "description": "Fast, Balanced and Deep each run on a model from your account; the table shows the mapping as of opening this page (hover **AI Cost** in the status bar for the current one). To change it: [Choose tier models](command:cco.chooseTierModels), or [Settings](command:workbench.action.openSettings?%5B%22cost%20optimizer%22%5D).",
+            "when": "cco.tiersPage == 2",
+            "media": {
+              "markdown": "media/walkthrough/step-tiers-2.md"
+            },
+            "completionEvents": [
+              "onCommand:cco.chooseTierModels"
+            ]
+          },
+          {
+            "id": "cco.step.on3",
+            "title": "It is on. These are your tiers",
+            "description": "Fast, Balanced and Deep each run on a model from your account; the table shows the mapping as of opening this page (hover **AI Cost** in the status bar for the current one). To change it: [Choose tier models](command:cco.chooseTierModels), or [Settings](command:workbench.action.openSettings?%5B%22cost%20optimizer%22%5D).",
+            "when": "cco.tiersPage == 3",
+            "media": {
+              "markdown": "media/walkthrough/step-tiers-3.md"
+            },
+            "completionEvents": [
+              "onCommand:cco.chooseTierModels"
+            ]
+          },
+          {
             "id": "cco.step.chat",
             "title": "Work as usual",
-            "description": "Keep your chat model. Routine work runs on a cheaper model through a **Fast Tier** subagent (hover the card for the model); risky work goes to **Deep Tier**. Nothing is blocked, nothing is written into your project.",
+            "description": "Keep your chat model. Routine work runs on a cheaper model through a subagent named after that model and its tier (a **Composer 2.5 Fast** card, for example); risky work goes to the Deep tier. Nothing is blocked, nothing is written into your project.",
             "media": {
               "markdown": "media/walkthrough/step-init.md"
             }
@@ -265,8 +302,8 @@
               "markdown": "media/walkthrough/step-override.md"
             },
             "completionEvents": [
-              "onSettingChanged:cco.enforceRouting",
-              "onSettingChanged:cco.chatBudgetUsd"
+              "onSettingChanged:costOptimizer.enforceRouting",
+              "onSettingChanged:costOptimizer.chatBudgetUsd"
             ]
           }
         ]
