@@ -84,3 +84,22 @@ test("plugin copies next to the extension: a local copy is retired (moved under 
   assert.equal(findPluginCopies(home).length, 1, "only the marketplace copy is left");
   fs.rmSync(home, { recursive: true, force: true });
 });
+
+test("remote window: subagents written after it opened are recorded as unknown to it (first setup) or as the previous names (re-map)", () => {
+  const { recordAgentsWrittenAfterOpen } = require("../../dist/userScope.js");
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "cco-win-"));
+  const started = Date.now() - 1000;
+  assert.equal(recordAgentsWrittenAfterOpen(root, [], started, false).written, false, "a local window refreshes its list itself");
+  const first = recordAgentsWrittenAfterOpen(root, [], started, true);
+  assert.deepEqual(first, { written: true, noneOfOurs: true });
+  let rec = JSON.parse(fs.readFileSync(path.join(root, "window-agents.json"), "utf8"));
+  assert.equal(rec.noneOfOurs, true);
+  const remap = recordAgentsWrittenAfterOpen(root, ["composer-2.5-fast", "claude-opus-5-deep"], started, true);
+  assert.deepEqual(remap, { written: true, noneOfOurs: false });
+  rec = JSON.parse(fs.readFileSync(path.join(root, "window-agents.json"), "utf8"));
+  assert.deepEqual(rec.names, ["claude-opus-5-deep", "composer-2.5-fast"]);
+  // a window that opened with the files in place recorded its own list: left alone
+  fs.writeFileSync(path.join(root, "window-agents.json"), JSON.stringify({ ts: new Date().toISOString(), source: "workspaceOpen", names: ["composer-2.5-fast"], noneOfOurs: false }));
+  assert.equal(recordAgentsWrittenAfterOpen(root, [], started, true).written, false);
+  fs.rmSync(root, { recursive: true, force: true });
+});

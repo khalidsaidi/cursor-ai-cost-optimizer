@@ -8,7 +8,7 @@ import { decideHookMode, doctorWorkspace, findBundledBinary, findNode, installWo
 import { costStatement, formatUsd, readSavings, readLastDecision, readTierModels, loadPricing, modelDisplayName, resolveModelPrice, pickerModels } from "./pricing";
 import { syncSettingsToPluginConfig } from "./settings";
 import { hooksLoadedInWindow } from "./hooksLog";
-import { doctorUser, installUser, pauseWorkspace, stripUserHooks, uninstallUser, userHookCommand, userStatus, workspacePaused, workspaceStateDir, findPluginCopies, retirePluginCopies } from "./userScope";
+import { doctorUser, installUser, pauseWorkspace, stripUserHooks, uninstallUser, userHookCommand, userStatus, workspacePaused, workspaceStateDir, findPluginCopies, retirePluginCopies, recordAgentsWrittenAfterOpen, generatedAgentNames } from "./userScope";
 import { runHookCommand } from "./selfcheck";
 import { decideTier, heuristicScores, overrideToken, parseOverride, DEFAULT_CONFIG } from "./scorer";
 
@@ -314,6 +314,7 @@ export function activate(context: vscode.ExtensionContext) {
     return true;
   };
   const runDoctor = async () => {
+    const namesBeforeDoctor = generatedAgentNames();
     try {
       const copies = findPluginCopies();
       if (copies.length) {
@@ -338,7 +339,11 @@ export function activate(context: vscode.ExtensionContext) {
       if (u.installed) {
         log.info(`[doctor] everywhere: ${u.changed ? `repaired (${u.actions.join(", ")})` : "ok"}`);
         if (u.changed && u.actions.some((a) => a === "legacy_agents_replaced" || a === "repointed_after_update")) {
-          noteReload("names");
+          const rec = recordAgentsWrittenAfterOpen(stateRoot, namesBeforeDoctor, activationStarted, Boolean(vscode.env.remoteName));
+          if (rec.written) {
+            noteReload(rec.noneOfOurs ? "finish" : "names");
+            log.info(`[doctor] remote window: subagents rewritten after it opened; routing continues under the previous names until a reload`);
+          }
         }
       }
     } catch (error) {
@@ -442,6 +447,7 @@ export function activate(context: vscode.ExtensionContext) {
       syncSettingsToPluginConfig(stateRoot, firstWorkspace());
       if (scope === "user") {
         // Seconds, not minutes: no per-model probing here (a model the plan refuses is caught at run time and stepped down).
+        const namesBefore = generatedAgentNames();
         const result = await vscode.window.withProgress({ location: vscode.ProgressLocation.Window, title: vscode.l10n.t("AI Cost Optimizer: turning on…"), cancellable: true }, async (_progress, token) => {
           const controller = new AbortController();
           token.onCancellationRequested(() => controller.abort());
@@ -455,7 +461,12 @@ export function activate(context: vscode.ExtensionContext) {
         // The routing rule arrives through the sessionStart hook, so this window routes from the next chat: no reload.
         const tiers = (["fast-tier", "balanced-tier", "deep-tier"] as const).map((a) => `${a === "fast-tier" ? "Fast" : a === "balanced-tier" ? "Balanced" : "Deep"} → ${modelDisplayName(result.agents[a] ?? "inherit", loadPricing(null, bundledPricing))}`).join(" · ");
         flash(args?.firstRun ? vscode.l10n.t("AI Cost Optimizer is on") : vscode.l10n.t("AI Cost Optimizer: {0}", tiers));
-        noteReload(args?.firstRun ? "finish" : "names");
+        // A remote window lists subagents only when it opens: tell the hooks what this window can still use.
+        const rec = recordAgentsWrittenAfterOpen(stateRoot, namesBefore, activationStarted, Boolean(vscode.env.remoteName));
+        if (rec.written) {
+          noteReload(rec.noneOfOurs ? "finish" : "names");
+          log.info(`[install] remote window: subagents written after it opened; ${rec.noneOfOurs ? "work stays in the chat until a reload" : "routing continues under the previous names until a reload"}`);
+        }
         refreshStatus();
         writeWalkthroughMapping(context.extensionPath, result.agents, loadPricing(null, bundledPricing));
         if (args?.firstRun && !context.globalState.get<boolean>("cco.walkthroughShown")) {

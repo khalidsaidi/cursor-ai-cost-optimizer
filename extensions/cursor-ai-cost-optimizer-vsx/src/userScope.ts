@@ -343,3 +343,44 @@ export function retirePluginCopies(stateRoot: string, copies: PluginCopy[]): { r
   }
   return { retired, marketplace };
 }
+
+/**
+ * A remote window (WSL, SSH, container) lists subagents when it opens and does not refresh the list, so subagent
+ * files written after that moment are unknown to it until a reload. When the extension writes them in such a
+ * window it records what the window can still use: the generated names that existed before (aliases now, on the
+ * new models), or none at all for a first setup; the hooks then route under those names, or keep the work in the
+ * chat, instead of sending the model a name the Task tool will reject. workspaceOpen rewrites the record when a
+ * window opens with the files in place.
+ */
+export function recordAgentsWrittenAfterOpen(stateRoot: string, namesBefore: string[], windowStartedAt: number, remote: boolean): { written: boolean; noneOfOurs: boolean } {
+  if (!remote) {
+    return { written: false, noneOfOurs: false };
+  }
+  const file = path.join(stateRoot, "window-agents.json");
+  try {
+    const existing = JSON.parse(fs.readFileSync(file, "utf8")) as { ts?: string; source?: string };
+    if (existing?.ts && Date.parse(existing.ts) >= windowStartedAt && existing.source === "workspaceOpen") {
+      return { written: false, noneOfOurs: false }; // this window recorded its own list: the files were there when it opened
+    }
+  } catch {}
+  const names = [...new Set(namesBefore)].sort();
+  const noneOfOurs = !names.some((n) => /^cco-(fast|balanced|deep|explore|verifier)$|-(fast|balanced|deep|research|verifier)$|-tier$|^fast-research$|^tier-verifier$/.test(n));
+  fs.mkdirSync(stateRoot, { recursive: true });
+  fs.writeFileSync(file, `${JSON.stringify({ ts: new Date().toISOString(), source: "written_after_open", names, noneOfOurs }, null, 2)}\n`, "utf8");
+  return { written: true, noneOfOurs };
+}
+
+/** Generated subagent files present now (any name), for recordAgentsWrittenAfterOpen. */
+export function generatedAgentNames(): string[] {
+  const dir = path.join(os.homedir(), ".cursor", "agents");
+  const out: string[] = [];
+  try {
+    for (const f of fs.readdirSync(dir)) {
+      if (!f.endsWith(".md")) continue;
+      try {
+        if (fs.readFileSync(path.join(dir, f), "utf8").includes(GENERATED_PREFIX)) out.push(f.slice(0, -3));
+      } catch {}
+    }
+  } catch {}
+  return out.sort();
+}
