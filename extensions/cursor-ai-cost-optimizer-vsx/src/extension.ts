@@ -7,6 +7,7 @@ import * as path from "path";
 import { decideHookMode, doctorWorkspace, findBundledBinary, findNode, installWorkspace, plannedFiles, runPluginScriptAsync, stripCcoHooks, uninstallWorkspace, workspacePaths, workspaceStatus, type HookRuntimePreference, type HooksFile, type Options } from "./install";
 import { costStatement, formatUsd, readSavings, readLastDecision, readTierModels, loadPricing, modelDisplayName } from "./pricing";
 import { syncSettingsToPluginConfig } from "./settings";
+import { hooksLoadedInWindow } from "./hooksLog";
 import { doctorUser, installUser, pauseWorkspace, stripUserHooks, uninstallUser, userHookCommand, userStatus, workspacePaused, workspaceStateDir } from "./userScope";
 import { runHookCommand } from "./selfcheck";
 import { decideTier, heuristicScores, overrideToken, parseOverride, DEFAULT_CONFIG } from "./scorer";
@@ -145,6 +146,12 @@ export function activate(context: vscode.ExtensionContext) {
     md.appendMarkdown(`**AI Cost Optimizer** — ${c.mode === "none" ? vscode.l10n.t("off") : c.enabled ? where : vscode.l10n.t("paused in {0}", ws ? path.basename(ws) : "")}\n\n`);
     let warn = false;
     let savedUsd = 0;
+    // Ground truth from Cursor's own hooks log: a team policy or setting can keep hooks from loading.
+    const hooksState = c.mode !== "none" ? hooksLoadedInWindow(context.logUri.fsPath) : { known: false as const };
+    if (hooksState.known && !hooksState.loaded) {
+      warn = true;
+      md.appendMarkdown(`\n$(warning) ${vscode.l10n.t("Cursor did not load the hooks in this window{0}. Routing is off here; a team policy or a Cursor setting may disable hooks.", hooksState.reason ? ` (${hooksState.reason})` : "")}\n`);
+    }
     if (c.mode !== "none" && ws) {
       const cost = costStatement(ws, bundledPricing, c.mode === "user" ? { stateRoot, workspaceStateDir: path.join(workspaceStateDir(stateRoot, ws), "state") } : {});
       for (const line of cost.lines) {
@@ -170,7 +177,7 @@ export function activate(context: vscode.ExtensionContext) {
       md.appendMarkdown(`${vscode.l10n.t("Routes routine work to cheaper models and shows what it saves.")} [${vscode.l10n.t("Turn on")}](command:cco.installCursorAssets?%7B%22scope%22%3A%22user%22%2C%22confirm%22%3Afalse%7D)\n`);
     }
     const savedText = savedUsd >= 0.01 && vscode.workspace.getConfiguration("cco").get<boolean>("showSavingsInStatusBar", true) ? vscode.l10n.t("Saved {0}", formatUsd(savedUsd)) : "AI Cost";
-    status.text = warn ? "$(warning) AI Cost" : c.mode === "none" ? `$(zap) ${vscode.l10n.t("AI Cost: Off")}` : c.enabled ? `$(zap) ${savedText}` : `$(zap) ${vscode.l10n.t("AI Cost: Paused")}`;
+    status.text = hooksState.known && !hooksState.loaded ? `$(warning) ${vscode.l10n.t("AI Cost: hooks off")}` : warn ? "$(warning) AI Cost" : c.mode === "none" ? `$(zap) ${vscode.l10n.t("AI Cost: Off")}` : c.enabled ? `$(zap) ${savedText}` : `$(zap) ${vscode.l10n.t("AI Cost: Paused")}`;
     status.tooltip = md;
     status.show();
     // context keys drive command enablement (package.json "enablement"), like the first-party extensions

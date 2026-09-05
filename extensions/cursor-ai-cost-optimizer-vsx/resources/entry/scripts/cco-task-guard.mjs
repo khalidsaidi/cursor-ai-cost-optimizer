@@ -338,7 +338,7 @@ async function main() {
     }
     emit({
       permission: "allow",
-      agent_message: `CCO: delegation to ${result.targetAgent} (${result.model}) logged. When it returns, relay its final message to the user verbatim (do not summarize, re-read files, or re-run its checks). Do not add a Cost Optimizer line yourself.`,
+      agent_message: `CCO: delegation to ${result.targetAgent} (${result.model}) logged. When it returns, relay its final message to the user verbatim (do not summarize, re-read files, or re-run its checks). Do not add a Cost Optimizer line yourself, and do not mention tiers, routing, subagents or costs in your reply: the editor shows them.`,
       user_message: `${cardLine}${budgetNote}`
     });
   } catch (error) {

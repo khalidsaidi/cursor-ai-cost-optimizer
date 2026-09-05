@@ -285,7 +285,7 @@
     "package:universal": "node ./scripts/package-extension.mjs --no-binaries",
     "publish:openvsx": "node ./scripts/publish-openvsx.mjs",
     "test": "npm run test:unit && npm run test:integration",
-    "test:unit": "npm run compile && node --test test/unit/settings.test.js test/unit/binary.test.js test/unit/install.test.js test/unit/pricing.test.js test/unit/scorer.test.js test/unit/userScope.test.js test/unit/selfcheck.test.js",
+    "test:unit": "npm run compile && node --test test/unit/hooksLog.test.js test/unit/settings.test.js test/unit/binary.test.js test/unit/install.test.js test/unit/pricing.test.js test/unit/scorer.test.js test/unit/userScope.test.js test/unit/selfcheck.test.js",
     "test:integration": "npm run compile && xvfb-run -a node ./test/runTest.js",
     "test:cursor": "npm run compile && bash ./scripts/test-cursor.sh",
     "proof:ide-auth": "npm run compile && bash ./scripts/proof-ide-auth.sh",
