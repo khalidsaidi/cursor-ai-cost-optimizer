@@ -118,7 +118,9 @@ export function decideUserHookMode(opts: Options): HookMode {
   if (pref === "node") {
     return "node";
   }
-  return findNode(opts.nodePath) ? "node" : hasBinary ? "binary" : "node";
+  // Everywhere is machine-local by nature (hooks.json already points into this extension's folder), so the
+  // compiled binary is preferred: ~37 ms per tool call instead of ~140 ms for a Node start.
+  return hasBinary ? "binary" : findNode(opts.nodePath) ? "node" : "node";
 }
 
 export interface UserInstallResult {

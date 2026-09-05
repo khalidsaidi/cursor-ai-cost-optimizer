@@ -1,45 +1,27 @@
 ---
-description: AI Cost Optimizer (CCO) routing. Pick the cheapest sufficient effort tier and delegate to the fast-tier / balanced-tier / deep-tier subagents, which run on tier-specific models; hooks enforce guardrails.
+description: AI Cost Optimizer (CCO) routing. Pick the cheapest sufficient tier and delegate to the fast-tier / balanced-tier / deep-tier subagents (each runs on its own model); hooks enforce guardrails.
 alwaysApply: true
 ---
 
 # CCO routing
 
-Goal: spend the least while meeting the quality this request needs. Savings come from delegation: each tier subagent (`fast-tier`, `balanced-tier`, `deep-tier`) runs on its own model (mapped once per account by `cco-init`; the CLI session context lists the mapping and prices).
+Spend the least that meets the quality this request needs: delegate work to `fast-tier`, `balanced-tier` or `deep-tier` (each runs on its own model; the session context lists them with prices). If the Task tool has no `fast-tier` subagent, CCO is not enabled here: work normally and never mention or set it up.
 
-## 0. Not set up in this project?
-If the Task tool has no `fast-tier` subagent available, CCO is not enabled here: work normally, say nothing about CCO, and never run the setup yourself. (`/cco` explains how to enable it.)
+Overrides: `[cco:fast]` `[cco:balanced]` `[cco:deep]` force a tier, `[cco:auto]` restores routing; copy the token into the delegated prompt.
 
-## 1. Overrides
-`[cco:fast]`, `[cco:balanced]`, `[cco:deep]` force a tier; `[cco:auto]` restores default routing. Copy any override token into the delegated prompt verbatim.
-
-## 2. Score the request (0–10 each, quick estimate)
-- complexity: +2 multi-step, +3 architecture/refactor/migration/perf, +3 debugging without a clear repro, +2 unfamiliar API/spec
-- risk: +4 prod/auth/payments/security/privacy/data loss, +3 irreversible ops, +2 "best practice"/compliance
-- breadth: +2 several files, +3 cross-service/multi-language, +3 repo-wide reasoning
-- uncertainty: +3 unclear requirements, +2 "not sure"/"investigate"/"research"
+## Score (0–10 each, quick estimate)
+- complexity: +2 multi-step, +3 architecture/refactor/migration/perf, +3 debugging without a clear repro, +2 unfamiliar API
+- risk: +4 prod/auth/payments/security/privacy/data loss, +3 irreversible ops, +2 compliance
+- breadth: +2 several files, +3 cross-service, +3 repo-wide reasoning
+- uncertainty: +3 unclear requirements, +2 "investigate"/"research"
 - latency: +4 "asap"/"urgent"/"quick", +3 "one-liner"/"just tell me"
 
-effort = 0.45·complexity + 0.35·risk + 0.15·breadth + 0.10·uncertainty − 0.20·latency
-FAST ≤ 3.4 · BALANCED 3.5–6.4 · DEEP ≥ 6.5
-Guardrails: risk ≥ 7 never FAST; risk ≥ 9 always DEEP; latency ≥ 7 with risk ≤ 3 and complexity ≤ 3 is FAST.
+effort = 0.45·complexity + 0.35·risk + 0.15·breadth + 0.10·uncertainty − 0.20·latency → FAST ≤ 3.4, BALANCED 3.5–6.4, DEEP ≥ 6.5. Guardrails: risk ≥ 7 never FAST; risk ≥ 9 always DEEP; latency ≥ 7 with risk ≤ 3 and complexity ≤ 3 is FAST.
 
-## 3. Delegate
-Use the Task tool with `subagent_type` = `fast-tier`, `balanced-tier`, or `deep-tier`. The Task prompt must begin with one line:
-`CCO-SCORES: complexity=<n> risk=<n> breadth=<n> uncertainty=<n> latency=<n>`
-then the full task: goal, relevant paths, constraints, and the acceptance check. Pass paths, not file contents. Do not narrate the routing (no "I'll route this to…"); make the Task call directly. A hook validates the scores line, may reroute the delegation, and logs the decision. Hooks may also attach advice to a tool call ("CCO (advice…)"); treat that advice as an instruction for your next action.
+## Delegate
+For any request that needs tools, your FIRST action is one Task call (`subagent_type` = the tier) whose prompt starts with `CCO-SCORES: complexity=<n> risk=<n> breadth=<n> uncertainty=<n> latency=<n>`, then the goal, relevant paths, constraints and acceptance check (paths, not file contents). Do not narrate the routing. Hooks validate the scores, may reroute or answer "do this directly in this chat", and may attach advice to a tool call: follow those messages, never argue or retry a denied call.
 
-Answer directly (no delegation) when the reply is a sentence or two with no tool use, when the user is just chatting, or when a FAST-scored request is a question (explain/what/why) that needs at most a couple of reads. Never route from inside a `cco-*` subagent.
+Answer directly when the reply is a sentence or two with no tool use, when the user is just chatting, or when a FAST-scored question needs at most a couple of reads. FAST tasks go straight to `fast-tier`. For BALANCED/DEEP work on a frontier chat model, exploration and reproduction go to `fast-research` (read-only). Independent subtasks go out as parallel Task calls. Never route from inside a subagent.
 
-Default posture: delegate. For any request that needs tools, make the Task call your FIRST action (do not read or edit first), and after it returns relay the result in at most 5 short lines with no further tool calls. Hooks know the prices: if a tier is not cheaper than your chat model they answer the Task call with "do this directly in this chat" (then work normally here), and if you start working directly when you should delegate they tell you which tier to use. Follow those messages; never argue with them or retry the denied call.
-
-## 3b. Research and parallel work
-- Research is always cheap: for codebase exploration, finding usages, reading docs, or reproducing a failure, delegate to `fast-research` (read-only, FAST model) with a precise question and use its summary. Do this even when the task itself stays in this chat (a DEEP task on a frontier chat model): the hooks stop you after a few reads and point you to `fast-research`.
-- Independent subtasks go out as parallel Task calls in the same turn (for example two explorations, or FAST edits in unrelated files); do not serialize work that does not depend on other work.
-- Every work delegation carries an acceptance line (the project's test command, added by the hook); a hook runs it after FAST/BALANCED edits in the IDE and tells you `CCO-VERIFY: pass|fail`.
-
-## 4. Cascade (verify, then escalate)
-If a subagent returns `CCO-ESCALATE: <tier>` or `CCO-VERIFY: fail`, delegate once to the next tier up with its findings; never rerun the same tier. After FAST or BALANCED code changes where a cheap test exists, run it or delegate to `tier-verifier`; escalate on failure.
-
-## 5. Keep the parent context small
-Ask subagents for summaries, never re-read what they reported or re-run their checks, and start a new chat for a new task. Relay the subagent's final message to the user verbatim (it is written for them). Never add a cost, tier or "Cost Optimizer" line of your own: Cursor shows the tier and model on the subagent card and the editor shows the savings.
+## After
+If a subagent returns `CCO-ESCALATE: <tier>` or `CCO-VERIFY: fail`, delegate once to the next tier up with its findings; never rerun the same tier. Relay the subagent's final message to the user verbatim in at most a few lines, with no further tool calls, and never re-read or re-check its work. Never add a cost, tier or "Cost Optimizer" line of your own: the subagent card shows the tier and model, the editor shows the savings.

@@ -43,6 +43,11 @@ interface Settings {
   hookRuntime: HookRuntimePreference;
   nodePath: string | null;
 }
+/** Feedback for an action the user just took: 4 s in the status bar, never a popup. */
+function flash(text: string): void {
+  vscode.window.setStatusBarMessage(`$(zap) ${text}`, 4000);
+}
+
 function settings(): Settings {
   const cfg = vscode.workspace.getConfiguration("cco");
   return {
@@ -94,7 +99,7 @@ async function migrateRemovedSettings(context: vscode.ExtensionContext): Promise
   }
   if (found.length && !context.globalState.get<boolean>(MIGRATION_WARNED_KEY)) {
     await context.globalState.update(MIGRATION_WARNED_KEY, true);
-    void notify("warn", vscode.l10n.t("AI Cost Optimizer: the settings {0} were removed in 0.2.0 and have been cleared (routing is configured in .cursor/cco.json now).", [...new Set(found)].join(", ")));
+    log.warn(`[migrate] settings removed in 0.2.0 cleared: ${[...new Set(found)].join(", ")}`);
   }
 }
 
@@ -327,23 +332,7 @@ export function activate(context: vscode.ExtensionContext) {
         refreshStatus();
         // The routing rule arrives through the sessionStart hook, so this window routes from the next chat: no reload.
         const tiers = (["fast-tier", "balanced-tier", "deep-tier"] as const).map((a) => `${a === "fast-tier" ? "Fast" : a === "balanced-tier" ? "Balanced" : "Deep"} → ${modelDisplayName(result.agents[a] ?? "inherit", loadPricing(null, bundledPricing))}`).join(" · ");
-        const details = args?.firstRun ? vscode.l10n.t("How it works") : vscode.l10n.t("Details");
-        const undo = vscode.l10n.t("Undo");
-        const text = args?.firstRun
-          ? vscode.l10n.t("AI Cost Optimizer is on: routine work goes to cheaper models and the status bar shows what you save. {0}.", tiers)
-          : vscode.l10n.t("AI Cost Optimizer is on. {0}. Start a new chat.", tiers);
-        if (args?.quiet) {
-          return result;
-        }
-        void vscode.window.showInformationMessage(text, details, undo).then((choice) => {
-          if (choice === details && args?.firstRun) {
-            void vscode.commands.executeCommand("workbench.action.openWalkthrough", `${EXTENSION_ID}#cco.gettingStarted`, false);
-          } else if (choice === details) {
-            log.show(true);
-          } else if (choice === undo) {
-            void vscode.commands.executeCommand("cco.uninstallCursorAssets", { confirm: false });
-          }
-        });
+        flash(args?.firstRun ? vscode.l10n.t("AI Cost Optimizer is on") : vscode.l10n.t("AI Cost Optimizer: {0}", tiers));
         return result;
       }
       const ws = args?.workspace ?? (await pickWorkspace("set up"));
@@ -354,22 +343,7 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
       const plan = plannedFiles(ws, opts);
-      if (args?.confirm !== false) {
-        const detail = [
-          `Writes 8 files under ${path.basename(ws)}/.cursor/ (they will show up in git status):`,
-          ...plan.creates.map((f) => `  ${f}`),
-          ``,
-          `Modifies: ${plan.modifies.join(", ")}`,
-          `Hooks: ${plan.hookMode === "binary" ? "bundled cco-hook binary (no Node.js needed)" : "node .cursor/cco-hook.mjs, about 0.05 s per tool call"}`,
-          ``,
-          `Commit these to share the setup with teammates (they are a no-op without the extension), or add .cursor/ to .gitignore.`,
-          `Nothing is written outside this folder. Remove from This Workspace takes it all back out.`,
-        ].join("\n");
-        const choice = await vscode.window.showInformationMessage(vscode.l10n.t("Set up AI Cost Optimizer in {0}/.cursor/?", path.basename(ws)), { modal: true, detail }, vscode.l10n.t("Set up"));
-        if (choice !== vscode.l10n.t("Set up")) {
-          return;
-        }
-      }
+      log.info(`[install] ${path.basename(ws)}: will write ${plan.creates.join(", ")}; modifies ${plan.modifies.join(", ")}`);
       const result = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: vscode.l10n.t("AI Cost Optimizer: setting up this workspace (model discovery)"), cancellable: true }, async (_progress, token) => {
         const controller = new AbortController();
         token.onCancellationRequested(() => controller.abort());
@@ -381,11 +355,7 @@ export function activate(context: vscode.ExtensionContext) {
       }
       log.info(`[install] cco-init output: ${result.init.stdout.trim()}`);
       refreshStatus();
-      void vscode.window.showInformationMessage(vscode.l10n.t("AI Cost Optimizer is set up for {0}. Start a new chat to use it.", path.basename(ws)), vscode.l10n.t("Show details")).then((choice) => {
-        if (choice === vscode.l10n.t("Show details")) {
-          log.show(true);
-        }
-      });
+      flash(vscode.l10n.t("AI Cost Optimizer is on in {0}", path.basename(ws)));
       return result;
     } catch (error) {
       const message = String((error as Error)?.message ?? error);
@@ -415,7 +385,7 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
       refreshStatus();
-      void vscode.window.showInformationMessage(c.paused ? vscode.l10n.t("AI Cost Optimizer is on again in {0}.", path.basename(ws)) : vscode.l10n.t("AI Cost Optimizer is paused in {0}. Chats here work as before.", path.basename(ws)));
+      flash(c.paused ? vscode.l10n.t("AI Cost Optimizer is on again in {0}", path.basename(ws)) : vscode.l10n.t("AI Cost Optimizer is paused in {0}", path.basename(ws)));
     } catch (error) {
       void notify("error", vscode.l10n.t("AI Cost Optimizer: {0}", String((error as Error)?.message ?? error)));
     }
@@ -424,17 +394,11 @@ export function activate(context: vscode.ExtensionContext) {
   const uninstallCmd = vscode.commands.registerCommand("cco.uninstallCursorAssets", async (args?: { confirm?: boolean; workspace?: string }) => {
     const u = userStatus(stateRoot);
     if (u.installed && !args?.workspace) {
-      if (args?.confirm !== false) {
-        const choice = await vscode.window.showWarningMessage(vscode.l10n.t("Remove AI Cost Optimizer from Cursor?"), { modal: true, detail: vscode.l10n.t("Removes CCO's entries from ~/.cursor/hooks.json, the generated cco-* subagents from ~/.cursor/agents, and the extension's state. Other hook entries and your own files are kept. Nothing is left behind.") }, vscode.l10n.t("Remove"));
-        if (choice !== vscode.l10n.t("Remove")) {
-          return;
-        }
-      }
       try {
         const result = await uninstallUser(options(), stateRoot);
         log.info(`[uninstall] everywhere: via ${result.init.runtime} (status ${result.init.status}); removed ${result.removed.join(", ")}`);
         refreshStatus();
-        void vscode.window.showInformationMessage(vscode.l10n.t("AI Cost Optimizer was removed from Cursor."));
+        flash(vscode.l10n.t("AI Cost Optimizer removed from Cursor"));
         return result;
       } catch (error) {
         const message = String((error as Error)?.message ?? error);
@@ -450,17 +414,11 @@ export function activate(context: vscode.ExtensionContext) {
       }
       return;
     }
-    if (args?.confirm !== false) {
-      const choice = await vscode.window.showWarningMessage(vscode.l10n.t("Remove AI Cost Optimizer from {0}/.cursor/?", path.basename(ws)), { modal: true, detail: vscode.l10n.t("Removes CCO's hook entries, the generated cco-* subagents, the rule it added, and its state folder. Your own files and other tools' hook entries are kept.") }, vscode.l10n.t("Remove"));
-      if (choice !== vscode.l10n.t("Remove")) {
-        return;
-      }
-    }
     try {
       const result = await uninstallWorkspace(ws, options());
       log.info(`[uninstall] ${ws}: via ${result.init.runtime} (status ${result.init.status}); removed ${result.removed.join(", ")}`);
       refreshStatus();
-      void vscode.window.showInformationMessage(vscode.l10n.t("AI Cost Optimizer was removed from {0}.", path.basename(ws)));
+      flash(vscode.l10n.t("AI Cost Optimizer removed from {0}", path.basename(ws)));
       return result;
     } catch (error) {
       const message = String((error as Error)?.message ?? error);
@@ -475,7 +433,7 @@ export function activate(context: vscode.ExtensionContext) {
     const ws = firstWorkspace();
     const c = combined(ws);
     if (c.mode === "none") {
-      void notify("info", vscode.l10n.t("Turn AI Cost Optimizer on first."));
+      flash(vscode.l10n.t("Turn AI Cost Optimizer on first"));
       return;
     }
     const runtimePath = c.mode === "user" ? path.join(stateRoot, "runtime.json") : path.join(ws as string, RUNTIME_REL);
@@ -489,7 +447,7 @@ export function activate(context: vscode.ExtensionContext) {
     const runtime = readJson(runtimePath) as { discovery?: { availableModels?: string[] } } | null;
     const ids = (runtime?.discovery?.availableModels ?? []).filter((id) => typeof id === "string" && id && !/^auto$/i.test(id));
     if (!ids.length) {
-      void notify("info", vscode.l10n.t("No model list yet. Run Update models and try again."));
+      flash(vscode.l10n.t("No model list yet: run Update models first"));
       return;
     }
     const pricing = loadPricing(null, bundledPricing);
@@ -516,7 +474,7 @@ export function activate(context: vscode.ExtensionContext) {
     }
     await vscode.commands.executeCommand("cco.installCursorAssets", { scope: c.mode, confirm: false, workspace: ws ?? undefined, quiet: true });
     const after = readTierModels(ws ?? os.homedir(), c.mode === "user" ? path.join(os.homedir(), ".cursor", "agents") : undefined);
-    void vscode.window.showInformationMessage(vscode.l10n.t("Tier models: Fast → {0} · Balanced → {1} · Deep → {2}.", modelDisplayName(after.fast ?? "inherit", pricing), modelDisplayName(after.balanced ?? "inherit", pricing), modelDisplayName(after.deep ?? "inherit", pricing)));
+    flash(vscode.l10n.t("Tier models: Fast → {0} · Balanced → {1} · Deep → {2}", modelDisplayName(after.fast ?? "inherit", pricing), modelDisplayName(after.balanced ?? "inherit", pricing), modelDisplayName(after.deep ?? "inherit", pricing)));
     refreshStatus();
   });
 
@@ -528,7 +486,7 @@ export function activate(context: vscode.ExtensionContext) {
     const c = combined(ws);
     const stripped = c.mode === "user" ? stripUserHooks(stateRoot) : c.mode === "project" && ws ? stripProjectHooks(ws) : false;
     refreshStatus();
-    void vscode.window.showInformationMessage(stripped ? vscode.l10n.t("AI Cost Optimizer hooks are off. Update models turns them back on.") : vscode.l10n.t("No AI Cost Optimizer hooks were active."));
+    flash(stripped ? vscode.l10n.t("AI Cost Optimizer hooks are off (Update models restores)") : vscode.l10n.t("No AI Cost Optimizer hooks were active"));
   });
 
   // Status bar click: a small menu, like the Copilot status item.
@@ -585,12 +543,17 @@ export function activate(context: vscode.ExtensionContext) {
         lines.push("Open a folder to see tier rates.");
       }
       log.info(`[recommend] ${lines.join(" | ")}`);
-      const items = token ? ["Copy token", "Insert token"] : [];
-      const action = await notify("info", lines[0], items, { modal: true, detail: lines.slice(1).join("\n") });
-      if (action === "Copy token" && token) {
-        await vscode.env.clipboard.writeText(token);
-      } else if (action === "Insert token" && token && editor) {
-        await editor.edit((b) => b.insert(editor.selection.active, token));
+      type Item = vscode.QuickPickItem & { act?: () => Promise<void> };
+      const items: Item[] = lines.filter((l) => l.trim()).map((l) => ({ label: l }));
+      if (token && editor) {
+        items.unshift({ label: `$(insert) ${vscode.l10n.t("Insert {0} at the cursor", token)}`, act: async () => { await editor.edit((b) => b.insert(editor.selection.active, token)); } });
+      }
+      if (token) {
+        items.unshift({ label: `$(copy) ${vscode.l10n.t("Copy {0}", token)}`, act: async () => { await vscode.env.clipboard.writeText(token); flash(vscode.l10n.t("Copied {0}", token)); } });
+      }
+      const picked = await vscode.window.showQuickPick(items, { placeHolder: cost?.chatModel ? vscode.l10n.t("Savings and tier rates (next to {0})", cost.chatModelLabel) : vscode.l10n.t("Savings and tier rates") });
+      if (picked?.act) {
+        await picked.act();
       }
     } catch (error) {
       void notify("error", vscode.l10n.t("AI Cost Optimizer: recommend failed: {0}", String((error as Error)?.message ?? error)));
@@ -649,7 +612,7 @@ export function activate(context: vscode.ExtensionContext) {
       ].join("\n");
       await vscode.env.clipboard.writeText(report);
       log.info(`[diagnostics]\n${report}`);
-      void notify("info", vscode.l10n.t("AI Cost Optimizer diagnostics copied to the clipboard."));
+      flash(vscode.l10n.t("Diagnostics copied to the clipboard"));
     } catch (error) {
       void notify("error", vscode.l10n.t("AI Cost Optimizer: diagnostics failed: {0}", String((error as Error)?.message ?? error)));
     }
