@@ -133,6 +133,19 @@ export function writeWorkspaceAgents(workspace, tierModels) {
     }
   } catch {}
   try { writeJson(namesPath(workspace), Object.keys(aliases).length ? { ...names, _aliases: aliases } : names); } catch {}
+  // user scope: the agents-only local plugin for the Cursor CLI mirrors what was just written
+  try {
+    const paths = workspacePaths(workspace);
+    if (paths.scope === "user") {
+      const mirror = path.join(path.dirname(paths.agentsDir), "plugins", "local", "cco-agents");
+      if (fs.existsSync(path.join(mirror, ".cursor-plugin", "plugin.json"))) {
+        for (const file of fs.readdirSync(path.join(mirror, "agents"))) fs.unlinkSync(path.join(mirror, "agents", file));
+        for (const file of fs.readdirSync(dir)) {
+          if (file.endsWith(".md") && (readTextSafe(path.join(dir, file)) || "").includes(GENERATED_MARKER_PREFIX)) fs.copyFileSync(path.join(dir, file), path.join(mirror, "agents", file));
+        }
+      }
+    }
+  } catch {}
   return results;
 }
 

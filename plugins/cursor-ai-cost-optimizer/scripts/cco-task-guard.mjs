@@ -130,6 +130,11 @@ export function evaluateTask({ toolInput, config, state = null, lastPrompt = nul
     updatedPrompt = `${scoresLine}\n${prompt}`;
   }
   const testCommand = workspace ? detectTestCommand(workspace) : null;
+  // No project test runner but the task itself adds or touches tests: the subagent must run those before it
+  // finishes (measured: a routed task once handed back a failing test the parent could not re-check).
+  if (!testCommand && /\btests?\b/i.test(prompt) && !/Acceptance:/i.test(updatedPrompt)) {
+    updatedPrompt += "\n\nAcceptance: run every test file you add or change (for example `node --test <file>`) and fix failures before finishing; report the command and its result. If a failure is outside your tier's budget, reply with CCO-ESCALATE instead of guessing.";
+  }
   if (testCommand && !/Acceptance:/i.test(updatedPrompt)) {
     updatedPrompt += `\n\nAcceptance: after your changes run \`${testCommand.command}\` and report the result. If it fails and the fix is outside your tier's budget, reply with CCO-ESCALATE instead of retrying.`;
   }
@@ -233,6 +238,20 @@ async function main() {
     const qualityDriven = Boolean(result.override && result.override !== "auto") || Boolean(result.guardrail && String(result.guardrail).startsWith("risk")) || result.learning?.escalated;
     // A tier model the user picked (Settings / Choose tier models) is used as chosen, cheaper or not.
     const userChosen = Boolean(String(config?.modelOverrides?.[result.targetTier] || "").trim());
+    // A tiny one-file change: a subagent's own session start costs more than the whole edit (measured through the
+    // CLI: a one-line addition cost $0.070 delegated against $0.064 done in place). It stays in the chat.
+    const tinyTask = Boolean(sessionForOverride?.promptMeta?.tiny) && result.targetTier === "fast" && !(result.override && result.override !== "auto") && !userChosen && config?.enforcement?.requireDelegation !== "always";
+    if (tinyTask) {
+      if (paths && config?.enforcement?.logDecisions !== false) {
+        appendJsonl(paths.decisionsPath, { ts: nowIso(), conversation_id: payload.conversation_id ?? null, requested: result.requestedAgent, final: "chat", model: sessionModel, rewritten: false, reason: "tiny_task_stays_in_chat", scores: result.scores, scoreSource: result.scoreSource, effort: result.effort });
+      }
+      emit({
+        permission: "deny",
+        agent_message: "CCO: this is a small one-file change: do it directly in this chat now (a subagent's start-up would cost more than the edit). Do not call Task for it and do not mention routing.",
+        user_message: "Small change: done in the chat."
+      });
+      return;
+    }
     if (config?.enforcement?.requireDelegation !== "always" && !qualityDriven && !userChosen && sessionModel && result.model !== "inherit") {
       const pricing = loadPricing(paths?.pricingPath);
       const sessionRate = blendedRatePerMillion(resolveModelPrice(sessionModel, pricing, { overrides: config?.pricing?.overrides }));

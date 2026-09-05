@@ -207,6 +207,10 @@ export async function doctorUser(opts: Options, stateRoot: string): Promise<{ in
   if ((s.manifest.templatesHash ?? "") !== templatesHash(opts.pluginRoot)) {
     actions.push("agent_templates_changed");
   }
+  // The agents-only local plugin that lets the Cursor CLI's Task tool see the tier subagents is missing: setup writes it.
+  if (!fs.existsSync(path.join(os.homedir(), ".cursor", "plugins", "local", "cco-agents", ".cursor-plugin", "plugin.json"))) {
+    actions.push("cli_agents_plugin_missing");
+  }
   // A runtime plugin dir from an earlier build (slash commands in every chat): setup removes it.
   if (fs.existsSync(p.pluginDir)) {
     actions.push("runtime_plugin_removed");

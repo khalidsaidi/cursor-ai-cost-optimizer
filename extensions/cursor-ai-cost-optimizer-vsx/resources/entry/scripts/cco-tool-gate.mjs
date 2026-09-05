@@ -145,7 +145,8 @@ export function gateDecision({ toolName, session, config, pricing, models, promp
     }
     // A tiny one-file edit (typo, rename, comment) is faster and about as cheap done right here.
     const tiny = prompt ? isTinyTask(prompt) : Boolean(meta.tiny);
-    if (t === "fast" && !(override && override !== "auto") && tiny) {
+    // (a Fast model the user picked is used as chosen, tiny or not)
+    if (t === "fast" && !(override && override !== "auto") && tiny && !String(config?.modelOverrides?.fast || "").trim()) {
       return { action: "allow", reason: "tiny_task_stays_in_chat", phase: "pre" };
     }
     // A subagent is a fresh session that re-caches the whole system context. Only delegate when the

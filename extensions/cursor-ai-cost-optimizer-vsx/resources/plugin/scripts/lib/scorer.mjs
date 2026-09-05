@@ -293,6 +293,9 @@ export function isTinyTask(text) {
   const words = t.split(/\s+/).length;
   const files = (t.match(/[\w./-]+\.(ts|tsx|js|mjs|cjs|py|go|rs|java|kt|rb|php|cs|sql|yml|yaml|json|md|txt)\b/g) || []).length;
   const tinyVerb = /\b(typo|rename|comment|one[- ]liner|one line|bump|indent|whitespace|reorder|capitali[sz]e|spelling|wording|tweak)\b/.test(t);
-  const bigSignal = /\b(tests?|refactor|implement|feature|migrate|across|all files|every|debug|investigate|architecture|security|production)\b/.test(t);
-  return words <= 25 && files <= 1 && tinyVerb && !bigSignal;
+  // a single small addition to one file ("add a foo(a) function to calc.mjs that returns a * 2 and export it"):
+  // measured through the CLI, delegating it costs more than doing it in place (the subagent's own session start)
+  const smallAddition = /\b(add|append|insert|export|remove|delete|change|update|set|replace)\b/.test(t) && /\b(function|helper|method|constant|const|export|line|note|field|property|import|flag|option)\b/.test(t) && !/\b(and|,)\s+(add|create|write|update)\b.*\b(test|file|module)\b/.test(t);
+  const bigSignal = /\b(tests?|refactor|implement|feature|migrate|across|all files|every|debug|investigate|architecture|security|production|module|endpoint|api|schema|migration)\b/.test(t);
+  return words <= 30 && files <= 1 && (tinyVerb || smallAddition) && !bigSignal;
 }

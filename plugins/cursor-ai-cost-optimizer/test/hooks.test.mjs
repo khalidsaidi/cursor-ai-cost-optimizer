@@ -727,16 +727,16 @@ test("a window that still lists the old subagent names: the Task tool's error is
 
 test("the chat model is re-read on every prompt: after a switch to the Fast tier's own model, work stays in the chat", () => {
   const ws = readyWorkspace();
-  runHook("cco-prompt-capture.mjs", { hook_event_name: "beforeSubmitPrompt", conversation_id: "sw1", model: "composer-2.5-fast", prompt: "add a helper", workspace_roots: [ws] });
+  runHook("cco-prompt-capture.mjs", { hook_event_name: "beforeSubmitPrompt", conversation_id: "sw1", model: "composer-2.5-fast", prompt: "implement a slugify helper in utils/slugify.js", workspace_roots: [ws] });
   assert.equal(loadSession(ws, "sw1").model, "composer-2.5-fast");
   const before = runHook("cco-tool-gate.mjs", { hook_event_name: "preToolUse", conversation_id: "sw1", model: "composer-2.5-fast", tool_name: "Write", tool_input: { file_path: "a.js", content: "x" }, workspace_roots: [ws] });
   assert.match(String(before.agent_message || ""), /Task/, "on the 2x fast variant the plain Fast tier is worth a delegation");
-  runHook("cco-prompt-capture.mjs", { hook_event_name: "beforeSubmitPrompt", conversation_id: "sw1", model: "composer-2.5", prompt: "add another helper", workspace_roots: [ws] });
+  runHook("cco-prompt-capture.mjs", { hook_event_name: "beforeSubmitPrompt", conversation_id: "sw1", model: "composer-2.5", prompt: "implement a second helper in utils/slugify.js", workspace_roots: [ws] });
   assert.equal(loadSession(ws, "sw1").model, "composer-2.5", "the switch in the picker is picked up");
   const after = runHook("cco-tool-gate.mjs", { hook_event_name: "preToolUse", conversation_id: "sw1", model: "composer-2.5", tool_name: "Write", tool_input: { file_path: "a.js", content: "x" }, workspace_roots: [ws] });
   assert.equal(after.permission, "allow");
   assert.equal(after.agent_message, undefined, "same model as the Fast tier: nothing to gain, no advice");
-  const task = runHook("cco-task-guard.mjs", { hook_event_name: "preToolUse", conversation_id: "sw1", model: "composer-2.5", tool_name: "Task", tool_input: { subagent_type: "composer-2.5-fast", prompt: "CCO-SCORES: complexity=1 risk=0 breadth=0 uncertainty=0 latency=0\nadd another helper" }, workspace_roots: [ws] });
+  const task = runHook("cco-task-guard.mjs", { hook_event_name: "preToolUse", conversation_id: "sw1", model: "composer-2.5", tool_name: "Task", tool_input: { subagent_type: "composer-2.5-fast", prompt: "CCO-SCORES: complexity=1 risk=0 breadth=0 uncertainty=0 latency=0\nimplement a second helper in utils/slugify.js" }, workspace_roots: [ws] });
   assert.equal(task.permission, "deny", "a delegation to the very same model is turned back into in-chat work");
 });
 
@@ -803,4 +803,12 @@ test("an Ask chat is not briefed (no tools to route); the briefing arrives once 
   assert.deepEqual(ask, { continue: true });
   const plan = runHook("cco-prompt-capture.mjs", { hook_event_name: "beforeSubmitPrompt", conversation_id: "mode1", composer_mode: "plan", prompt: "plan a refactor", workspace_roots: [ws] });
   assert.match(String(plan.additional_context), /composer-2\.5-fast/, "Plan mode explores with tools: routed like Agent mode");
+});
+
+test("a task that adds tests in a project without a test runner tells the subagent to run the tests it writes", () => {
+  const ws = readyWorkspace();
+  createSession({ workspace: ws, conversationId: "acc-1", model: "cursor-grok-4.6-high" });
+  const out = runHook("cco-task-guard.mjs", { hook_event_name: "preToolUse", conversation_id: "acc-1", model: "grok-4.6", tool_name: "Task", tool_input: { subagent_type: "composer-2.5-fast", prompt: "CCO-SCORES: complexity=3 risk=0 breadth=2 uncertainty=0 latency=0\nCreate stats.mjs with mean/median/stdev and a node:test file covering them" }, workspace_roots: [ws] });
+  assert.equal(out.permission, "allow");
+  assert.match(String(out.updated_input?.prompt || ""), /Acceptance: run every test file you add or change/);
 });

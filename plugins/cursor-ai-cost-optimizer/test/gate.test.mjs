@@ -37,9 +37,9 @@ test("router mode: expensive parent is denied everything but Task before delegat
   assert.match(verdict.reason, /^cost_session_/);
   assert.equal(verdict.tier, "fast");
   assert.equal(verdict.model, "composer-2.5");
-  const read = gateDecision({ toolName: "Read", session: session(), config, pricing, models, prompt: "add helper" });
+  const read = gateDecision({ toolName: "Read", session: session(), config, pricing, models, prompt: "implement a slugify helper in utils/slugify.js" });
   assert.equal(read.action, "deny", "router mode also blocks context gathering on the expensive model");
-  const post = gateDecision({ toolName: "Read", session: session({ delegations: [{ agent: "fast-tier" }] }), config, pricing, models, prompt: "add helper" });
+  const post = gateDecision({ toolName: "Read", session: session({ delegations: [{ agent: "fast-tier" }] }), config, pricing, models, prompt: "implement a slugify helper in utils/slugify.js" });
   assert.equal(post.action, "deny");
   assert.equal(post.reason, "relay_only_after_delegation");
   assert.equal(gateDecision({ toolName: "Task", session: session(), config, pricing, models, prompt: "x" }).reason, "task_handled_by_guard");
@@ -80,8 +80,8 @@ test("gate: subagents, overrides, escape hatch and modes", () => {
 
 test("gate: no delegation demanded when the tier model is inherit or equals the session model", () => {
   const inherit = { fast: "inherit", balanced: "inherit", deep: "inherit" };
-  assert.equal(gateDecision({ toolName: "Write", session: session(), config, pricing, models: inherit, prompt: "add helper" }).action, "allow");
-  assert.equal(gateDecision({ toolName: "Write", session: session({ model: "claude-opus-5-thinking-high" }), config, pricing, models: { ...models, fast: "claude-opus-5-thinking-high" }, prompt: "add helper" }).action, "allow");
+  assert.equal(gateDecision({ toolName: "Write", session: session(), config, pricing, models: inherit, prompt: "implement a slugify helper in utils/slugify.js" }).action, "allow");
+  assert.equal(gateDecision({ toolName: "Write", session: session({ model: "claude-opus-5-thinking-high" }), config, pricing, models: { ...models, fast: "claude-opus-5-thinking-high" }, prompt: "implement a slugify helper in utils/slugify.js" }).action, "allow");
 });
 
 test("gate hook process: end to end with session state, transcript prompt, denial counting and delegation reset", () => {

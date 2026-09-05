@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { heuristicScores, decideTier, parseOverride, parseScoresLine, applyStateEscalation, formatScoresLine, effortScore } from "../scripts/lib/scorer.mjs";
+import { heuristicScores, decideTier, parseOverride, parseScoresLine, applyStateEscalation, formatScoresLine, effortScore, isTinyTask } from "../scripts/lib/scorer.mjs";
 import { loadDefaults } from "../scripts/lib/config.mjs";
 
 const config = loadDefaults();
@@ -94,5 +94,14 @@ test("plain-language 'do it yourself' requests switch routing off for that promp
   }
   for (const p of ["subagents are great, use the fast one", "add a helper to calc.mjs", "write tests for the parser"]) {
     assert.equal(parseOverride(p), null, p);
+  }
+});
+
+test("tiny tasks: a single small addition to one file is tiny; anything with tests, a module or several files is not", () => {
+  for (const p of ["Add a nineteen(a) function to calc.mjs that returns a * 19 and export it", "fix the typo in README.md", "rename mul to multiply in calc.mjs", "add a MAX_RETRIES constant to config.mjs"]) {
+    assert.equal(isTinyTask(p), true, p);
+  }
+  for (const p of ["Create stats.mjs exporting mean, median and stdev, add a node:test file and a README section", "add a function to calc.mjs and write tests for it", "implement the payments module", "refactor the exports across all files"]) {
+    assert.equal(isTinyTask(p), false, p);
   }
 });
