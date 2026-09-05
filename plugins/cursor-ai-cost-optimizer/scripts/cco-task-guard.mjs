@@ -28,7 +28,7 @@ import { loadJointState, modelLimitedUntil } from "./lib/state.mjs";
 import { tierLabel, modelLabel, reasonLabel } from "./lib/labels.mjs";
 import { readWorkspaceAgentModel } from "./lib/agents.mjs";
 import { tierFor } from "./lib/models.mjs";
-import { detectTestCommand, estimateTaskCostUsd, formatUsd } from "./lib/project.mjs";
+import { detectTestCommand, estimateTaskCostUsd, formatUsd, delegationWorth } from "./lib/project.mjs";
 import { updateSession, loadSession, createSession, normalizeModelId, syncTurnFromTranscript, guessTranscriptPath, saveSession } from "./lib/session.mjs";
 import { loadPricing, resolveModelPrice, blendedRatePerMillion } from "./lib/pricing.mjs";
 
@@ -237,10 +237,10 @@ async function main() {
       const pricing = loadPricing(paths?.pricingPath);
       const sessionRate = blendedRatePerMillion(resolveModelPrice(sessionModel, pricing, { overrides: config?.pricing?.overrides }));
       const tierRate = blendedRatePerMillion(resolveModelPrice(result.model, pricing, { overrides: config?.pricing?.overrides }));
-      const minSavings = Number(config?.enforcement?.minSavingsFactor ?? 1.3);
       // Escalating to a stronger (pricier) model is the parent's quality call and is always allowed;
-      // only a sideways/downward move that is not materially cheaper is pointless.
-      if (sessionRate && tierRate && tierRate <= sessionRate && sessionRate / tierRate < minSavings) {
+      // only a sideways/downward move that does not save money once the subagent's session start is paid is pointless.
+      const worth = delegationWorth({ tier: result.targetTier, tierModel: result.model, sessionModel, pricing, config });
+      if (sessionRate && tierRate && tierRate <= sessionRate && worth.known && !worth.worth) {
         if (paths && config?.enforcement?.logDecisions !== false) {
           appendJsonl(paths.decisionsPath, { ts: nowIso(), conversation_id: payload.conversation_id ?? null, requested: result.requestedAgent, final: "chat", model: sessionModel, rewritten: false, reason: `tier_${result.targetTier}_not_cheaper_than_chat_model`, scores: result.scores, scoreSource: result.scoreSource, effort: result.effort });
         }
@@ -259,7 +259,7 @@ async function main() {
     let multiplier = null;
     try {
       const pricingNow = loadPricing(paths?.pricingPath);
-      const est = estimateTaskCostUsd({ tier: result.targetTier, model: result.model, pricing: pricingNow, config });
+      const est = estimateTaskCostUsd({ tier: result.targetTier, model: result.model, pricing: pricingNow, config, delegation: true });
       estimateUsd = est;
       chatEstimateUsd = sessionModel ? estimateTaskCostUsd({ tier: result.targetTier, model: sessionModel, pricing: pricingNow, config }) : null;
       const chatRate0 = blendedRatePerMillion(resolveModelPrice(sessionModel, pricingNow, { overrides: config?.pricing?.overrides }));

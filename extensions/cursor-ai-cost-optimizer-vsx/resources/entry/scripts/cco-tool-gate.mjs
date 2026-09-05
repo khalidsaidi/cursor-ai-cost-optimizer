@@ -28,6 +28,7 @@ import {
   isEnabled, isMain, applyScopeArgs, agentForTier, windowLacksAgents } from "./lib/common.mjs";
 applyScopeArgs();
 import { loadConfig } from "./lib/config.mjs";
+import { delegationWorth } from "./lib/project.mjs";
 import { modelLimitedUntil } from "./lib/state.mjs";
 import { tierLabel, modelLabel } from "./lib/labels.mjs";
 import { loadPricing, resolveModelPrice, blendedRatePerMillion } from "./lib/pricing.mjs";
@@ -69,12 +70,9 @@ export function isRouterMode({ session, config, pricing, models }) {
     return { router: true, factor: null, reason: "fast_model_chosen_by_user" };
   }
   const sessionModel = session?.model || null;
-  const sessionPrice = sessionModel ? resolveModelPrice(sessionModel, pricing, { overrides: config?.pricing?.overrides }) : null;
-  const sessionRate = blendedRatePerMillion(sessionPrice);
-  const fastRate = blendedRatePerMillion(models.fast === "inherit" ? null : resolveModelPrice(models.fast, pricing, { overrides: config?.pricing?.overrides }));
-  const factor = sessionRate && fastRate ? sessionRate / fastRate : null;
-  const minSavings = asNumber(enforcement.minSavingsFactor, 1.3);
-  return { router: Boolean(factor && factor >= minSavings), factor, reason: factor ? `session_${factor.toFixed(1)}x_fast_tier` : "no_price_signal" };
+  const worth = delegationWorth({ tier: "fast", tierModel: models.fast, sessionModel, pricing, config });
+  const factor = worth.known ? worth.factor : null;
+  return { router: Boolean(worth.known && worth.worth), factor, reason: factor ? `session_${factor.toFixed(1)}x_fast_tier` : "no_price_signal" };
 }
 
 /**
@@ -155,7 +153,6 @@ export function gateDecision({ toolName, session, config, pricing, models, promp
     if (mode !== "always" && !(override && override !== "auto")) {
       const tierRate = blendedRatePerMillion(resolveModelPrice(models[t], pricing, { overrides: config?.pricing?.overrides }));
       const sessionRate = blendedRatePerMillion(resolveModelPrice(sessionModel, pricing, { overrides: config?.pricing?.overrides }));
-      const minSavings = asNumber(enforcement.minSavingsFactor, 1.3);
       const qualityDriven = t === "deep" || String(decision?.guardrail || "").startsWith("risk");
       const stronger = tierRate && sessionRate && tierRate > sessionRate * 1.05;
       if (qualityDriven && stronger && models[t] !== sessionModel) {
@@ -168,7 +165,8 @@ export function gateDecision({ toolName, session, config, pricing, models, promp
         return { action: "deny", reason: `quality_${decision?.guardrail || "deep"}`, tier: t, model: models[t], decision, phase: "pre" };
       }
       const userChosen = Boolean(String(config?.modelOverrides?.[t] || "").trim());
-      if (!userChosen && tierRate && sessionRate && sessionRate / tierRate < minSavings) {
+      const worthT = delegationWorth({ tier: t, tierModel: models[t], sessionModel, pricing, config });
+      if (!userChosen && worthT.known && !worthT.worth) {
         if (readTool && !explored && asNumber(session.readCount, 0) >= readBudget && models.fast !== "inherit" && models.fast !== sessionModel && !session.readNudged) {
           return { action: "deny", reason: "read_budget_use_explore", phase: "pre", tier: "explore", model: models.fast, decision };
         }

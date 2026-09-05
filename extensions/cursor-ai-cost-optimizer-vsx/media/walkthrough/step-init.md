@@ -1,6 +1,6 @@
 # Work as usual
 
-Keep whatever chat model you like. Each task goes to the cheapest tier that can do it well, and that tier runs on its own model:
+Keep whatever chat model you like. Each task goes to the cheapest tier that can do it well, and that tier runs on its own model. On **Composer** routine work already runs cheap, so it stays in the chat and only risky work is routed; on **Auto** the model Auto picked is what gets priced; with a pricier chat model (Claude, GPT, Grok) routine work is delegated and the savings add up:
 
 | Tier | Typical work | Model (without a CLI login) |
 |---|---|---|

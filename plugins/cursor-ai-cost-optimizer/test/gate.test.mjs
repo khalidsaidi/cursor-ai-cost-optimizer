@@ -157,13 +157,13 @@ test("session start hook re-creates missing workspace agents from a cached runti
   assert.match(out.additional_context, /`claude-opus-5-deep` on claude-opus-5-thinking-high/);
 });
 
-test("gate refines a placeholder session model from a later hook payload and applies router mode for Auto", () => {
+test("gate refines a placeholder session model from a later hook payload; Auto is not worth a FAST delegation once the subagent's session start is counted", () => {
   const ws = fs.mkdtempSync(path.join(os.tmpdir(), "cco-gate2-"));
   writeWorkspaceAgents(ws, { "fast-tier": "composer-2.5", "balanced-tier": "claude-sonnet-5-thinking-high", "deep-tier": "claude-opus-5-thinking-high", "tier-verifier": "composer-2.5" });
   createSession({ workspace: ws, conversationId: "conv-ide", model: "auto" });
   const first = runHook("cco-tool-gate.mjs", { hook_event_name: "preToolUse", conversation_id: "conv-ide", model: "", tool_name: "Write", tool_input: {}, workspace_roots: [ws] });
-  assert.equal(first.permission, "allow", "advise-first: allowed, with routing advice (Auto is priced above the FAST tier)");
-  assert.match(first.agent_message, /CCO \(advice/);
+  assert.equal(first.permission, "allow");
+  assert.equal(first.agent_message, undefined, "a typical FAST task on Auto (est.) costs about what the Composer subagent costs with its session start: nothing to gain, no advice");
   const refined = runHook("cco-tool-gate.mjs", { hook_event_name: "preToolUse", conversation_id: "conv-ide", model: "composer-2.5", tool_name: "Write", tool_input: {}, workspace_roots: [ws] });
   assert.equal(loadSession(ws, "conv-ide").model, "composer-2.5");
   assert.equal(refined.permission, "allow", "once the concrete cheap model is known, ordinary work stays in the chat");
@@ -179,7 +179,7 @@ test("router mode answers FAST questions directly but still routes FAST work", (
   assert.equal(work.action, "deny");
 });
 
-test("IDE replay: workspaceOpen + first prompt on Auto → router mode → delegate → relay; cheap chat keeps FAST work", () => {
+test("IDE replay: workspaceOpen + first prompt on Auto → no FAST delegation (not worth its session start); cheap chat keeps FAST work", () => {
   const ws = fs.mkdtempSync(path.join(os.tmpdir(), "cco-ide-"));
   fs.mkdirSync(path.join(ws, ".cursor"), { recursive: true });
   fs.writeFileSync(path.join(ws, ".cursor", "cco.json"), JSON.stringify({ pricing: { enabled: false }, discovery: { auto: false } }));
@@ -189,14 +189,11 @@ test("IDE replay: workspaceOpen + first prompt on Auto → router mode → deleg
   const prompt = runHook("cco-prompt-capture.mjs", { hook_event_name: "beforeSubmitPrompt", conversation_id: "ide-A", model: "default", prompt: "Create utils/slugify.js exporting slugify(str) and a node:test for it, then run node --test utils/", workspace_roots: [ws] });
   assert.equal(prompt.continue, true);
   const grep = runHook("cco-tool-gate.mjs", { hook_event_name: "preToolUse", conversation_id: "ide-A", model: "default", tool_name: "Grep", tool_input: { pattern: "slugify" }, workspace_roots: [ws] });
-  assert.equal(grep.permission, "allow", "advise-first");
-  assert.match(grep.agent_message, /subagent_type="composer-2\.5-fast"/);
+  assert.equal(grep.permission, "allow");
+  assert.equal(grep.agent_message, undefined, "on Auto a typical FAST task costs about what the subagent costs with its session start: no routing advice");
   const task = runHook("cco-task-guard.mjs", { hook_event_name: "preToolUse", conversation_id: "ide-A", model: "default", tool_name: "Task", tool_input: { description: "slugify", prompt: "CCO-SCORES: complexity=3 risk=0 breadth=1 uncertainty=0 latency=2\nCreate utils/slugify.js ...", subagent_type: "fast-tier" }, workspace_roots: [ws] });
-  assert.equal(task.permission, "allow");
-  assert.match(task.user_message, /Fast on Composer 2\.5/);
-  const read = runHook("cco-tool-gate.mjs", { hook_event_name: "preToolUse", conversation_id: "ide-A", model: "default", tool_name: "Read", tool_input: {}, workspace_roots: [ws] });
-  assert.equal(read.permission, "allow");
-  assert.match(read.agent_message, /relaying the subagent's final message verbatim/);
+  assert.equal(task.permission, "deny", "a FAST delegation from Auto is turned back into in-chat work");
+  assert.match(task.agent_message, /directly in this chat/);
 
   // Cheap chat model: a FAST delegation is pointless, the guard keeps the work in the chat.
   runHook("cco-prompt-capture.mjs", { hook_event_name: "beforeSubmitPrompt", conversation_id: "ide-B", model: "composer-2.5", prompt: "add a helper", workspace_roots: [ws] });

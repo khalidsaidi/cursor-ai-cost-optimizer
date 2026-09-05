@@ -25,6 +25,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { delegationWorth } from "./lib/project.mjs";
 import { loadConfig } from "./lib/config.mjs";
 import { loadPricing, resolveModelPrice, blendedRatePerMillion } from "./lib/pricing.mjs";
 import { refreshPricing } from "./cco-refresh-pricing.mjs";
@@ -79,12 +80,9 @@ export function sessionIsCheap({ workspace, config, sessionModel }) {
     const paths = workspacePaths(workspace);
     const pricing = loadPricing(paths.pricingPath);
     const fastModel = readWorkspaceAgentModel(workspace, "fast-tier") || readJsonSafe(paths.runtimePath)?.profiles?.fast?.model || "inherit";
-    const session = blendedRatePerMillion(resolveModelPrice(sessionModel, pricing, { overrides: config?.pricing?.overrides }));
-    const fast = fastModel === "inherit" ? null : blendedRatePerMillion(resolveModelPrice(fastModel, pricing, { overrides: config?.pricing?.overrides }));
-    if (!session || !fast) {
-      return false;
-    }
-    return session / fast < Number(config?.enforcement?.minSavingsFactor ?? 1.3);
+    // Whole-task comparison, the subagent's session start included (the same test the hooks apply per call).
+    const worth = delegationWorth({ tier: "fast", tierModel: fastModel, sessionModel, pricing, config });
+    return worth.known ? !worth.worth : false;
   } catch {
     return false;
   }

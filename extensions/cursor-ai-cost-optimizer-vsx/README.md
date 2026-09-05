@@ -10,14 +10,14 @@ the Cursor plugin marketplace, and ships a self-contained hook binary for machin
 
 1. **Install it.** It turns itself on, quietly: the status bar item switches to `⚡ AI Cost` and a Get Started page shows your three tiers with a **Choose tier models** link; no popup, no question, no reload, nothing written into any project: the Cost Optimizer registers in Cursor's own user-level config (`~/.cursor/hooks.json` entries, `~/.cursor/agents/<model>-<tier>.md`) and keeps its state in the extension's storage, the way Copilot keeps its state in the editor. **Remove** in the status menu takes it all back out.
    - Prefer repo files? `AI Cost Optimizer: Turn On / Update Models` also offers **This project only**: 8 files under the project's `.cursor/`, shown to you before anything is written.
-2. **Work normally.** Keep your usual chat model. A routed task shows a **Fast Tier** (or Balanced / Deep) subagent card whose line reads `Fast on Composer 2.5 · ~$0.02, saves ~$0.04`; risky work goes to the strong tier and says so. The status bar shows what you have saved in the project; its tooltip shows the tiers, the last task and the total.
+2. **Work normally.** Keep your usual chat model. A routed task shows a **Fast Tier** (or Balanced / Deep) subagent card whose line reads `Fast on Composer 2.5 · ~$0.02, saves ~$0.04`; risky work goes to the strong tier and says so. The status bar shows what you have saved in the project (an estimate from list prices, net of each subagent's session start; Cursor does not expose billed usage to extensions); its tooltip shows the tiers, the last task and the total.
 3. **Steer when you want to.** **Choose tier models** in the status menu picks which model runs Fast, Balanced and Deep. `[cco:fast]`, `[cco:balanced]`, `[cco:deep]` in a prompt force a tier for one request; `[cco:off]` bypasses routing once. **Pause here** switches a project off without removing anything.
 
 ## Features
 
 - **Tiered routing with real savings**: the routing rule scores each request (complexity, risk, breadth,
   uncertainty, latency) and delegates to `fast-tier` / `balanced-tier` / `deep-tier` subagents, each pinned to a
-  model your account can run. Delegation only happens when the tier model is materially cheaper.
+  model your account can run. Delegation only happens when a typical task costs at least 20% less on the tier's model once the subagent's own session start (about 38k cached tokens, configurable) is paid. On **Composer** that is never the case, so routine work stays in the chat and only risky work is routed; on **Auto** the optimizer prices the model Auto actually picked for the chat (often Grok or Claude) and delegates when that saves; a pricier chat model (Claude, GPT, Grok) is where the routing saves most.
 - **Hooks that enforce it**: the Task guard rewrites mis-routed delegations and applies guardrails (high risk
   never runs FAST); the tool gate keeps expensive chat models from doing cheap work themselves; outcome learning
   escalates tiers that keep failing; every decision is logged to `.cursor/cco/state/decisions.jsonl`.

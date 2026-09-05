@@ -37,7 +37,12 @@ export function detectTestCommand(workspace) {
 }
 
 /** Rough expected cost of a task on a tier's model, from the tier's expected token volume. */
-export function estimateTaskCostUsd({ tier, model, pricing, config }) {
+/**
+ * Estimated cost of a tier's typical task on a model. A delegation is a fresh session: it writes the whole
+ * system context (rules, tool schemas, ~38k tokens measured) to the cache once, so its estimate carries that
+ * start-up cost; the chat's own session already has it and pays nothing extra.
+ */
+export function estimateTaskCostUsd({ tier, model, pricing, config, delegation = false }) {
   const price = resolveModelPrice(model, pricing, { overrides: config?.pricing?.overrides });
   const expected = config?.budgets?.[tier]?.expectedTokens;
   if (!price || !Number.isFinite(price.input) || !expected) {
@@ -46,8 +51,29 @@ export function estimateTaskCostUsd({ tier, model, pricing, config }) {
   const input = asNumber(expected.input, 0);
   const output = asNumber(expected.output, 0);
   // Most input is cache reads in a multi-turn subagent session.
-  const usd = (input * (0.2 * price.input + 0.8 * price.cacheRead) + output * price.output) / 1_000_000;
+  let usd = (input * (0.2 * price.input + 0.8 * price.cacheRead) + output * price.output) / 1_000_000;
+  if (delegation) {
+    const overheadTokens = asNumber(config?.budgets?.sessionOverheadTokens, 38000);
+    const writeRate = Number.isFinite(price.cacheWrite) ? price.cacheWrite : price.input;
+    usd += (overheadTokens * writeRate) / 1_000_000;
+  }
   return Number(usd.toFixed(3));
+}
+
+/**
+ * Is a delegation of this tier's task to `tierModel` worth it next to doing it in the chat on `sessionModel`?
+ * Compares whole-task estimates (the delegation's session start included) against the configured minimum
+ * savings factor. Returns nulls when a price is unknown.
+ */
+export function delegationWorth({ tier, tierModel, sessionModel, pricing, config }) {
+  const tierCost = tierModel && tierModel !== "inherit" ? estimateTaskCostUsd({ tier, model: tierModel, pricing, config, delegation: true }) : null;
+  const chatCost = sessionModel ? estimateTaskCostUsd({ tier, model: sessionModel, pricing, config }) : null;
+  const minSavings = asNumber(config?.enforcement?.minSavingsFactor, 1.3);
+  if (tierCost === null || chatCost === null || tierCost <= 0) {
+    return { known: false, worth: null, tierCost, chatCost, factor: null };
+  }
+  const factor = chatCost / tierCost;
+  return { known: true, worth: factor >= minSavings, tierCost, chatCost, factor: Number(factor.toFixed(2)), savings: Number((chatCost - tierCost).toFixed(3)) };
 }
 
 export function formatUsd(usd) {
