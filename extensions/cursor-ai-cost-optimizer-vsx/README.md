@@ -8,19 +8,10 @@ the Cursor plugin marketplace, and ships a self-contained hook binary for machin
 
 ## Getting started
 
-1. **Set it up** — click **AI Cost** in the status bar (or Command Palette → `AI Cost Optimizer: Set Up / Update`) and choose:
-   - **Everywhere** (recommended): nothing is written into any project. CCO registers in Cursor's own user-level
-     config (`~/.cursor/hooks.json` entries, `~/.cursor/agents/cco-*.md`) and keeps its state in the extension's
-     storage, the way Copilot keeps its state in the editor. Pause it per project from the same menu.
-   - **This project only**: 8 files under the project's `.cursor/`, shareable with teammates through git.
-   You see exactly what will be written before anything happens. After an Everywhere setup, reload the window once
-   (the notification offers it): Cursor loads the routing rule when a workspace opens, so the current window needs
-   a reload; new windows get it automatically.
-2. **Start a new chat and work normally.** Keep your usual chat model. Each routed task ends with one line like
-   `[cco: FAST → composer-2.5 • 0.3x of your chat model • est. $0.02]`. Nothing is blocked; risky work always
-   goes to the strong tier.
-3. **Steer when you want to** — `[cco:fast]`, `[cco:balanced]`, `[cco:deep]` in a prompt force a tier,
-   `[cco:off]` bypasses routing for one request. `/cco-report` shows decisions and estimated savings.
+1. **Turn it on.** After installing, one toast offers it; or click **AI Cost** in the status bar → **Turn on**, or run `AI Cost Optimizer: Turn On / Update Models`. It takes a few seconds, asks nothing else, and needs no reload. Nothing is written into any project: the Cost Optimizer registers in Cursor's own user-level config (`~/.cursor/hooks.json` entries, `~/.cursor/agents/cco-*.md`) and keeps its state in the extension's storage, the way Copilot keeps its state in the editor. **Undo** is on the confirmation toast; **Remove** takes it all back out later.
+   - Prefer repo files? The palette command also offers **This project only**: 8 files under the project's `.cursor/`, shown to you before anything is written, shareable with teammates through git.
+2. **Start a new chat and work normally.** Keep your usual chat model. A routed task shows a subagent card with a line like `Fast on Composer 2.5 · ~$0.02, saves ~$0.04` and ends with `Cost Optimizer · Fast on Composer 2.5 · ~$0.02, saves ~$0.04`. Risky work goes to the strong tier and says so. The status bar shows what you have saved in the project.
+3. **Steer when you want to** — `[cco:fast]`, `[cco:balanced]`, `[cco:deep]` in a prompt force a tier, `[cco:off]` bypasses routing for one request. **Pause here** in the status menu switches a project off without removing anything.
 
 ## Features
 
@@ -39,14 +30,14 @@ the Cursor plugin marketplace, and ships a self-contained hook binary for machin
 
 | Command | What it does |
 | --- | --- |
-| AI Cost Optimizer: Set Up / Update | Sets up (or refreshes) CCO everywhere or for the open folder, after showing what will be written. |
+| AI Cost Optimizer: Turn On / Update Models | Turns the Cost Optimizer on for all projects (seconds, nothing written into projects) or for the open folder only (shows the 8 files first); re-maps the tiers when already on. |
 | AI Cost Optimizer: Remove | Removes everything the setup wrote (everywhere, or from the open folder); other tools' hook entries and your own files are kept. |
-| AI Cost Optimizer: Pause / Resume in This Project | Turns routing off or on for the open folder without removing anything. |
-| AI Cost Optimizer: Show Tier Rates / Recommend a Tier | Cost statement for this project — each tier's model and its rate relative to your chat model (`FAST → composer-2.5 • 0.1x of claude-opus-5 (Rate is counted at 0.1x.)`) — and, for selected text, the recommended tier with its override token. |
+| AI Cost Optimizer: Pause / Resume Here | Switches routing off or on for the open folder without removing anything; paused chats work as before. |
+| AI Cost Optimizer: Savings and Tier Rates | What you have saved in this project, each tier's model and its price next to your chat model, and, for selected text, the recommended tier. |
 | AI Cost Optimizer: Insert [cco:fast] / [cco:balanced] / [cco:deep] | Inserts an override token at the cursor (editor commands). |
 | AI Cost Optimizer: Open Status Menu | The same menu as clicking **AI Cost** in the status bar. |
 | AI Cost Optimizer: Show Log | Opens the "AI Cost Optimizer" log output. |
-| AI Cost Optimizer: Collect Diagnostics | Copies a bug-report summary (runtime mapping, hook mode, binary hash, Node and Cursor versions) to the clipboard. |
+| AI Cost Optimizer: Copy Diagnostics | Copies a bug-report summary (runtime mapping, hook mode, binary hash, Node and Cursor versions) to the clipboard. |
 
 ## Settings
 
@@ -97,7 +88,7 @@ Measured against the bar set by the big first-party extensions (Copilot Chat, Am
 | Projects you paused / did not set up | Paused projects: the chat is told to work normally and any `cco-*` delegation is turned back into in-chat work (the rule and subagents are user-level and cannot be unloaded per project). | Untouched: no files, no messages, no hooks. |
 | On extension update | Hook entries are repointed silently. | The pinned plugin path and binary are refreshed silently. |
 | On every activation | 1.5 s after startup, off the extension host thread: a repair pass, then a self-check that runs the real hook command once. If it fails or does not answer in 6 s, the hooks are turned off and you get one message. | same |
-| If you want it off right now | Status menu → **Turn hooks off now**: hook entries removed, nothing else touched; Set Up / Update restores. | same |
+| If you want it off right now | Status menu → **Turn hooks off now**: hook entries removed, nothing else touched; Update models restores. | same |
 | On Remove | Hook entries, subagents and state removed. Other tools' entries kept. Nothing left. | Everything under `.cursor/` that CCO wrote is removed; other tools' hook entries and your files are kept. |
 | If you uninstall the extension | Its uninstall hook removes the hook entries, the subagents and its storage. Nothing left. | Project files stay until you run Remove; the shim retires its own hook entries after 7 days. |
 
@@ -133,7 +124,7 @@ See **Uninstall** below before removing the extension.
 ## Network access and data
 
 The extension itself has no telemetry and opens no connections. Two network activities happen during
-**Set Up / Update** and later hook runs, both performed by the bundled plugin scripts:
+**Turn On / Update Models** and later hook runs, both performed by the bundled plugin scripts:
 
 1. **Pricing**: `https://cursor.com/docs/models-and-pricing.md` is fetched (setup, and again by the
    `workspaceOpen`/`sessionStart` hooks when the cache is older than `pricing.refreshHours`, default 24 h). A
