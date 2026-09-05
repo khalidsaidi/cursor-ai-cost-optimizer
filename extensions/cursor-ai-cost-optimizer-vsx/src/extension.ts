@@ -5,7 +5,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { decideHookMode, doctorWorkspace, findBundledBinary, findNode, installWorkspace, plannedFiles, runPluginScriptAsync, stripCcoHooks, uninstallWorkspace, workspacePaths, workspaceStatus, type HookRuntimePreference, type HooksFile, type Options, hasProjectLeftovers } from "./install";
-import { costStatement, formatUsd, readSavings, readLastDecision, readTierModels, loadPricing, modelDisplayName, resolveModelPrice, pickerModels } from "./pricing";
+import { costStatement, formatUsd, readSavings, readLastDecision, readTierModels, loadPricing, modelDisplayName, resolveModelPrice, pickerModels, overrideMismatches } from "./pricing";
 import { syncSettingsToPluginConfig } from "./settings";
 import { hooksLoadedInWindow } from "./hooksLog";
 import { doctorUser, installUser, pauseWorkspace, stripUserHooks, uninstallUser, userHookCommand, userStatus, workspacePaused, workspaceStateDir, findPluginCopies, retirePluginCopies, recordAgentsWrittenAfterOpen, generatedAgentNames } from "./userScope";
@@ -215,6 +215,12 @@ export function activate(context: vscode.ExtensionContext) {
       const cost = costStatement(ws, bundledPricing, c.mode === "user" ? { stateRoot, workspaceStateDir: path.join(workspaceStateDir(stateRoot, ws), "state") } : {});
       for (const line of cost.lines) {
         md.appendMarkdown(`- ${line.text}\n`);
+      }
+      if (c.mode === "user") {
+        for (const mm of overrideMismatches(path.join(stateRoot, "runtime.json"), userStatus(stateRoot).agents)) {
+          md.appendMarkdown(`\n$(warning) ${vscode.l10n.t("{0}: \"{1}\" is not a model your account lists; using {2}. Pick one with Choose tier models.", mm.tier === "fast" ? vscode.l10n.t("Fast") : mm.tier === "balanced" ? vscode.l10n.t("Balanced") : vscode.l10n.t("Deep"), mm.requested, mm.actual ? modelDisplayName(mm.actual, loadPricing(null, bundledPricing)) : vscode.l10n.t("the automatic choice"))}\n`);
+          warn = true;
+        }
       }
       const fastLine = cost.lines.find((l) => l.tier === "fast");
       if (fastLine && fastLine.multiplier !== null && fastLine.multiplier >= 0.995 && cost.chatModelLabel) {
@@ -469,6 +475,10 @@ export function activate(context: vscode.ExtensionContext) {
         }
         refreshStatus();
         writeWalkthroughMapping(context.extensionPath, result.agents, loadPricing(null, bundledPricing));
+        const mismatch = overrideMismatches(path.join(stateRoot, "runtime.json"), result.agents)[0];
+        if (mismatch) {
+          flash(vscode.l10n.t("{0}: \"{1}\" is not a model your account lists; using {2}", mismatch.tier === "fast" ? vscode.l10n.t("Fast") : mismatch.tier === "balanced" ? vscode.l10n.t("Balanced") : vscode.l10n.t("Deep"), mismatch.requested, mismatch.actual ? modelDisplayName(mismatch.actual, loadPricing(null, bundledPricing)) : vscode.l10n.t("the automatic choice")));
+        }
         if (args?.firstRun && !context.globalState.get<boolean>("cco.walkthroughShown")) {
           void context.globalState.update("cco.walkthroughShown", true);
           void vscode.commands.executeCommand("workbench.action.openWalkthrough", `${EXTENSION_ID}#cco.gettingStarted`, false);

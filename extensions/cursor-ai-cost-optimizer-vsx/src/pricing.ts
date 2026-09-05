@@ -405,3 +405,29 @@ export function pickerModels(ids: string[], pricing: PricingTable | null): Array
   }
   return rows.sort((a, b) => (a.rate ?? Number.MAX_VALUE) - (b.rate ?? Number.MAX_VALUE) || a.label.localeCompare(b.label));
 }
+
+/**
+ * A tier model the user typed in Settings that the account does not list is skipped by the mapping (best effort),
+ * which must not stay silent: the tier keeps its automatic model and the user is told which id was not found.
+ */
+export function overrideMismatches(runtimePath: string, agents: Record<string, string | null>): Array<{ tier: Tier; requested: string; actual: string | null }> {
+  let requested: Record<string, string> = {};
+  try {
+    const runtime = JSON.parse(fs.readFileSync(runtimePath, "utf8")) as { discovery?: { overrides?: { requested?: Record<string, string> } } };
+    requested = runtime.discovery?.overrides?.requested ?? {};
+  } catch {
+    return [];
+  }
+  const out: Array<{ tier: Tier; requested: string; actual: string | null }> = [];
+  for (const tier of TIERS) {
+    const want = String(requested[tier] ?? "").trim();
+    if (!want) {
+      continue;
+    }
+    const actual = agents[`${tier}-tier`] ?? null;
+    if (actual !== want) {
+      out.push({ tier, requested: want, actual });
+    }
+  }
+  return out;
+}

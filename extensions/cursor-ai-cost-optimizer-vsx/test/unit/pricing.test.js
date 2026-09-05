@@ -106,3 +106,14 @@ test("readSavings counts only real delegations, not tasks kept in the chat", () 
   assert.ok(Math.abs(s.savedUsd - 0.06) < 1e-9);
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test("overrideMismatches: a typed tier model the account does not list is reported with the model actually used", () => {
+  const { overrideMismatches } = require("../../dist/pricing.js");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cco-ovr-"));
+  const rt = path.join(dir, "runtime.json");
+  fs.writeFileSync(rt, JSON.stringify({ discovery: { overrides: { requested: { fast: "gpt-99-turbo", balanced: "", deep: "claude-opus-5-thinking-high" } } } }));
+  const agents = { "fast-tier": "composer-2.5", "balanced-tier": "claude-sonnet-5-thinking-high", "deep-tier": "claude-opus-5-thinking-high" };
+  assert.deepEqual(overrideMismatches(rt, agents), [{ tier: "fast", requested: "gpt-99-turbo", actual: "composer-2.5" }]);
+  assert.deepEqual(overrideMismatches(path.join(dir, "missing.json"), agents), []);
+  fs.rmSync(dir, { recursive: true, force: true });
+});

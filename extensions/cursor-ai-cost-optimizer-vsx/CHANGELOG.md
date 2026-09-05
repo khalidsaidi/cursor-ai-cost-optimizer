@@ -20,6 +20,7 @@ All notable changes to this extension are documented here. The format is based o
 - Menu and commands renamed to what they do: Turn on, Savings and tier rates, Pause here / Resume here, Update models, Remove from Cursor.
 
 ### Fixed
+- A tier model typed in Settings that the account does not list was skipped silently (the tier kept its automatic model and nothing said so). The status bar now shows a warning and the tooltip names the id and the model in use; the same message flashes after the re-map.
 - The chat model is re-read on every prompt. Switching the picker mid-chat (Composer 2.5 Fast to plain Composer 2.5, the Fast tier's own model) used to leave the hooks on the first prompt's model, so the chat delegated to an identical model and counted it as savings; now that task stays in the chat and the tooltip says why ("Composer 2.5 already costs no more than the Fast tier"). Tasks kept in the chat no longer count as routed tasks.
 - "no subagents", "do it yourself", "directly", "in this chat" in a prompt switch routing off for that turn. In enforce mode such a request used to have its edits blocked twice, after which the model wrote the file through a shell command.
 - **Savings and tier rates** opens on the savings, the last task and the rates; it no longer asks for a prompt to score first (that is a sub-item now).
