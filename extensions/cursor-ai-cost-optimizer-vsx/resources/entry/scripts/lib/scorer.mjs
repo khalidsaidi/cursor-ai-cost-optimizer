@@ -19,6 +19,14 @@ export function normalizeScores(raw) {
 }
 
 /** Detect a manual override token anywhere in the text. Last token wins. */
+/** Plain-language steering, so nobody has to remember a token. Explicit tokens still win. */
+const PHRASES = [
+  ["deep", /\b(use|with|on|pick|prefer)\s+(the\s+)?(best|strongest|smartest|most capable|top|strong|big|frontier)\s+model\b|\bbest model\b|\bthink hard(er)?\b/],
+  ["fast", /\b(use|with|on|pick|prefer)\s+(the\s+)?(cheapest|fastest|cheap|fast|small|quick)\s+model\b|\bquick and cheap\b|\bcheaply\b/],
+  ["off", /\b(don'?t|do not|no)\s+(route|delegate|routing|delegation)\b|\bwithout (routing|delegating|subagents?)\b|\bdo it (yourself|here|in this chat)\b/],
+  ["auto", /\b(back to|resume|restore)\s+(auto(matic)?\s+)?routing\b/]
+];
+
 export function parseOverride(text, tokens = DEFAULT_OVERRIDE_TOKENS) {
   const lower = String(text ?? "").toLowerCase();
   let best = null;
@@ -33,7 +41,15 @@ export function parseOverride(text, tokens = DEFAULT_OVERRIDE_TOKENS) {
       best = tier;
     }
   }
-  return best;
+  if (best) {
+    return best;
+  }
+  for (const [tier, re] of PHRASES) {
+    if (re.test(lower)) {
+      return tier;
+    }
+  }
+  return null;
 }
 
 /**

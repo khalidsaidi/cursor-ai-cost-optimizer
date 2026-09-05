@@ -71,3 +71,12 @@ test("proseOnly keeps long single-line prose and drops pasted machine output", a
   const log = "fix this\n" + JSON.stringify({ error: "ECONNRESET", stack: "at payments.refund (/srv/app/src/payments.js:12:5) production secret token auth".repeat(4), ts: 1725000000000 });
   assert.equal(proseOnly(log), "fix this");
 });
+
+test("plain-language steering counts as an override; explicit tokens still win", () => {
+  assert.equal(parseOverride("please use the best model for this refactor"), "deep");
+  assert.equal(parseOverride("Use the cheapest model, it is trivial"), "fast");
+  assert.equal(parseOverride("don't route this, do it here"), "off");
+  assert.equal(parseOverride("back to automatic routing please"), "auto");
+  assert.equal(parseOverride("use the best model [cco:fast]"), "fast", "a token beats a phrase");
+  assert.equal(parseOverride("add a function"), null);
+});

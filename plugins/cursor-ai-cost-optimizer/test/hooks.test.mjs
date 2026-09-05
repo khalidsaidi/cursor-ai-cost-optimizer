@@ -392,7 +392,10 @@ test("user scope: nothing in the repo; ~/.cursor hooks + agents, private state r
     assert.equal(res.status, 0, res.stderr);
     return JSON.parse(res.stdout.trim().split(/\r?\n/).filter(Boolean).pop());
   };
-  const start = run("sessionStart", { hook_event_name: "sessionStart", conversation_id: "u0", workspace_roots: [ws] });
+  const cheap = run("sessionStart", { hook_event_name: "sessionStart", conversation_id: "u-cheap", model: "composer-2.5", workspace_roots: [ws] });
+  assert.match(cheap.additional_context, /short form/, "a cheap chat model gets the short rule");
+  assert.doesNotMatch(cheap.additional_context, /## Score/);
+  const start = run("sessionStart", { hook_event_name: "sessionStart", conversation_id: "u0", model: "claude-opus-5-thinking-high", workspace_roots: [ws] });
   assert.match(start.additional_context, /# CCO routing/, "user scope: the routing rule is delivered through the session context");
   const open = run("workspaceOpen", { hook_event_name: "workspaceOpen", workspace_roots: [ws] });
   assert.deepEqual(open.pluginPaths, [path.join(root, "plugin")]);

@@ -27,12 +27,13 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { loadConfig } from "./lib/config.mjs";
+import { loadPricing, resolveModelPrice, blendedRatePerMillion } from "./lib/pricing.mjs";
 import { refreshPricing } from "./cco-refresh-pricing.mjs";
 import { discover } from "./cco-discover-models.mjs";
 import { buildSessionContext } from "./lib/context.mjs";
 import { cliVersion } from "./lib/models.mjs";
 import { createSession, pruneSessions, normalizeModelId } from "./lib/session.mjs";
-import { writeWorkspaceAgents, workspaceHasAgents } from "./lib/agents.mjs";
+import { writeWorkspaceAgents, workspaceHasAgents, readWorkspaceAgentModel } from "./lib/agents.mjs";
 import { TIERS } from "./lib/common.mjs";
 
 const REFRESH_LOCK_MINUTES = 10;
@@ -68,6 +69,34 @@ export function scheduleBackgroundRefresh({ workspace, paths, force = false }) {
   } catch (error) {
     return { action: "failed", error: String(error?.message || error).slice(0, 200) };
   }
+}
+
+/** True when delegating FAST work would not save materially over the session model (Composer, Auto, …). */
+export function sessionIsCheap({ workspace, config, sessionModel }) {
+  if (!sessionModel || config?.enforcement?.requireDelegation === "always") {
+    return false;
+  }
+  try {
+    const paths = workspacePaths(workspace);
+    const pricing = loadPricing(paths.pricingPath);
+    const fastModel = readWorkspaceAgentModel(workspace, "fast-tier") || readJsonSafe(paths.runtimePath)?.profiles?.fast?.model || "inherit";
+    const session = blendedRatePerMillion(resolveModelPrice(sessionModel, pricing, { overrides: config?.pricing?.overrides }));
+    const fast = fastModel === "inherit" ? null : blendedRatePerMillion(resolveModelPrice(fastModel, pricing, { overrides: config?.pricing?.overrides }));
+    if (!session || !fast) {
+      return false;
+    }
+    return session / fast < Number(config?.enforcement?.minSavingsFactor ?? 1.3);
+  } catch {
+    return false;
+  }
+}
+
+/** The rule a cheap chat model gets: no scoring table, just overrides and the risk escalation. */
+export function compactRuleText() {
+  return [
+    "# CCO routing (short form: your chat model is already the cheap tier)",
+    "Work normally in this chat. Delegate only when it improves quality: risky work (production, auth, payments, security, privacy, data loss, irreversible operations) or a genuinely complex multi-file change goes to the `deep-tier` subagent (Task tool; the prompt starts with `CCO-SCORES: complexity=<n> risk=<n> breadth=<n> uncertainty=<n> latency=<n>`, 0–10 each), medium work to `balanced-tier`. `[cco:deep]`, `[cco:balanced]`, `[cco:fast]` force a tier; `[cco:off]` skips routing. Relay a subagent's final message verbatim. Never mention tiers, routing, subagents or costs in your own text; never add a cost line. If the Task tool has no `fast-tier` subagent, CCO is not enabled here: ignore all of this."
+  ].join("\n");
 }
 
 let ruleCache = null;
@@ -196,7 +225,9 @@ async function main() {
     // User scope has no rule file in the project: the routing rule rides along here, for this very window,
     // every Cursor version with hooks, and the CLI alike (no plugin path, no reload).
     if (paths.scope === "user") {
-      const rule = routingRuleText();
+      // A cheap chat model (Composer, Auto) rarely needs routing: it gets the short rule (risk escalation and
+      // overrides only) instead of paying for the full one on every turn.
+      const rule = sessionIsCheap({ workspace, config, sessionModel }) ? compactRuleText() : routingRuleText();
       if (rule) {
         additionalContext += `\n\n${rule}`;
       }
