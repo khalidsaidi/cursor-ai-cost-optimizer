@@ -89,7 +89,10 @@ test("remote window: subagents written after it opened are recorded as unknown t
   const { recordAgentsWrittenAfterOpen } = require("../../dist/userScope.js");
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "cco-win-"));
   const started = Date.now() - 1000;
+  fs.mkdirSync(root, { recursive: true });
+  fs.writeFileSync(path.join(root, "window-agents.json"), JSON.stringify({ ts: new Date(started - 5000).toISOString(), source: "workspaceOpen", names: ["cco-fast"] }));
   assert.equal(recordAgentsWrittenAfterOpen(root, [], started, false).written, false, "a local window refreshes its list itself");
+  assert.equal(fs.existsSync(path.join(root, "window-agents.json")), false, "and an older record is dropped so the new names are handed out");
   const first = recordAgentsWrittenAfterOpen(root, [], started, true);
   assert.deepEqual(first, { written: true, noneOfOurs: true });
   let rec = JSON.parse(fs.readFileSync(path.join(root, "window-agents.json"), "utf8"));

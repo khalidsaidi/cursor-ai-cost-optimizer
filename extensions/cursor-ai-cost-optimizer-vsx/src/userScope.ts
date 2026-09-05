@@ -353,10 +353,14 @@ export function retirePluginCopies(stateRoot: string, copies: PluginCopy[]): { r
  * window opens with the files in place.
  */
 export function recordAgentsWrittenAfterOpen(stateRoot: string, namesBefore: string[], windowStartedAt: number, remote: boolean): { written: boolean; noneOfOurs: boolean } {
+  const file = path.join(stateRoot, "window-agents.json");
   if (!remote) {
+    // a local window picks up new subagent files itself: the names written now are the ones to hand out
+    try {
+      fs.rmSync(file, { force: true });
+    } catch {}
     return { written: false, noneOfOurs: false };
   }
-  const file = path.join(stateRoot, "window-agents.json");
   try {
     const existing = JSON.parse(fs.readFileSync(file, "utf8")) as { ts?: string; source?: string };
     if (existing?.ts && Date.parse(existing.ts) >= windowStartedAt && existing.source === "workspaceOpen") {

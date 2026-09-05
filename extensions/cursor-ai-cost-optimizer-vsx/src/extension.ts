@@ -244,7 +244,7 @@ export function activate(context: vscode.ExtensionContext) {
       md.appendMarkdown(`\n$(warning) ${vscode.l10n.t("The Cost Optimizer plugin is also installed in Cursor (Settings → Plugins): uninstall it, the extension replaces it. Its subagents run on your chat model and its hooks run a second time.")}\n`);
     }
     if (reloadHint && c.mode === "user" && c.enabled) {
-      md.appendMarkdown(`\n${reloadHint === "finish" ? vscode.l10n.t("Cursor lists subagents when a window opens: reload this window once to start routing here.") : vscode.l10n.t("Cursor lists subagents when a window opens: this window keeps routing under the previous names until it is reloaded.")}\n`);
+      md.appendMarkdown(`\n${reloadHint === "finish" ? vscode.l10n.t("Cursor lists subagents when a window opens: reload this window once to start routing here.") : vscode.l10n.t("Cursor lists subagents when a window opens: this window keeps the previous tier mapping (names and models) until it is reloaded; the new one applies after that.")}\n`);
     }
     status.text = hooksState.known && !hooksState.loaded ? `$(warning) ${vscode.l10n.t("AI Cost: hooks off")}` : warn ? "$(warning) AI Cost" : c.mode === "none" ? `$(zap) ${vscode.l10n.t("AI Cost: Off")}` : c.enabled ? (reloadHint === "finish" ? `$(zap) ${vscode.l10n.t("AI Cost: reload to finish")}` : `$(zap) ${savedText}`) : `$(zap) ${vscode.l10n.t("AI Cost: Paused")}`;
     status.tooltip = md;
@@ -342,7 +342,7 @@ export function activate(context: vscode.ExtensionContext) {
           const rec = recordAgentsWrittenAfterOpen(stateRoot, namesBeforeDoctor, activationStarted, Boolean(vscode.env.remoteName));
           if (rec.written) {
             noteReload(rec.noneOfOurs ? "finish" : "names");
-            log.info(`[doctor] remote window: subagents rewritten after it opened; routing continues under the previous names until a reload`);
+            log.info(`[doctor] remote window: subagents rewritten after it opened; this window keeps the previous mapping until a reload`);
           }
         }
       }
@@ -465,7 +465,7 @@ export function activate(context: vscode.ExtensionContext) {
         const rec = recordAgentsWrittenAfterOpen(stateRoot, namesBefore, activationStarted, Boolean(vscode.env.remoteName));
         if (rec.written) {
           noteReload(rec.noneOfOurs ? "finish" : "names");
-          log.info(`[install] remote window: subagents written after it opened; ${rec.noneOfOurs ? "work stays in the chat until a reload" : "routing continues under the previous names until a reload"}`);
+          log.info(`[install] remote window: subagents written after it opened; ${rec.noneOfOurs ? "work stays in the chat until a reload" : "this window keeps the previous mapping until a reload"}`);
         }
         refreshStatus();
         writeWalkthroughMapping(context.extensionPath, result.agents, loadPricing(null, bundledPricing));
@@ -648,7 +648,7 @@ export function activate(context: vscode.ExtensionContext) {
       items.push({ label: vscode.l10n.t("$(extensions) Uninstall the Cursor plugin"), description: vscode.l10n.t("the extension replaces it; its subagents run on your chat model"), run: () => vscode.commands.executeCommand("aiSettings.action.open").then(undefined, () => flash(vscode.l10n.t("Cursor Settings → Plugins → AI Cost Optimizer → Uninstall"))) });
     }
     if (reloadHint && c.mode === "user") {
-      items.push({ label: vscode.l10n.t("$(refresh) Reload window"), description: reloadHint === "finish" ? vscode.l10n.t("finishes the setup in this window (Cursor lists subagents when a window opens)") : vscode.l10n.t("shows the new subagent names in this window"), run: () => vscode.commands.executeCommand("workbench.action.reloadWindow") });
+      items.push({ label: vscode.l10n.t("$(refresh) Reload window"), description: reloadHint === "finish" ? vscode.l10n.t("finishes the setup in this window (Cursor lists subagents when a window opens)") : vscode.l10n.t("applies the new tier models in this window"), run: () => vscode.commands.executeCommand("workbench.action.reloadWindow") });
     }
     if (c.mode === "none") {
       items.push({ label: vscode.l10n.t("$(zap) Turn on"), description: vscode.l10n.t("for all projects (nothing written into them), or this project only"), run: () => vscode.commands.executeCommand("cco.installCursorAssets") });

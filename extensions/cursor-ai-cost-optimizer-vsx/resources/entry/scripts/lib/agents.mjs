@@ -120,9 +120,12 @@ export function writeWorkspaceAgents(workspace, tierModels) {
       const oldName = file.slice(0, -3);
       const role = roleOf(oldName);
       const target = role ? names[role] : null;
-      const content = role ? renderWorkspaceAgent(role, tierModels[role] || "inherit", oldName) : null;
-      if (target && content) {
-        writeTextIfChanged(path.join(dir, file), content.replace(GENERATED_MARKER, `${GENERATED_MARKER}\n${ALIAS_MARKER_PREFIX} ${target} -->`));
+      if (target) {
+        // Kept as it was (same model): a window that still lists this name also still runs the definition it
+        // loaded with it, so the cards and estimates stay honest until the window is reloaded.
+        if (!text.includes(ALIAS_MARKER_PREFIX)) {
+          writeTextIfChanged(path.join(dir, file), text.includes(GENERATED_MARKER) ? text.replace(GENERATED_MARKER, `${GENERATED_MARKER}\n${ALIAS_MARKER_PREFIX} ${target} -->`) : `${text.trimEnd()}\n${ALIAS_MARKER_PREFIX} ${target} -->\n`);
+        }
         aliases[oldName] = target;
       } else {
         try { fs.unlinkSync(path.join(dir, file)); } catch {}
