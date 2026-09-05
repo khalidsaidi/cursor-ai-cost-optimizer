@@ -28,7 +28,7 @@ import {
   isEnabled, isMain, applyScopeArgs, agentForTier } from "./lib/common.mjs";
 applyScopeArgs();
 import { loadConfig } from "./lib/config.mjs";
-import { modelLimitedUntil, limitsPathFor } from "./lib/state.mjs";
+import { modelLimitedUntil } from "./lib/state.mjs";
 import { tierLabel, modelLabel } from "./lib/labels.mjs";
 import { loadPricing, resolveModelPrice, blendedRatePerMillion } from "./lib/pricing.mjs";
 import { heuristicScores, decideTier, parseOverride, isQuestionLike, isTinyTask } from "./lib/scorer.mjs";
@@ -229,7 +229,7 @@ async function main() {
     const config = loadConfig(workspace);
     const pricing = loadPricing(paths.pricingPath);
     const runtime = readJsonSafe(paths.runtimePath);
-    const models = tierModels(workspace, runtime, paths ? limitsPathFor(paths.jointStatePath) : null);
+    const models = tierModels(workspace, runtime, paths ? paths.limitsPath : null);
     if (refineSessionModel(session, payload.model)) {
       saveSession(workspace, session);
     }

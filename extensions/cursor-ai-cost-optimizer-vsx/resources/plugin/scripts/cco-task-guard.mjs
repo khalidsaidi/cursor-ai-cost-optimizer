@@ -24,7 +24,7 @@ import {
 applyScopeArgs();
 import { loadConfig } from "./lib/config.mjs";
 import { parseOverride, parseScoresLine, heuristicScores, decideTier, applyStateEscalation, formatScoresLine } from "./lib/scorer.mjs";
-import { loadJointState, modelLimitedUntil, limitsPathFor } from "./lib/state.mjs";
+import { loadJointState, modelLimitedUntil } from "./lib/state.mjs";
 import { tierLabel, modelLabel, reasonLabel } from "./lib/labels.mjs";
 import { readWorkspaceAgentModel } from "./lib/agents.mjs";
 import { tierFor } from "./lib/models.mjs";
@@ -183,7 +183,7 @@ async function main() {
       conversationId: payload.conversation_id || null,
       runtime,
       workspace,
-      limitsPath: paths ? limitsPathFor(paths.jointStatePath) : null
+      limitsPath: paths ? paths.limitsPath : null
     });
     if (!result.applies) {
       emit({ permission: "allow" });

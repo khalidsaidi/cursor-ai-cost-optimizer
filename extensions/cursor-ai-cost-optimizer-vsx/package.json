@@ -59,6 +59,12 @@
         "title": "Turn On / Update Models"
       },
       {
+        "command": "cco.chooseTierModels",
+        "category": "AI Cost Optimizer",
+        "title": "Choose Tier Models",
+        "enablement": "cco.mode != 'none'"
+      },
+      {
         "command": "cco.uninstallCursorAssets",
         "category": "AI Cost Optimizer",
         "title": "Remove",
@@ -178,7 +184,7 @@
           {
             "id": "cco.step.chat",
             "title": "Start a new chat and work normally",
-            "description": "Keep your usual chat model. Each routed task ends with one line like `[cco: FAST \u2192 composer-2.5 \u2022 0.3x of your chat model \u2022 est. $0.02]`. Risky work is always sent to the strong tier.",
+            "description": "Keep your usual chat model. Each routed task ends with one line like `[cco: FAST → composer-2.5 • 0.3x of your chat model • est. $0.02]`. Risky work is always sent to the strong tier.",
             "media": {
               "markdown": "media/walkthrough/step-init.md"
             }

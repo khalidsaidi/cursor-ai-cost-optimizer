@@ -79,7 +79,14 @@ export function markModelLimited({ limitsPath, model, minutes = 360, reason = "s
     return null;
   }
   const limits = loadLimits(limitsPath);
-  limits[model] = { until: new Date(Date.now() + minutes * 60_000).toISOString(), reason, at: nowIso() };
+  const prev = limits[model] || {};
+  limits[model] = {
+    until: new Date(Date.now() + minutes * 60_000).toISOString(),
+    reason,
+    at: nowIso(),
+    failures: asNumber(prev.failures, 0) + 1,
+    firstFailureAt: prev.firstFailureAt || nowIso()
+  };
   try {
     writeJson(limitsPath, limits);
   } catch {}
@@ -93,4 +100,24 @@ export function modelLimitedUntil(limitsPath, model) {
     return null;
   }
   return Date.parse(entry.until) > Date.now() ? entry.until : null;
+}
+
+const UNAVAILABLE_FAILURES = 3;
+const UNAVAILABLE_SPAN_HOURS = 12;
+
+/**
+ * A model that keeps refusing to start across cooldown periods is not a usage limit but a plan/team restriction
+ * or a disabled model: it is treated as unavailable and discovery maps its tier to the next candidate.
+ */
+export function modelUnavailable(limitsPath, model) {
+  const entry = limitsPath ? loadLimits(limitsPath)[model] : null;
+  if (!entry) {
+    return false;
+  }
+  const span = Date.now() - Date.parse(entry.firstFailureAt || entry.at || 0);
+  return asNumber(entry.failures, 0) >= UNAVAILABLE_FAILURES && span >= UNAVAILABLE_SPAN_HOURS * 3_600_000;
+}
+
+export function unavailableModels(limitsPath) {
+  return Object.keys(loadLimits(limitsPath)).filter((m) => modelUnavailable(limitsPath, m));
 }

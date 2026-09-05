@@ -28,11 +28,20 @@ export function loadDefaults() {
 /** Defaults merged with the project's .cursor/cco.json (if any). */
 export function loadConfig(workspace) {
   const defaults = loadDefaults();
-  const user = workspace ? readJsonSafe(workspacePaths(workspace).configPath) : null;
-  if (!user) {
-    return { ...defaults, _source: "defaults" };
+  const paths = workspace ? workspacePaths(workspace) : null;
+  const global = paths?.userConfigPath ? readJsonSafe(paths.userConfigPath) : null;
+  const user = paths ? readJsonSafe(paths.configPath) : null;
+  let merged = defaults;
+  let source = "defaults";
+  if (global) {
+    merged = deepMerge(merged, global);
+    source = "user";
   }
-  return { ...deepMerge(defaults, user), _source: "workspace" };
+  if (user) {
+    merged = deepMerge(merged, user);
+    source = "workspace";
+  }
+  return { ...merged, _source: source };
 }
 
 /** Write the project's config with only the knobs people are expected to touch. */

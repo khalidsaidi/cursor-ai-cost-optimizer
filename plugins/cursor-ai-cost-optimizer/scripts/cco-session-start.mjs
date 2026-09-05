@@ -46,11 +46,11 @@ function refreshLockPath(paths) {
  * the work and the current session keeps the cached data. A lock file keeps concurrent sessions from starting
  * more than one refresh per REFRESH_LOCK_MINUTES.
  */
-export function scheduleBackgroundRefresh({ workspace, paths }) {
+export function scheduleBackgroundRefresh({ workspace, paths, force = false }) {
   const lock = refreshLockPath(paths);
   try {
     const st = fs.statSync(lock);
-    if (Date.now() - st.mtimeMs < REFRESH_LOCK_MINUTES * 60_000) {
+    if (!force && Date.now() - st.mtimeMs < REFRESH_LOCK_MINUTES * 60_000) {
       return { action: "scheduled", already: true };
     }
   } catch {}
@@ -59,7 +59,7 @@ export function scheduleBackgroundRefresh({ workspace, paths }) {
     fs.writeFileSync(lock, nowIso(), "utf8");
     const bundled = Boolean(process.env.CCO_HOOK_MAIN);
     const argv = bundled ? [] : [path.join(path.dirname(fileURLToPath(import.meta.url)), "cco-hook.mjs")];
-    argv.push("refresh", ...scopeArgs(), "--workspace", workspace);
+    argv.push("refresh", ...scopeArgs(), "--workspace", workspace, ...(force ? ["--force"] : []));
     const child = spawn(process.execPath, argv, { detached: true, stdio: "ignore", windowsHide: true, env: process.env });
     child.on("error", () => {});
     child.unref();
@@ -107,7 +107,7 @@ export async function refreshPricingIfStale({ paths, config, background = false,
   }
 }
 
-export function refreshDiscoveryIfStale({ workspace, paths, config, background = false }) {
+export function refreshDiscoveryIfStale({ workspace, paths, config, background = false, force = false }) {
   const discoveryCfg = config?.discovery || {};
   if (discoveryCfg.auto === false) {
     return { action: "disabled" };
@@ -117,7 +117,7 @@ export function refreshDiscoveryIfStale({ workspace, paths, config, background =
   const age = ageHours(existing?.generatedAt);
   const version = cliVersion();
   const versionChanged = existing?.cli?.version && version && existing.cli.version !== version;
-  if (existing && existing.schemaVersion === 2 && age < refreshHours && !versionChanged) {
+  if (!force && existing && existing.schemaVersion === 2 && age < refreshHours && !versionChanged) {
     // Runtime is fresh; still make sure the plugin's tier agents match it (a plugin update resets them).
     let agents = [];
     if (discoveryCfg.writeAgents !== false && existing.profiles && workspaceHasAgents(workspace)) {

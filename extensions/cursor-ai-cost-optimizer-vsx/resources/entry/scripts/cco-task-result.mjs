@@ -20,7 +20,8 @@ import {
   isEnabled, isMain, applyScopeArgs, agentForTier } from "./lib/common.mjs";
 applyScopeArgs();
 import { loadConfig } from "./lib/config.mjs";
-import { loadJointState, recordOutcome, saveJointState, markModelLimited, limitsPathFor, modelLimitedUntil } from "./lib/state.mjs";
+import { loadJointState, recordOutcome, saveJointState, markModelLimited, modelLimitedUntil, modelUnavailable } from "./lib/state.mjs";
+import { scheduleBackgroundRefresh } from "./cco-session-start.mjs";
 import { escalateTier } from "./lib/scorer.mjs";
 import { tierFor } from "./lib/models.mjs";
 import { readWorkspaceAgentModel } from "./lib/agents.mjs";
@@ -109,7 +110,12 @@ async function main() {
       saveJointState(paths.jointStatePath, next);
     }
     if (paths && analysis.startupFailure) {
-      markModelLimited({ limitsPath: limitsPathFor(paths.jointStatePath), model: analysis.failedModel || model, minutes: asNumber(config?.learning?.limitCooldownMinutes, 360) });
+      const failed = analysis.failedModel || model;
+      markModelLimited({ limitsPath: paths.limitsPath, model: failed, minutes: asNumber(config?.learning?.limitCooldownMinutes, 360) });
+      if (modelUnavailable(paths.limitsPath, failed)) {
+        // Not a limit any more: remap the tiers without this model (detached, nothing waits on it).
+        scheduleBackgroundRefresh({ workspace, paths, force: true });
+      }
     }
     hookLog(paths, {
       event: hookEvent,
@@ -158,7 +164,7 @@ async function main() {
     }
     // The top tier failed (typically a usage limit on the DEEP model): there is nothing to escalate to, so the
     // chat model finishes the task itself and says so honestly instead of leaving a dead subagent card.
-    const limitsPath = paths ? limitsPathFor(paths.jointStatePath) : null;
+    const limitsPath = paths ? paths.limitsPath : null;
     const lowerModel = analysis.nextTier && workspace ? readWorkspaceAgentModel(workspace, agentForTier(analysis.nextTier)) : null;
     const lowerUsable = analysis.startupFailure ? Boolean(analysis.nextTier) && lowerModel && lowerModel !== "inherit" && !modelLimitedUntil(limitsPath, lowerModel) : Boolean(analysis.nextTier);
     if (analysis.startupFailure && lowerUsable && cascade) {

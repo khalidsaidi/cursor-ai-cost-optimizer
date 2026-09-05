@@ -215,7 +215,11 @@ export function workspacePaths(workspace) {
       jointStatePath: path.join(stateDir, "joint-state.json"),
       lastPromptPath: path.join(stateDir, "last-prompt.json"),
       decisionsPath: path.join(stateDir, "decisions.jsonl"),
-      hooksLogPath: path.join(stateDir, "hooks.jsonl")
+      hooksLogPath: path.join(stateDir, "hooks.jsonl"),
+      // Account-level facts (a model at its usage limit, or refused by the plan) are shared by every project.
+      limitsPath: path.join(root, "model-limits.json"),
+      // Settings the user chose for all projects (tier models); a project's cco.json still overrides them.
+      userConfigPath: path.join(root, "cco.json")
     };
   }
   const ccoDir = path.join(cursorDir, "cco");
@@ -239,7 +243,9 @@ export function workspacePaths(workspace) {
     jointStatePath: path.join(stateDir, "joint-state.json"),
     lastPromptPath: path.join(stateDir, "last-prompt.json"),
     decisionsPath: path.join(stateDir, "decisions.jsonl"),
-    hooksLogPath: path.join(stateDir, "hooks.jsonl")
+    hooksLogPath: path.join(stateDir, "hooks.jsonl"),
+    limitsPath: path.join(stateDir, "model-limits.json"),
+    userConfigPath: null
   };
 }
 export function isEnabled(workspace) {
@@ -369,6 +375,7 @@ export function applyScopeArgs(argv = process.argv.slice(2)) {
     if (argv[i] === "--scope" && argv[i + 1]) process.env.CCO_SCOPE = argv[i + 1];
     if (argv[i] === "--state-root" && argv[i + 1]) process.env.CCO_STATE_ROOT = argv[i + 1];
     if (argv[i] === "--workspace" && argv[i + 1]) process.env.CCO_WORKSPACE = argv[i + 1];
+    if (argv[i] === "--force") process.env.CCO_FORCE_REFRESH = "1";
   }
 }
 

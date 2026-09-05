@@ -4,7 +4,7 @@ const path = require('path');
 const vscode = require('vscode');
 
 // runTest.js points CCO_CURSOR_AGENT_BIN at a fake CLI; everything the extension writes is under the fixture's .cursor/.
-const COMMANDS = ['cco.installCursorAssets', 'cco.uninstallCursorAssets', 'cco.togglePause', 'cco.showMenu', 'cco.recommendTier', 'cco.insertOverrideFast', 'cco.insertOverrideBalanced', 'cco.insertOverrideDeep', 'cco.showOutputChannel', 'cco.collectDiagnostics'];
+const COMMANDS = ['cco.installCursorAssets', 'cco.chooseTierModels', 'cco.uninstallCursorAssets', 'cco.togglePause', 'cco.showMenu', 'cco.recommendTier', 'cco.insertOverrideFast', 'cco.insertOverrideBalanced', 'cco.insertOverrideDeep', 'cco.showOutputChannel', 'cco.collectDiagnostics'];
 const CCO_RE = /cco-hook|\.cursor[\\/]cco[\\/]scripts[\\/]cco-/;
 const BINARY_FORM = /^"[^"]+[\\/]\.cursor[\\/]cco[\\/]bin[\\/]cco-hook(\.exe)?" \w+$/;
 const NODE_FORM = /^node \.cursor\/cco-hook\.mjs [A-Za-z]+$/;

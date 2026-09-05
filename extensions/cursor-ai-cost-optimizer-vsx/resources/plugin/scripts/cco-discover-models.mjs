@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { unavailableModels } from "./lib/state.mjs";
 /**
  * Map CCO tiers (fast/balanced/deep) to models that this account can actually run,
  * then write .cursor/cco-runtime.json and workspace-level .cursor/agents/cco-*.md overrides
@@ -56,7 +57,12 @@ export function discover({ workspace, probe, writeAgents, config: configOverride
     probe = false;
     notes.push("tier models were not verified on this account (no usable Cursor CLI); Cursor applies the account's own access rules when a subagent runs");
   }
-  const available = listing.models || [];
+  // Models this account has repeatedly refused to run (plan/team restriction, disabled model) are left out.
+  const unavailable = new Set(unavailableModels(paths.limitsPath));
+  const available = (listing.models || []).filter((m) => !unavailable.has(m.id));
+  if (unavailable.size) {
+    notes.push(`skipped on this account (refused repeatedly): ${[...unavailable].join(", ")}`);
+  }
   const availableSet = new Set(available.map((m) => m.id));
   const overrides = normalizeOverrides(config);
   const policy = config?.modelOverridePolicy === "strict" ? "strict" : "best_effort";

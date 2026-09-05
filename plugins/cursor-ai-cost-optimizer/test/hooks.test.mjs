@@ -612,3 +612,47 @@ test("legacy cco-* names: old rules still route, and generated cco-*.md files ar
   assert.equal(fs.existsSync(path.join(dir, "cco-mine.md")), true, "user file kept");
   assert.equal(fs.existsSync(path.join(dir, "fast-tier.md")), true);
 });
+
+test("a model refused repeatedly across cooldowns becomes unavailable: discovery remaps its tier and a forced refresh is scheduled", async () => {
+  const { markModelLimited, modelUnavailable, unavailableModels } = await import("../scripts/lib/state.mjs");
+  const ws = readyWorkspace();
+  const paths = workspacePaths(ws);
+  fs.mkdirSync(path.dirname(paths.limitsPath), { recursive: true });
+  // Two refusals a day apart, then a third: a usage limit does not look like that, a plan restriction does.
+  fs.writeFileSync(paths.limitsPath, JSON.stringify({ "claude-sonnet-5-thinking-high": { until: "2020-01-01T00:00:00.000Z", failures: 2, firstFailureAt: "2020-01-01T00:00:00.000Z" } }));
+  markModelLimited({ limitsPath: paths.limitsPath, model: "claude-sonnet-5-thinking-high", minutes: 1 });
+  assert.equal(modelUnavailable(paths.limitsPath, "claude-sonnet-5-thinking-high"), true);
+  assert.deepEqual(unavailableModels(paths.limitsPath), ["claude-sonnet-5-thinking-high"]);
+  const models = ["composer-2.5", "claude-sonnet-5-thinking-high", "cursor-grok-4.6-high", "claude-opus-5-thinking-high"].map((id) => ({ id, label: id }));
+  const runtime = discover({ workspace: ws, probe: false, writeAgents: false, config, models: { ok: true, models, current: "auto", defaultModel: "auto" } });
+  assert.notEqual(runtime.profiles.balanced.model, "claude-sonnet-5-thinking-high", "the refused model is no longer a candidate");
+  assert.equal(runtime.profiles.balanced.model, "cursor-grok-4.6-high");
+  // The third refusal at run time schedules a remap without waiting for the 24 h refresh.
+  fs.writeFileSync(paths.limitsPath, JSON.stringify({ "claude-opus-5-thinking-high": { until: "2020-01-01T00:00:00.000Z", failures: 2, firstFailureAt: "2020-01-01T00:00:00.000Z" } }));
+  createSession({ workspace: ws, conversationId: "unav-1", model: "cursor-grok-4.6-high" });
+  runHook("cco-task-result.mjs", { hook_event_name: "subagentStop", conversation_id: "unav-1", subagent_type: "deep-tier", model: "claude-opus-5-thinking-high", status: "error", duration_ms: 700, message_count: 0, tool_call_count: 0, workspace_roots: [ws] });
+  assert.ok(fs.existsSync(path.join(path.dirname(paths.pricingPath), "refresh.lock")), "forced refresh scheduled");
+});
+
+test("user-scope global config (tier models chosen for all projects) layers between defaults and the project file", async () => {
+  const { loadConfig } = await import("../scripts/lib/config.mjs");
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "cco-root-"));
+  const ws = tmpWorkspace();
+  const prevScope = process.env.CCO_SCOPE;
+  const prevRoot = process.env.CCO_STATE_ROOT;
+  process.env.CCO_SCOPE = "user";
+  process.env.CCO_STATE_ROOT = root;
+  try {
+    fs.writeFileSync(path.join(root, "cco.json"), JSON.stringify({ modelOverrides: { balanced: "gpt-5.6-terra-high" } }));
+    const cfg = loadConfig(ws);
+    assert.equal(cfg.modelOverrides.balanced, "gpt-5.6-terra-high");
+    assert.equal(cfg._source, "user");
+    const paths = workspacePaths(ws);
+    fs.mkdirSync(path.dirname(paths.configPath), { recursive: true });
+    fs.writeFileSync(paths.configPath, JSON.stringify({ modelOverrides: { balanced: "cursor-grok-4.6-high" } }));
+    assert.equal(loadConfig(ws).modelOverrides.balanced, "cursor-grok-4.6-high", "the project file wins");
+  } finally {
+    if (prevScope === undefined) delete process.env.CCO_SCOPE; else process.env.CCO_SCOPE = prevScope;
+    if (prevRoot === undefined) delete process.env.CCO_STATE_ROOT; else process.env.CCO_STATE_ROOT = prevRoot;
+  }
+});

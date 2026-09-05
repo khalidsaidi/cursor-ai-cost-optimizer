@@ -27,7 +27,7 @@ async function main() {
     ensureDir(paths.stateDir);
     const config = loadConfig(workspace);
     const pricing = await refreshPricingIfStale({ paths, config });
-    const discovery = refreshDiscoveryIfStale({ workspace, paths, config });
+    const discovery = refreshDiscoveryIfStale({ workspace, paths, config, force: process.env.CCO_FORCE_REFRESH === "1" });
     hookLog(paths, { event: "refresh", pricing, discovery });
   } catch (error) {
     hookLog(paths, { event: "refresh", error: String(error?.message || error) });
