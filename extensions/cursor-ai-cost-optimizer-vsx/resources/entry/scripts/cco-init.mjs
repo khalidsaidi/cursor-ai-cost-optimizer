@@ -18,7 +18,7 @@ import { refreshPricing } from "./cco-refresh-pricing.mjs";
 import { discover } from "./cco-discover-models.mjs";
 import { installHooks, uninstallHooks } from "./cco-install-hooks.mjs";
 import { resolveModelPrice, loadPricing } from "./lib/pricing.mjs";
-import { GENERATED_MARKER } from "./lib/agents.mjs";
+import { GENERATED_MARKER, GENERATED_MARKER_PREFIX } from "./lib/agents.mjs";
 
 /** User scope: a plugin directory (rule, commands, skills; no agents, no hooks) that workspaceOpen hands to Cursor. */
 function writeRuntimePlugin(dir) {
@@ -53,10 +53,14 @@ async function main() {
   if (args.uninstall) {
     const hooks = uninstallHooks({ workspace });
     const removed = [];
-    for (const name of [...CCO_AGENT_NAMES, ...LEGACY_AGENT_NAMES]) {
-      const file = path.join(paths.agentsDir, `${name}.md`);
+    // Every generated subagent file, whatever it is named (model-named, role-named, pre-0.3 cco-*): marker-based.
+    let candidates = [];
+    try {
+      candidates = fs.readdirSync(paths.agentsDir).filter((f) => f.endsWith(".md")).map((f) => path.join(paths.agentsDir, f));
+    } catch {}
+    for (const file of candidates) {
       try {
-        if (fs.readFileSync(file, "utf8").includes(GENERATED_MARKER)) {
+        if (fs.readFileSync(file, "utf8").includes(GENERATED_MARKER_PREFIX)) {
           fs.unlinkSync(file);
           removed.push(file);
         }

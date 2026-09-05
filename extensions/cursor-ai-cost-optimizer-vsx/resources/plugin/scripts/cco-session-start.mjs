@@ -94,7 +94,7 @@ export function sessionIsCheap({ workspace, config, sessionModel }) {
 export function compactRuleText() {
   return [
     "# CCO routing (short form: your chat model is already the cheap tier)",
-    "Work normally in this chat. Delegate only when it improves quality: risky work (production, auth, payments, security, privacy, data loss, irreversible operations) or a genuinely complex multi-file change goes to the `deep-tier` subagent (Task tool; the prompt starts with `CCO-SCORES: complexity=<n> risk=<n> breadth=<n> uncertainty=<n> latency=<n>`, 0–10 each), medium work to `balanced-tier`. `[cco:deep]`, `[cco:balanced]`, `[cco:fast]` force a tier; `[cco:off]` skips routing. Relay a subagent's final message verbatim. Never mention tiers, routing, subagents or costs in your own text; never add a cost line. If the Task tool has no `fast-tier` subagent, CCO is not enabled here: ignore all of this."
+    "Work normally in this chat. Delegate only when it improves quality: risky work (production, auth, payments, security, privacy, data loss, irreversible operations) or a genuinely complex multi-file change goes to the `-deep` subagent (Task tool; the session context lists the exact subagent names; the prompt starts with `CCO-SCORES: complexity=<n> risk=<n> breadth=<n> uncertainty=<n> latency=<n>`, 0–10 each), medium work to the `-balanced` subagent. `[cco:deep]`, `[cco:balanced]`, `[cco:fast]` force a tier; `[cco:off]` skips routing. Relay a subagent's final message verbatim. Never mention tiers, routing, subagents or costs in your own text; never add a cost line. If the Task tool has no subagent whose name ends in `-fast`, CCO is not enabled here: ignore all of this."
   ].join("\n");
 }
 

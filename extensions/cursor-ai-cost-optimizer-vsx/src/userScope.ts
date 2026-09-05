@@ -11,7 +11,7 @@ import * as crypto from "crypto";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { binaryFileName, findNode, runPluginScriptAsync, type HookMode, type Options, type RunResult } from "./install";
+import { binaryFileName, findNode, readAgentNames, runPluginScriptAsync, type HookMode, type Options, type RunResult } from "./install";
 
 export interface UserPaths {
   root: string;
@@ -79,9 +79,10 @@ function initArgs(stateRoot: string, workspace: string, extra: string[] = []): s
 export function readUserAgents(stateRoot: string): Record<string, string | null> {
   const p = userPaths(stateRoot);
   const out: Record<string, string | null> = {};
+  const names = readAgentNames(path.join(p.root, "agent-names.json"));
   for (const name of CCO_AGENT_NAMES) {
     try {
-      const text = fs.readFileSync(path.join(p.agentsDir, `${name}.md`), "utf8");
+      const text = fs.readFileSync(path.join(p.agentsDir, `${names[name]}.md`), "utf8");
       out[name] = /^model:\s*(.+)$/m.exec(text)?.[1]?.trim() ?? null;
     } catch {
       out[name] = null;
@@ -96,7 +97,7 @@ export function userStatus(stateRoot: string): UserStatus {
   const hooks = readJson<{ hooks?: Record<string, Array<{ command?: string }>> } | null>(p.hooksPath, null);
   const hooked = Boolean(hooks && Object.values(hooks.hooks || {}).some((list) => (list || []).some((e) => String(e.command || "").includes("cco-hook") && String(e.command || "").includes("--scope user"))));
   const agents = readUserAgents(stateRoot);
-  const installed = Boolean(manifest) && hooked && fs.existsSync(path.join(p.agentsDir, "fast-tier.md"));
+  const installed = Boolean(manifest) && hooked && fs.existsSync(path.join(p.agentsDir, `${readAgentNames(path.join(p.root, "agent-names.json"))["fast-tier"]}.md`));
   return { installed, hookMode: manifest?.hookMode ?? null, manifest, agents };
 }
 

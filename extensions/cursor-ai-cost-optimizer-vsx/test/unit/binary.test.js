@@ -65,11 +65,11 @@ test("compiled binary: preToolUse Task fast-tier allows with updated_input and l
     const res = t.run("preToolUse", { conversation_id: "conv-1", tool_name: "Task", tool_input: { description: "List commits", prompt: "Show the last 3 commits", subagent_type: "fast-tier" } });
     assert.equal(res.status, 0, res.stderr);
     assert.equal(res.out.permission, "allow");
-    assert.equal(res.out.updated_input?.subagent_type, "fast-tier", JSON.stringify(res.out));
+    assert.equal(res.out.updated_input?.subagent_type, "composer-2.5-fast", JSON.stringify(res.out));
     assert.match(res.out.updated_input.prompt, /^CCO-SCORES: /);
     const decisions = fs.readFileSync(path.join(t.p.stateDir, "decisions.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l));
-    assert.equal(decisions[0].final, "fast-tier");
-    assert.equal(decisions[0].model, "composer-2.5", "model read from .cursor/agents/fast-tier.md");
+    assert.equal(decisions[0].final, "composer-2.5-fast");
+    assert.equal(decisions[0].model, "composer-2.5", "model read from the model-named agent file");
     assert.equal(fs.existsSync(path.join(t.ws, ".ai")), false, "no .ai directory in the workspace");
   } finally {
     fs.rmSync(t.ws, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
@@ -80,7 +80,7 @@ test("compiled binary: config from .cursor/cco.json overrides plugin defaults (r
   const t = await setup((cfg) => ({ ...cfg, guardrails: { ...(cfg.guardrails || {}), riskForceDeep: 2, riskNoFast: 2 } }));
   try {
     const res = t.run("preToolUse", { conversation_id: "conv-2", tool_name: "Task", tool_input: { description: "x", prompt: "CCO-SCORES: complexity=1 risk=3 breadth=0 uncertainty=0 latency=5\nShow the last 3 commits", subagent_type: "fast-tier" } });
-    assert.equal(res.out.updated_input?.subagent_type, "deep-tier", JSON.stringify(res.out));
+    assert.equal(res.out.updated_input?.subagent_type, "claude-opus-5-deep", JSON.stringify(res.out));
   } finally {
     fs.rmSync(t.ws, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }

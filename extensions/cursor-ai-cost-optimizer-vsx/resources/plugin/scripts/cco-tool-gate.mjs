@@ -32,14 +32,14 @@ import { tierLabel, modelLabel } from "./lib/labels.mjs";
 import { loadPricing, resolveModelPrice, blendedRatePerMillion } from "./lib/pricing.mjs";
 import { heuristicScores, decideTier, parseOverride, isQuestionLike, isTinyTask } from "./lib/scorer.mjs";
 import { loadSession, saveSession, userPromptFromTranscript, guessTranscriptPath, refineSessionModel, syncTurnFromTranscript, userPromptFromTranscriptTurn } from "./lib/session.mjs";
-import { readWorkspaceAgentModel } from "./lib/agents.mjs";
+import { agentNames, readWorkspaceAgentModel } from "./lib/agents.mjs";
 
 const DEFAULT_WORK_TOOLS = "^(Write|Edit|StrReplace|MultiEdit|Delete|Shell|Bash|NotebookEdit|ApplyPatch|CreateFile|EditFile|DeleteFile)$";
 
 function tierModels(workspace, runtime, limitsPath = null) {
   const out = {};
   for (const tier of TIERS) {
-    out[tier] = (workspace && readWorkspaceAgentModel(workspace, agentForTier(tier))) || runtime?.profiles?.[tier]?.model || "inherit";
+    out[tier] = (workspace && readWorkspaceAgentModel(workspace, agentForTier(tier, workspace))) || runtime?.profiles?.[tier]?.model || "inherit";
   }
   // A tier whose model is on cooldown (refused to start a subagent: usage limit) runs on the next usable lower tier.
   if (limitsPath) {
@@ -188,11 +188,11 @@ export function gateDecision({ toolName, session, config, pricing, models, promp
   return { action: "allow", reason: routerInfo.factor ? "no_savings_expected" : "no_price_signal", phase: "pre" };
 }
 
-export function denyMessage({ toolName, verdict, sessionModel }) {
+export function denyMessage({ toolName, verdict, sessionModel, workspace = null }) {
   if (verdict.reason === "read_budget_use_explore") {
     return [
       `CCO: you have used the read budget for research on ${sessionModel || "the chat model"}. Delegate the remaining research to the cheap explorer instead of reading more here.`,
-      `Call the Task tool with subagent_type="fast-research" (read-only, runs on ${verdict.model}) and a precise question: what to find, which paths or symbols, what to report (paths with line ranges, a short answer). Independent questions can be sent as parallel Task calls in the same turn. Then continue the work here using its summary.`
+      `Call the Task tool with subagent_type="${agentNames(workspace)["fast-research"]}" (read-only, runs on ${verdict.model}) and a precise question: what to find, which paths or symbols, what to report (paths with line ranges, a short answer). Independent questions can be sent as parallel Task calls in the same turn. Then continue the work here using its summary.`
     ].join("\n");
   }
   if (verdict.phase === "post") {
@@ -206,7 +206,7 @@ export function denyMessage({ toolName, verdict, sessionModel }) {
     : "CCO-SCORES: complexity=<0-10> risk=<0-10> breadth=<0-10> uncertainty=<0-10> latency=<0-10>";
   return [
     `CCO: ${toolName} is not allowed on ${sessionModel || "the chat model"} for this request (${verdict.reason}). Do not gather context or work around this with other tools.`,
-    `Your next action must be one Task call: subagent_type="${agentForTier(verdict.tier)}" (runs on ${verdict.model}). The Task prompt must start with \`${scores}\`, then pass the user's request verbatim plus any paths or constraints they gave; the subagent reads what it needs itself. When it returns, relay its final message to the user verbatim with no further tool calls.`
+    `Your next action must be one Task call: subagent_type="${agentForTier(verdict.tier, workspace)}" (runs on ${verdict.model}). The Task prompt must start with \`${scores}\`, then pass the user's request verbatim plus any paths or constraints they gave; the subagent reads what it needs itself. When it returns, relay its final message to the user verbatim with no further tool calls.`
   ].join("\n");
 }
 
@@ -280,7 +280,7 @@ async function main() {
         emit({ permission: "allow" });
         return;
       }
-      const message = denyMessage({ toolName: payload.tool_name, verdict, sessionModel: session.model }).replace(/^CCO: [^\n]*?(is not allowed|blocked)[^\n]*\n?/m, "");
+      const message = denyMessage({ toolName: payload.tool_name, verdict, sessionModel: session.model, workspace }).replace(/^CCO: [^\n]*?(is not allowed|blocked)[^\n]*\n?/m, "");
       emit({ permission: "allow", agent_message: `CCO (advice, this call is allowed): ${message}` });
       return;
     }
@@ -292,7 +292,7 @@ async function main() {
       }
       session.lastDenial = { ts: new Date().toISOString(), tool: payload.tool_name, reason: verdict.reason, tier: verdict.tier, phase: verdict.phase };
       saveSession(workspace, session);
-      const message = denyMessage({ toolName: payload.tool_name, verdict, sessionModel: session.model });
+      const message = denyMessage({ toolName: payload.tool_name, verdict, sessionModel: session.model, workspace });
       const userMessage =
         verdict.reason === "read_budget_use_explore"
           ? `Research moves to ${modelLabel(verdict.model, pricing)}; ${modelLabel(session.model, pricing)} keeps the decisions and edits.`

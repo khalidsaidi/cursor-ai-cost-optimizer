@@ -18,12 +18,22 @@ export const CCO_AGENT_NAMES = ["fast-tier", "balanced-tier", "deep-tier", "tier
 export const CCO_WORK_AGENTS = ["fast-tier", "balanced-tier", "deep-tier"];
 /** Names used before 0.3; generated files under these names are removed on setup/update and on uninstall. */
 export const LEGACY_AGENT_NAMES = ["cco-fast", "cco-balanced", "cco-deep", "cco-verifier", "cco-explore"];
-export function agentForTier(tier) {
-  return TIER_AGENT[String(tier || "").toLowerCase()] || null;
+/** The subagent name to delegate to for a tier: the current model-named agent when a workspace is known. */
+export function agentForTier(tier, workspace = null) {
+  const role = TIER_AGENT[String(tier || "").toLowerCase()] || null;
+  if (!role) return null;
+  if (!workspace) return role;
+  try {
+    const p = workspacePaths(workspace);
+    const stored = readJsonSafe(path.join(p.scope === "user" ? p.root : p.ccoDir, "agent-names.json"));
+    return typeof stored?.[role] === "string" && stored[role] ? stored[role] : role;
+  } catch {
+    return role;
+  }
 }
 export function isCcoAgent(name) {
-  const n = String(name || "");
-  return CCO_AGENT_NAMES.includes(n) || LEGACY_AGENT_NAMES.includes(n);
+  const n = String(name || "").toLowerCase();
+  return CCO_AGENT_NAMES.includes(n) || LEGACY_AGENT_NAMES.includes(n) || /-(fast|balanced|deep|research|verifier)$/.test(n);
 }
 
 export function nowIso() {
@@ -258,14 +268,14 @@ export function isEnabled(workspace) {
   const paths = workspacePaths(workspace);
   // A project-level setup (files in <ws>/.cursor) takes precedence over the user-level one, like Cursor's own
   // project-over-user rule: the user-scope hooks go inert there so nothing runs twice.
-  if (paths.scope === "user" && fs.existsSync(path.join(workspace, ".cursor", "agents", "fast-tier.md")) && fs.existsSync(path.join(workspace, ".cursor", "hooks.json"))) {
+  if (paths.scope === "user" && projectFastAgentExists(workspace) && fs.existsSync(path.join(workspace, ".cursor", "hooks.json"))) {
     return { enabled: false, reason: "project_scope_active" };
   }
   const cfg = readJsonSafe(paths.configPath);
   if (cfg && cfg.enabled === false) {
     return { enabled: false, reason: "workspace_opt_out" };
   }
-  if (!fs.existsSync(path.join(paths.agentsDir, "fast-tier.md"))) {
+  if (!fs.existsSync(path.join(paths.agentsDir, `${fastAgentName(paths)}.md`))) {
     return { enabled: false, reason: paths.scope === "user" ? "user_not_set_up" : "workspace_not_set_up" };
   }
   return { enabled: true, reason: null };
@@ -285,6 +295,17 @@ export function resolveCommand(cmd) {
     }
   }
   return null;
+}
+
+function fastAgentName(paths) {
+  const stored = readJsonSafe(path.join(paths.scope === "user" ? paths.root : paths.ccoDir, "agent-names.json"));
+  return typeof stored?.["fast-tier"] === "string" && stored["fast-tier"] ? stored["fast-tier"] : "fast-tier";
+}
+/** A project-scope setup exists when its own agent-names.json (or the plain fast-tier.md) is under <ws>/.cursor. */
+function projectFastAgentExists(workspace) {
+  const stored = readJsonSafe(path.join(workspace, ".cursor", "cco", "agent-names.json"));
+  const name = typeof stored?.["fast-tier"] === "string" && stored["fast-tier"] ? stored["fast-tier"] : "fast-tier";
+  return fs.existsSync(path.join(workspace, ".cursor", "agents", `${name}.md`));
 }
 
 export function run(cmd, args, options = {}) {

@@ -96,7 +96,7 @@ test("gate hook process: end to end with session state, transcript prompt, denia
   const first = runHook("cco-tool-gate.mjs", base);
   assert.equal(first.permission, "allow", "advise-first: the call goes through");
   assert.match(first.agent_message, /CCO \(advice, this call is allowed\)/);
-  assert.match(first.agent_message, /subagent_type="fast-tier"/);
+  assert.match(first.agent_message, /subagent_type="composer-2\.5-fast"/);
   assert.match(first.agent_message, /CCO-SCORES: complexity=/);
   const second = runHook("cco-tool-gate.mjs", base);
   assert.equal(second.permission, "allow");
@@ -154,7 +154,7 @@ test("session start hook re-creates missing workspace agents from a cached runti
   const out = runHook("cco-session-start.mjs", { hook_event_name: "sessionStart", conversation_id: "conv-R", model: "composer-2.5", workspace_roots: [ws] });
   assert.equal(out.cco.discovery, "cached");
   assert.equal(readWorkspaceAgentModel(ws, "fast-tier"), "composer-2.5", "workspace agents re-mapped from the cached runtime");
-  assert.match(out.additional_context, /deep-tier → claude-opus-5-thinking-high/);
+  assert.match(out.additional_context, /`claude-opus-5-deep` on claude-opus-5-thinking-high/);
 });
 
 test("gate refines a placeholder session model from a later hook payload and applies router mode for Auto", () => {
@@ -190,7 +190,7 @@ test("IDE replay: workspaceOpen + first prompt on Auto → router mode → deleg
   assert.equal(prompt.continue, true);
   const grep = runHook("cco-tool-gate.mjs", { hook_event_name: "preToolUse", conversation_id: "ide-A", model: "default", tool_name: "Grep", tool_input: { pattern: "slugify" }, workspace_roots: [ws] });
   assert.equal(grep.permission, "allow", "advise-first");
-  assert.match(grep.agent_message, /subagent_type="fast-tier"/);
+  assert.match(grep.agent_message, /subagent_type="composer-2\.5-fast"/);
   const task = runHook("cco-task-guard.mjs", { hook_event_name: "preToolUse", conversation_id: "ide-A", model: "default", tool_name: "Task", tool_input: { description: "slugify", prompt: "CCO-SCORES: complexity=3 risk=0 breadth=1 uncertainty=0 latency=2\nCreate utils/slugify.js ...", subagent_type: "fast-tier" }, workspace_roots: [ws] });
   assert.equal(task.permission, "allow");
   assert.match(task.user_message, /Fast on Composer 2\.5/);
@@ -220,7 +220,7 @@ test("step-level delegation: same-model deep task keeps edits in chat but sends 
   assert.equal(runHook("cco-tool-gate.mjs", read).permission, "allow", "read 3");
   const fourth = runHook("cco-tool-gate.mjs", read);
   assert.equal(fourth.permission, "allow", "advise-first: read allowed with explore advice attached");
-  assert.match(fourth.agent_message, /subagent_type="fast-research"/);
+  assert.match(fourth.agent_message, /subagent_type="composer-2\.5-research"/);
   const explore = runHook("cco-task-guard.mjs", { hook_event_name: "preToolUse", conversation_id: "conv-X", model: "claude-opus-5-thinking-high", tool_name: "Task", tool_input: { description: "find usages", prompt: "Where is the webhook key validated?", subagent_type: "fast-research" }, workspace_roots: [ws] });
   assert.equal(explore.permission, "allow");
   assert.match(explore.user_message, /Research on Composer 2\.5/);
@@ -255,7 +255,7 @@ test("post-tool hook runs the acceptance test after FAST edits and reports CCO-V
   fs.writeFileSync(path.join(ws, "test", "bad.test.mjs"), 'import test from "node:test"; import assert from "node:assert"; test("bad", () => assert.equal(1, 2));');
   const fail = runHook("cco-task-result.mjs", { hook_event_name: "postToolUse", tool_name: "Task", tool_input: { subagent_type: "fast-tier" }, tool_output: "Updated utils/x.js", workspace_roots: [ws] });
   assert.match(fail.additional_context, /CCO-VERIFY: fail/);
-  assert.match(fail.additional_context, /delegate once to balanced-tier/i);
+  assert.match(fail.additional_context, /delegate once to (balanced-tier|[a-z0-9.-]+-balanced)/i);
 });
 
 test("built-in explore delegations are rewritten to fast-research and count as research", () => {
@@ -302,7 +302,7 @@ test("per-chat budget warns at 80% and, when enforced, forces FAST beyond 2x", (
   let last = a;
   for (let i = 0; i < 9; i += 1) { last = task(); }
   assert.match(last.user_message, /budget: /);
-  assert.equal(last.updated_input.subagent_type, "fast-tier", "forced to FAST beyond 2x budget");
+  assert.equal(last.updated_input.subagent_type, "composer-2.5-fast", "forced to FAST beyond 2x budget");
 });
 
 test("research nudge is issued once per turn and does not open the escape hatch for risky work on a cheap chat model", () => {
@@ -314,11 +314,11 @@ test("research nudge is issued once per turn and does not open the escape hatch 
   for (let i = 0; i < 3; i += 1) { assert.equal(runHook("cco-tool-gate.mjs", read).permission, "allow"); }
   const nudge = runHook("cco-tool-gate.mjs", read);
   assert.equal(nudge.permission, "allow");
-  assert.match(nudge.agent_message, /fast-research/);
+  assert.match(nudge.agent_message, /-research/);
   assert.equal(runHook("cco-tool-gate.mjs", read).agent_message, undefined, "nudged once, then reads continue silently");
   const write = runHook("cco-tool-gate.mjs", { ...read, tool_name: "Write" });
   assert.equal(write.permission, "deny", "quality escalation is enforced even in advise mode");
-  assert.match(write.agent_message, /subagent_type="deep-tier"/, "risky work on a non-deep chat model goes to deep-tier");
+  assert.match(write.agent_message, /subagent_type="claude-opus-5-deep"/, "risky work on a non-deep chat model goes to the deep subagent");
   assert.equal(loadSession(ws, "conv-N").denials, 1, "only the quality denial counts");
 });
 

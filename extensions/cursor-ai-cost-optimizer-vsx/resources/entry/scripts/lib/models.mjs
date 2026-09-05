@@ -284,7 +284,10 @@ export function currentCliModelId() {
 
 export function tierFor(name) {
   const lower = String(name || "").toLowerCase();
-  return TIERS.find((tier) => lower === tier || lower === TIER_AGENT[tier] || lower === "cco-" + tier) || null;
+  const direct = TIERS.find((tier) => lower === tier || lower === TIER_AGENT[tier] || lower === "cco-" + tier);
+  if (direct) return direct;
+  const m = lower.match(/-(fast|balanced|deep)$/);
+  return m ? m[1] : null;
 }
 
 export function priceSummary(price) {

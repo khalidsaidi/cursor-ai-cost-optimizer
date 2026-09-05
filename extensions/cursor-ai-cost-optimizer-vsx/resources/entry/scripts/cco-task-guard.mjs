@@ -96,7 +96,7 @@ export function evaluateTask({ toolInput, config, state = null, lastPrompt = nul
     reason = `learning:${learning.reason}`;
   }
 
-  const modelFor = (t) => (workspace && readWorkspaceAgentModel(workspace, agentForTier(t))) || runtime?.profiles?.[t]?.model || "inherit";
+  const modelFor = (t) => (workspace && readWorkspaceAgentModel(workspace, agentForTier(t, workspace))) || runtime?.profiles?.[t]?.model || "inherit";
   // A tier whose model is on cooldown (it refused to start a subagent recently: usage limit) steps down to the
   // nearest lower tier whose model is usable, rather than failing the same way again.
   let limited = null;
@@ -112,7 +112,7 @@ export function evaluateTask({ toolInput, config, state = null, lastPrompt = nul
     }
   }
   const rewritten = target !== requestedTier;
-  const targetAgent = agentForTier(target);
+  const targetAgent = agentForTier(target, workspace);
   const model = modelFor(target);
   const scoresLine = formatScoresLine(scores);
   let updatedPrompt = prompt;
@@ -308,7 +308,7 @@ async function main() {
         budgetNote = ` · budget: ${formatUsd(spent)} of $${limit.toFixed(2)} used in this chat`;
       }
       if (config.budget.enforce && spent > limit * 2 && result.targetTier !== "fast" && !(result.override && result.override !== "auto")) {
-        result.targetAgent = "fast-tier";
+        result.targetAgent = agentForTier("fast", workspace);
         result.targetTier = "fast";
         result.model = readWorkspaceAgentModel(workspace, "fast-tier") || result.model;
         result.rewritten = true;

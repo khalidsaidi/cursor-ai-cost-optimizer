@@ -1,19 +1,13 @@
-# Start a new chat and work normally
+# Work as usual
 
-Keep whatever chat model you like. AI Cost Optimizer routes each task to the cheapest tier that can do it well and runs it on that tier's model:
+Keep whatever chat model you like. Each task goes to the cheapest tier that can do it well, and that tier runs on its own model:
 
-| Tier | Typical work | Default model |
+| Tier | Typical work | Model (without a CLI login) |
 |---|---|---|
-| FAST | quick answers, small edits, lookups | Composer 2.5 |
-| BALANCED | normal features and bug fixes | Claude Sonnet 5 (thinking) |
-| DEEP | risky, complex, multi-file, security, data | Claude Opus 5 (thinking) |
+| Fast | quick answers, small edits, lookups | Composer 2.5 |
+| Balanced | normal features and bug fixes | Claude Sonnet 5 |
+| Deep | risky, complex, multi-file, security, data | Claude Opus 5 |
 
-Each routed task ends with one line, for example:
+What you see in a chat: a **Fast Tier** (or Balanced / Deep) subagent card that completes, then the answer. Hover the card for the model. The chat never adds cost lines of its own; the status bar shows what you saved in this project, and its tooltip shows the last task.
 
-```
-Cost Optimizer · Fast on Composer 2.5 · ~$0.02, saves ~$0.05
-```
-
-Nothing is blocked. Cost routing is advice to the chat model; only your explicit `[cco:<tier>]` tokens and risky work (which always goes to the strong tier) are enforced.
-
-The status bar item **AI Cost** shows the tier mapping, rates relative to your chat model, and the estimated savings for this project. Run `/cco-report` in a chat for the full report, `/cco-models` to change models, `/cco-off` to pause routing in this project.
+Nothing is blocked: cost routing is advice to the chat model. Your explicit `[cco:…]` requests and risky work (always the strong tier) are enforced. A model your plan refuses is skipped for a few hours and the task steps down a tier.

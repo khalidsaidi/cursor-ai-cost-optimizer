@@ -44,6 +44,36 @@ interface Settings {
   hookRuntime: HookRuntimePreference;
   nodePath: string | null;
 }
+/** The Get Started page shows the real tier mapping: rendered into the walkthrough markdown whenever it changes. */
+function writeWalkthroughMapping(extensionPath: string, agents: Record<string, string | null>, pricing: ReturnType<typeof loadPricing>): void {
+  try {
+    const row = (role: string, label: string) => {
+      const model = agents[role] ?? "inherit";
+      const name = model && model !== "inherit" ? `${modelDisplayName(model, pricing)} ${label}` : `${label} Tier`;
+      return `| ${label} | ${modelDisplayName(model, pricing)} | ${name} |`;
+    };
+    const body = [
+      "# It is already on",
+      "",
+      "Nothing to set up. These are your tiers right now, mapped from the models your account can use:",
+      "",
+      "| Tier | Model | Card in the chat |",
+      "|---|---|---|",
+      row("fast-tier", "Fast"),
+      row("balanced-tier", "Balanced"),
+      row("deep-tier", "Deep"),
+      "",
+      "Change them any time: status bar **AI Cost** → **Choose tier models**, or Settings (search \"cco\"). Everything else stays as it was: your chat model, your project files (nothing is written into them), your workflow.",
+      "",
+      "The status bar shows what you saved in the current project; its tooltip shows the last task. **Remove from Cursor** in the same menu takes everything back out.",
+      "",
+    ].join("\n");
+    fs.writeFileSync(path.join(extensionPath, "media", "walkthrough", "step-install.md"), body, "utf8");
+  } catch {
+    // read-only extension folder: the static page stays
+  }
+}
+
 /** Feedback for an action the user just took: 4 s in the status bar, never a popup. */
 function flash(text: string): void {
   vscode.window.setStatusBarMessage(`$(zap) ${text}`, 4000);
@@ -185,7 +215,7 @@ export function activate(context: vscode.ExtensionContext) {
     void vscode.commands.executeCommand("setContext", "cco.paused", c.paused);
   };
   refreshStatus();
-  const watcher = vscode.workspace.createFileSystemWatcher("**/.cursor/{cco.json,hooks.json,agents/*-tier.md,cco/pricing.json,cco/state/decisions.jsonl,cco/state/sessions/*.json}");
+  const watcher = vscode.workspace.createFileSystemWatcher("**/.cursor/{cco.json,hooks.json,agents/*.md,cco/pricing.json,cco/state/decisions.jsonl,cco/state/sessions/*.json}");
   context.subscriptions.push(watcher, watcher.onDidChange(refreshStatus), watcher.onDidCreate(refreshStatus), watcher.onDidDelete(refreshStatus));
   // "Everywhere" keeps its state in the extension's storage, outside the workspace watcher: watch it too, so the
   // savings figure changes the moment a routed task ends (plus a slow poll as a safety net).
@@ -286,6 +316,12 @@ export function activate(context: vscode.ExtensionContext) {
     }
   };
   syncSettings("activation");
+  try {
+    const u0 = userStatus(stateRoot);
+    if (u0.installed) {
+      writeWalkthroughMapping(context.extensionPath, u0.agents, loadPricing(null, bundledPricing));
+    }
+  } catch {}
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration("cco.hookRuntime") || e.affectsConfiguration("cco.nodePath")) {
@@ -348,6 +384,11 @@ export function activate(context: vscode.ExtensionContext) {
         // The routing rule arrives through the sessionStart hook, so this window routes from the next chat: no reload.
         const tiers = (["fast-tier", "balanced-tier", "deep-tier"] as const).map((a) => `${a === "fast-tier" ? "Fast" : a === "balanced-tier" ? "Balanced" : "Deep"} → ${modelDisplayName(result.agents[a] ?? "inherit", loadPricing(null, bundledPricing))}`).join(" · ");
         flash(args?.firstRun ? vscode.l10n.t("AI Cost Optimizer is on") : vscode.l10n.t("AI Cost Optimizer: {0}", tiers));
+        writeWalkthroughMapping(context.extensionPath, result.agents, loadPricing(null, bundledPricing));
+        if (args?.firstRun && !context.globalState.get<boolean>("cco.walkthroughShown")) {
+          void context.globalState.update("cco.walkthroughShown", true);
+          void vscode.commands.executeCommand("workbench.action.openWalkthrough", `${EXTENSION_ID}#cco.gettingStarted`, false);
+        }
         return result;
       }
       const ws = args?.workspace ?? (await pickWorkspace("set up"));
@@ -466,7 +507,7 @@ export function activate(context: vscode.ExtensionContext) {
       return;
     }
     const pricing = loadPricing(null, bundledPricing);
-    const current = readTierModels(ws ?? os.homedir(), c.mode === "user" ? path.join(os.homedir(), ".cursor", "agents") : undefined);
+    const current = readTierModels(ws ?? os.homedir(), c.mode === "user" ? path.join(os.homedir(), ".cursor", "agents") : undefined, c.mode === "user" ? path.join(stateRoot, "agent-names.json") : undefined);
     const cfg = vscode.workspace.getConfiguration("cco");
     const target = c.mode === "user" ? vscode.ConfigurationTarget.Global : vscode.ConfigurationTarget.Workspace;
     const tierNames: Array<["fast" | "balanced" | "deep", string]> = [["fast", vscode.l10n.t("Fast")], ["balanced", vscode.l10n.t("Balanced")], ["deep", vscode.l10n.t("Deep")]];
@@ -488,7 +529,7 @@ export function activate(context: vscode.ExtensionContext) {
       await cfg.update(`tierModels.${tier}`, id || undefined, target);
     }
     await vscode.commands.executeCommand("cco.installCursorAssets", { scope: c.mode, confirm: false, workspace: ws ?? undefined, quiet: true });
-    const after = readTierModels(ws ?? os.homedir(), c.mode === "user" ? path.join(os.homedir(), ".cursor", "agents") : undefined);
+    const after = readTierModels(ws ?? os.homedir(), c.mode === "user" ? path.join(os.homedir(), ".cursor", "agents") : undefined, c.mode === "user" ? path.join(stateRoot, "agent-names.json") : undefined);
     flash(vscode.l10n.t("Tier models: Fast → {0} · Balanced → {1} · Deep → {2}", modelDisplayName(after.fast ?? "inherit", pricing), modelDisplayName(after.balanced ?? "inherit", pricing), modelDisplayName(after.deep ?? "inherit", pricing)));
     refreshStatus();
   });

@@ -1,11 +1,7 @@
-# Steer with override tokens
+# Steer when you want to
 
-Anywhere in a prompt:
+In the prompt, in plain words: "use the best model for this", "use the cheapest model", "don't route this, do it here", "back to automatic routing". Or the short form anywhere in a prompt: `[cco:fast]`, `[cco:balanced]`, `[cco:deep]`, `[cco:auto]`, `[cco:off]` (one request without routing).
 
-- `[cco:fast]` — cheapest tier, quick answers and small edits
-- `[cco:balanced]` — typical implementation work
-- `[cco:deep]` — risky or complex work
-- `[cco:auto]` — back to automatic routing
-- `[cco:off]` — skip CCO for this request
+From the status bar menu: **Choose tier models** (which model runs Fast, Balanced and Deep, from the models your account can use), **Pause here** (this project works as before), **Savings and tier rates**, **Remove from Cursor**.
 
-**AI Cost Optimizer: Recommend Tier** scores selected text with the same heuristics the hooks use and offers to insert the token.
+In Settings (search "cco"): the same tier models, enforce instead of advise, always delegate, a per-chat budget, cooldown hours, auto-enable, and the status bar figure. User settings apply to every project; workspace settings to one.

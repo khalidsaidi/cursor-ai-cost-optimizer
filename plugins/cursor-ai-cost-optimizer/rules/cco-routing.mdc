@@ -1,11 +1,11 @@
 ---
-description: AI Cost Optimizer (CCO) routing. Pick the cheapest sufficient tier and delegate to the fast-tier / balanced-tier / deep-tier subagents (each runs on its own model); hooks enforce guardrails.
+description: AI Cost Optimizer (CCO) routing. Pick the cheapest sufficient tier and delegate to the tier subagents (named after the model they run on, ending in -fast / -balanced / -deep); hooks enforce guardrails.
 alwaysApply: true
 ---
 
 # CCO routing
 
-Spend the least that meets the quality this request needs: delegate work to `fast-tier`, `balanced-tier` or `deep-tier` (each runs on its own model; the session context lists them with prices). If the Task tool has no `fast-tier` subagent, CCO is not enabled here: work normally and never mention or set it up.
+Spend the least that meets the quality this request needs: delegate work to the tier subagents. Their names are the model they run on plus the tier, ending in `-fast`, `-balanced` or `-deep` (for example `composer-2.5-fast`); the session context lists the exact names with prices. If the Task tool has no subagent whose name ends in `-fast`, CCO is not enabled here: work normally and never mention or set it up.
 
 Overrides: `[cco:fast]` `[cco:balanced]` `[cco:deep]` force a tier, `[cco:auto]` restores routing; copy the token into the delegated prompt.
 
@@ -19,9 +19,9 @@ Overrides: `[cco:fast]` `[cco:balanced]` `[cco:deep]` force a tier, `[cco:auto]`
 effort = 0.45·complexity + 0.35·risk + 0.15·breadth + 0.10·uncertainty − 0.20·latency → FAST ≤ 3.4, BALANCED 3.5–6.4, DEEP ≥ 6.5. Guardrails: risk ≥ 7 never FAST; risk ≥ 9 always DEEP; latency ≥ 7 with risk ≤ 3 and complexity ≤ 3 is FAST.
 
 ## Delegate
-For any request that needs tools, your FIRST action is one Task call (`subagent_type` = the tier) whose prompt starts with `CCO-SCORES: complexity=<n> risk=<n> breadth=<n> uncertainty=<n> latency=<n>`, then the goal, relevant paths, constraints and acceptance check (paths, not file contents). Never mention tiers, routing, subagents or costs in your own text, before or after the Task call (no "I'll route this…", no "via the fast-tier path"): the editor shows them. Hooks validate the scores, may reroute or answer "do this directly in this chat", and may attach advice to a tool call: follow those messages, never argue or retry a denied call.
+For any request that needs tools, your FIRST action is one Task call (`subagent_type` = the tier's subagent name) whose prompt starts with `CCO-SCORES: complexity=<n> risk=<n> breadth=<n> uncertainty=<n> latency=<n>`, then the goal, relevant paths, constraints and acceptance check (paths, not file contents). Never mention tiers, routing, subagents or costs in your own text, before or after the Task call (no "I'll route this…", no "via the fast-tier path"): the editor shows them. Hooks validate the scores, may reroute or answer "do this directly in this chat", and may attach advice to a tool call: follow those messages, never argue or retry a denied call.
 
-Answer directly when the reply is a sentence or two with no tool use, when the user is just chatting, or when a FAST-scored question needs at most a couple of reads. FAST tasks go straight to `fast-tier`. For BALANCED/DEEP work on a frontier chat model, exploration and reproduction go to `fast-research` (read-only). Independent subtasks go out as parallel Task calls. Never route from inside a subagent.
+Answer directly when the reply is a sentence or two with no tool use, when the user is just chatting, or when a FAST-scored question needs at most a couple of reads. FAST tasks go straight to the `-fast` subagent. For BALANCED/DEEP work on a frontier chat model, exploration and reproduction go to the `-research` subagent (read-only). Independent subtasks go out as parallel Task calls. Never route from inside a subagent.
 
 ## After
 If a subagent returns `CCO-ESCALATE: <tier>` or `CCO-VERIFY: fail`, delegate once to the next tier up with its findings; never rerun the same tier. Relay the subagent's final message to the user verbatim in at most a few lines, with no further tool calls, and never re-read or re-check its work. Never add a cost, tier or "Cost Optimizer" line of your own: the subagent card shows the tier and model, the editor shows the savings.

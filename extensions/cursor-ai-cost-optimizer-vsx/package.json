@@ -236,38 +236,39 @@
       {
         "id": "cco.gettingStarted",
         "title": "Get started with AI Cost Optimizer",
-        "description": "Turn it on, start a new chat, and steer with [cco:fast] / [cco:deep] when you want to.",
+        "description": "It is already on. Here is what you will see, and how to steer it.",
         "steps": [
           {
-            "id": "cco.step.install",
-            "title": "Set up in this workspace",
-            "description": "Writes the routing rule, tier subagents and hooks under .cursor/ (nothing outside your project). You confirm the file list first.\n[Set Up / Update in This Workspace](command:cco.installCursorAssets)",
+            "id": "cco.step.on",
+            "title": "It is already on",
+            "description": "Nothing to set up. The status bar shows **AI Cost**; after your first routed task it shows what you saved. Click it for the menu.\n[Open the status menu](command:cco.showMenu)",
             "media": {
               "markdown": "media/walkthrough/step-install.md"
             },
             "completionEvents": [
-              "onCommand:cco.installCursorAssets"
+              "onCommand:cco.showMenu",
+              "onContext:cco.mode != 'none'"
             ]
           },
           {
             "id": "cco.step.chat",
-            "title": "Start a new chat and work normally",
-            "description": "Keep your usual chat model. Each routed task ends with one line like `[cco: FAST → composer-2.5 • 0.3x of your chat model • est. $0.02]`. Risky work is always sent to the strong tier.",
+            "title": "Work as usual",
+            "description": "Keep your chat model. Routine work runs on a cheaper model through a **Fast Tier** subagent (hover the card for the model); risky work goes to **Deep Tier**. Nothing is blocked, nothing is written into your project.",
             "media": {
               "markdown": "media/walkthrough/step-init.md"
             }
           },
           {
-            "id": "cco.step.override",
+            "id": "cco.step.steer",
             "title": "Steer when you want to",
-            "description": "Force a tier with [cco:fast], [cco:balanced] or [cco:deep] anywhere in a prompt; [cco:auto] restores routing, [cco:off] bypasses it for one request.\n[Insert [cco:fast]](command:cco.insertOverrideFast)",
+            "description": "Say it in the prompt (\"use the best model\", \"don't route this\") or use `[cco:deep]` / `[cco:fast]`. Pick the model behind each tier, pause a project, or set a per-chat budget from the status menu and Settings.\n[Choose tier models](command:cco.chooseTierModels)\n[Open settings](command:workbench.action.openSettings?%5B%22cco%22%5D)",
             "media": {
               "markdown": "media/walkthrough/step-override.md"
             },
             "completionEvents": [
-              "onCommand:cco.insertOverrideFast",
-              "onCommand:cco.insertOverrideBalanced",
-              "onCommand:cco.insertOverrideDeep"
+              "onCommand:cco.chooseTierModels",
+              "onSettingChanged:cco.tierModels.fast",
+              "onSettingChanged:cco.enforceRouting"
             ]
           }
         ]

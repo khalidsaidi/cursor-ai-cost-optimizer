@@ -17,14 +17,14 @@ export function buildSessionContext({ workspace, config, sessionModel }) {
   const paths = workspacePaths(workspace);
   const runtime = readJsonSafe(paths.runtimePath);
   const pricing = loadPricing(paths.pricingPath);
-  const lines = ["CCO (AI Cost Optimizer) is active. Tier → model mapping for the tier subagents in this workspace:"];
+  const lines = ["CCO (AI Cost Optimizer) is active. Tier subagents in this workspace (use these exact names as subagent_type):"];
   const tierPrices = {};
   for (const tier of TIERS) {
-    const fromAgent = readWorkspaceAgentModel(workspace, agentForTier(tier));
+    const fromAgent = readWorkspaceAgentModel(workspace, agentForTier(tier, workspace));
     const model = fromAgent || runtime?.profiles?.[tier]?.model || "inherit";
     const price = model === "inherit" ? null : resolveModelPrice(model, pricing, { overrides: config?.pricing?.overrides });
     tierPrices[tier] = { model, price };
-    lines.push(`- ${agentForTier(tier)} → ${model}${model === "inherit" ? " (not set up in this workspace; run cco-init --workspace . once)" : ` (${fmtPrice(price)})`}`);
+    lines.push(`- ${tier.toUpperCase()} tier → subagent \`${agentForTier(tier, workspace)}\` on ${model}${model === "inherit" ? " (not set up in this workspace; run cco-init --workspace . once)" : ` (${fmtPrice(price)})`}`);
   }
   const verifierModel = readWorkspaceAgentModel(workspace, "tier-verifier") || runtime?.verifier?.model || "inherit";
   const exploreModel = readWorkspaceAgentModel(workspace, "fast-research") || tierPrices.fast.model;

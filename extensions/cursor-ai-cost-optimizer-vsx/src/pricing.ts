@@ -195,11 +195,19 @@ export function pricingIsStale(pricing: PricingTable, maxDays = PRICING_STALE_DA
 export const TIERS = ["fast", "balanced", "deep"] as const;
 export type Tier = (typeof TIERS)[number];
 
-export function readTierModels(workspace: string, agentsDir?: string): Record<Tier, string | null> {
+export function readTierModels(workspace: string, agentsDir?: string, namesFile?: string): Record<Tier, string | null> {
   const out = { fast: null, balanced: null, deep: null } as Record<Tier, string | null>;
+  let names: Record<string, unknown> = {};
+  try {
+    names = JSON.parse(fs.readFileSync(namesFile ?? path.join(workspace, ".cursor", "cco", "agent-names.json"), "utf8")) as Record<string, unknown>;
+  } catch {
+    names = {};
+  }
   for (const tier of TIERS) {
     try {
-      const text = fs.readFileSync(path.join(agentsDir ?? path.join(workspace, ".cursor", "agents"), `${tier}-tier.md`), "utf8");
+      const role = `${tier}-tier`;
+      const file = typeof names[role] === "string" && names[role] ? String(names[role]) : role;
+      const text = fs.readFileSync(path.join(agentsDir ?? path.join(workspace, ".cursor", "agents"), `${file}.md`), "utf8");
       const m = text.match(/^model:\s*(.+)$/m);
       out[tier] = m ? m[1].trim() : null;
     } catch {
@@ -283,7 +291,7 @@ export interface CostStatementOptions {
 export function costStatement(workspace: string, bundledPricingPath: string, optionsOrChatModel?: CostStatementOptions | string | null): CostStatement {
   const o: CostStatementOptions = typeof optionsOrChatModel === "object" && optionsOrChatModel !== null ? optionsOrChatModel : { chatModelOverride: optionsOrChatModel };
   const pricing = loadPricing(o.stateRoot ? path.join(o.stateRoot, "pricing.json") : path.join(workspace, ".cursor", "cco", "pricing.json"), bundledPricingPath);
-  const models = readTierModels(workspace, o.stateRoot ? path.join(os.homedir(), ".cursor", "agents") : undefined);
+  const models = readTierModels(workspace, o.stateRoot ? path.join(os.homedir(), ".cursor", "agents") : undefined, o.stateRoot ? path.join(o.stateRoot, "agent-names.json") : undefined);
   const chatModel = o.chatModelOverride === undefined ? readLatestChatModel(workspace, o.workspaceStateDir) : o.chatModelOverride;
   const chatModelLabel = !chatModel ? "" : modelDisplayName(chatModel, pricing);
   const stale = pricingIsStale(pricing);

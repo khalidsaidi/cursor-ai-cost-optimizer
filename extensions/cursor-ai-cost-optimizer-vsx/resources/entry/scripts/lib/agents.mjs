@@ -1,6 +1,6 @@
 import path from "node:path";
 import fs from "node:fs";
-import { PLUGIN_ROOT, CCO_AGENT_NAMES, LEGACY_AGENT_NAMES, readTextSafe, writeTextIfChanged, workspacePaths } from "./common.mjs";
+import { PLUGIN_ROOT, CCO_AGENT_NAMES, LEGACY_AGENT_NAMES, readTextSafe, writeTextIfChanged, workspacePaths, readJsonSafe, writeJson } from "./common.mjs";
 
 /**
  * Cursor honors a subagent's `model:` line for project subagents (<workspace>/.cursor/agents) and user
@@ -19,14 +19,14 @@ export function pluginAgentPath(name) {
   return path.join(PLUGIN_ROOT, "agents", `${name}.md`);
 }
 
-export function renderWorkspaceAgent(name, modelId) {
-  // Templates may be checked out with CRLF on Windows (git autocrlf); normalize before parsing the frontmatter.
-  const source = (readTextSafe(pluginAgentPath(name)) || "").replace(/\r\n/g, "\n");
+export function renderWorkspaceAgent(role, modelId, name = role) {
+  // Templates (by role) may be checked out with CRLF on Windows (git autocrlf); normalize before parsing the frontmatter.
+  const source = (readTextSafe(pluginAgentPath(role)) || "").replace(/\r\n/g, "\n");
   if (!source) {
     return null;
   }
   const model = modelId && modelId !== "inherit" ? modelId : "inherit";
-  const withModel = source.replace(/^model:\s*.*$/m, `model: ${model}`);
+  const withModel = source.replace(/^model:\s*.*$/m, `model: ${model}`).replace(/^name:\s*.*$/m, `name: ${name}`);
   const closing = withModel.indexOf("\n---\n", 4);
   if (closing < 0) {
     return null;
@@ -34,31 +34,96 @@ export function renderWorkspaceAgent(name, modelId) {
   return `${withModel.slice(0, closing + 5)}${GENERATED_MARKER}\n${withModel.slice(closing + 5)}`;
 }
 
-/** Write <workspace>/.cursor/agents/cco-*.md. Never overwrites a file that is not ours. */
+/** Role → suffix Cursor shows on the card after the model name ("Composer 2.5 Fast"). */
+const ROLE_SUFFIX = { "fast-tier": "fast", "balanced-tier": "balanced", "deep-tier": "deep", "fast-research": "research", "tier-verifier": "verifier" };
+
+/** "claude-sonnet-5-thinking-high" → "claude-sonnet-5"; "cursor-grok-4.6-high" → "grok-4.6"; "composer-2.5" stays. */
+export function modelSlug(modelId) {
+  let id = String(modelId || "").toLowerCase().replace(/^cursor-/, "");
+  id = id.replace(/-(thinking|fast|low|medium|high|xhigh|max|1m|nozdr|zdr|extra|no)(?=-|$)/g, "");
+  id = id.replace(/-+$/, "").replace(/[^a-z0-9.-]+/g, "-");
+  return id || "model";
+}
+
+/** The subagent name Cursor displays: the model it runs on, then the tier. Falls back to the role name. */
+export function agentNameFor(role, modelId) {
+  const suffix = ROLE_SUFFIX[role];
+  if (!suffix || !modelId || modelId === "inherit") {
+    return role;
+  }
+  return `${modelSlug(modelId)}-${suffix}`;
+}
+
+/** Which role a subagent name plays, or null when it is not ours (accepts role names and pre-0.3 cco-* names). */
+export function roleOf(name) {
+  const n = String(name || "").toLowerCase();
+  if (CCO_AGENT_NAMES.includes(n)) return n;
+  const legacy = { "cco-fast": "fast-tier", "cco-balanced": "balanced-tier", "cco-deep": "deep-tier", "cco-explore": "fast-research", "cco-verifier": "tier-verifier" };
+  if (legacy[n]) return legacy[n];
+  const m = n.match(/-(fast|balanced|deep|research|verifier)$/);
+  if (!m) return null;
+  return { fast: "fast-tier", balanced: "balanced-tier", deep: "deep-tier", research: "fast-research", verifier: "tier-verifier" }[m[1]];
+}
+
+function namesPath(workspace) {
+  const paths = workspacePaths(workspace);
+  return path.join(paths.scope === "user" ? paths.root : paths.ccoDir, "agent-names.json");
+}
+
+/** Role → current subagent name for this workspace (falls back to the role names). */
+export function agentNames(workspace) {
+  const stored = workspace ? readJsonSafe(namesPath(workspace)) : null;
+  const out = {};
+  for (const role of CCO_AGENT_NAMES) {
+    out[role] = typeof stored?.[role] === "string" && stored[role] ? stored[role] : role;
+  }
+  return out;
+}
+
+/**
+ * Write the tier subagents, named after the model each one runs on. Generated files under any other name
+ * (a previous mapping, the pre-0.3 cco-* names) are removed; user-authored files are never touched.
+ */
 export function writeWorkspaceAgents(workspace, tierModels) {
   const dir = workspaceAgentsDir(workspace);
   const results = [];
-  removeLegacyAgents(dir);
-  for (const name of CCO_AGENT_NAMES) {
-    const modelId = tierModels[name] || "inherit";
+  const names = {};
+  for (const role of CCO_AGENT_NAMES) {
+    const modelId = tierModels[role] || "inherit";
+    const name = agentNameFor(role, modelId);
+    names[role] = name;
     const target = path.join(dir, `${name}.md`);
     const existing = readTextSafe(target);
-    if (existing && !existing.includes(GENERATED_MARKER_PREFIX)) { // any CCO-generated version (older markers included) is ours to refresh
-      results.push({ name, path: target, action: "skipped_user_file", model: null });
+    if (existing && !existing.includes(GENERATED_MARKER_PREFIX)) {
+      results.push({ name, role, path: target, action: "skipped_user_file", model: null });
       continue;
     }
-    const content = renderWorkspaceAgent(name, modelId);
+    const content = renderWorkspaceAgent(role, modelId, name);
     if (!content) {
-      results.push({ name, path: target, action: "template_missing", model: null });
+      results.push({ name, role, path: target, action: "template_missing", model: null });
       continue;
     }
     const written = writeTextIfChanged(target, content);
-    results.push({ name, path: target, action: written ? "written" : "unchanged", model: modelId });
+    results.push({ name, role, path: target, action: written ? "written" : "unchanged", model: modelId });
   }
+  // Sweep generated files that are no longer part of the mapping (renamed tiers, old cco-* names).
+  const keep = new Set(Object.values(names).map((n) => `${n}.md`));
+  try {
+    for (const file of fs.readdirSync(dir)) {
+      if (!file.endsWith(".md") || keep.has(file)) continue;
+      const text = readTextSafe(path.join(dir, file));
+      if (text && text.includes(GENERATED_MARKER_PREFIX)) {
+        try { fs.unlinkSync(path.join(dir, file)); } catch {}
+      }
+    }
+  } catch {}
+  try { writeJson(namesPath(workspace), names); } catch {}
   return results;
 }
 
-export function readWorkspaceAgentModel(workspace, name) {
+export function readWorkspaceAgentModel(workspace, roleOrName) {
+  const names = agentNames(workspace);
+  const name = names[roleOrName] || roleOrName;
   const text = readTextSafe(path.join(workspaceAgentsDir(workspace), `${name}.md`));
   if (!text) {
     return null;
@@ -69,7 +134,7 @@ export function readWorkspaceAgentModel(workspace, name) {
 
 /** A workspace is set up for CCO when its tier agents exist. */
 export function workspaceHasAgents(workspace) {
-  return Boolean(readTextSafe(path.join(workspaceAgentsDir(workspace), "fast-tier.md")));
+  return Boolean(readTextSafe(path.join(workspaceAgentsDir(workspace), `${agentNames(workspace)["fast-tier"]}.md`)));
 }
 
 /** Generated agents under the pre-0.3 names (cco-*.md) are replaced by the user-facing names; user-authored files are kept. */
