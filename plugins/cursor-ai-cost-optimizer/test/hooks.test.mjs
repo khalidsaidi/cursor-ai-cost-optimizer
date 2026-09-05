@@ -293,7 +293,7 @@ test("install-hooks writes merge-preserving user/project entries pointing at the
   const { buildEntries, mergeHooks, installHooks, uninstallHooks, hooksInstalled } = await import("../scripts/cco-install-hooks.mjs");
   const entries = buildEntries();
   assert.equal(entries.preToolUse[0].command, "node .cursor/cco-hook.mjs preToolUse");
-  assert.equal(entries.preToolUse[0].matcher, ".*");
+  assert.match(entries.preToolUse[0].matcher, /^\^\(Task\|Write/, "per-call hook only for delegations, edits and shell (reads are free)");
   const merged = mergeHooks({ version: 1, hooks: { preToolUse: [{ command: "node other.js" }, { command: "node old/cco-hook.mjs preToolUse" }] } }, entries);
   assert.equal(merged.hooks.preToolUse.filter((e) => e.command === "node other.js").length, 1, "foreign entry preserved");
   assert.equal(merged.hooks.preToolUse.filter((e) => e.command.includes("old/cco-hook")).length, 0, "stale CCO entry replaced");

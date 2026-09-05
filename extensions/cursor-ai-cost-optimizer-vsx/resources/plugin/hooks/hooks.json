@@ -16,7 +16,7 @@
     "preToolUse": [
       {
         "command": "node \"${CURSOR_PLUGIN_ROOT}/scripts/cco-hook.mjs\" preToolUse",
-        "matcher": ".*",
+        "matcher": "^(Task|Write|Edit|StrReplace|MultiEdit|Delete|Shell|Bash|NotebookEdit|ApplyPatch|CreateFile|EditFile|DeleteFile)$",
         "timeout": 5
       }
     ],
