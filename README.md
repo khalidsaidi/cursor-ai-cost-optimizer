@@ -20,7 +20,7 @@ CCO routes each request to the cheapest effort tier that can do it well (FAST / 
 
 ## What a user sees
 
-Install it. One toast: "AI Cost Optimizer is on: routine work goes to cheaper models and the status bar shows what you save. Fast → Composer 2.5 · Balanced → Claude Sonnet 5 · Deep → Claude Opus 5." with **Undo** and **How it works**. Nothing to answer, no reload, nothing written into any project. From then on the status bar reads `⚡ Saved ~$4.12`; its tooltip shows each tier's model next to your chat model's price, the last task, and the project total.
+Install it. Nothing pops up, nothing to answer, no reload, nothing written into any project: the status bar item switches from `AI Cost: Off` to `⚡ AI Cost` and that is the whole onboarding (its tooltip names the three tier models; the menu has Remove). From then on the status bar reads `⚡ Saved ~$4.12`; its tooltip shows each tier's model next to your chat model's price, the last task, and the project total.
 
 In chat, on Auto or any model: the request, a **Fast Tier** subagent card (hover shows the model; its line reads `Fast on Composer 2.5 · ~$0.02, saves ~$0.04`), the answer. Risky work shows a **Deep Tier** card and `Risky or complex change: routing to Deep (Claude Opus 5)`. The chat model writes no cost lines of its own. A model your plan refuses is skipped for a few hours and the task steps down a tier, with a one-line note; a model refused repeatedly is replaced. **Choose tier models** in the status menu picks which model runs each tier, and the Settings UI (search "cco") holds every knob: tier models, enforce vs. advise, always delegate, budget per chat, cooldown hours, auto-enable.
 

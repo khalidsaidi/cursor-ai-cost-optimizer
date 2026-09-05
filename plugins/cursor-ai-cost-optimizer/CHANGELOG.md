@@ -7,6 +7,7 @@
 - No model-written cost lines: the parent relays the subagent's result and adds nothing.
 - Account-level `model-limits.json` (state root in user scope); a model refused three times across 12+ hours is unavailable: discovery drops it and a forced `cco-hook refresh --force` re-maps the tier. A user-scope global `cco.json` (state root) layers between defaults and the project file (`modelOverrides` chosen from the editor).
 - Dispatcher dedupe keys `subagentStop` on subagent id/type/status too.
+- Routing rule trimmed to the essentials (2.8 KB); FAST tasks go straight to `fast-tier` (no `fast-research` detour); no model-written cost lines.
 - Plain-language user lines: tool cards (`Fast on Composer 2.5 · ~$0.02, saves ~$0.04`, `Routing to Deep (Claude Opus 5) as requested.`, `Working in chat on Grok 4.6.`) and footers (`Cost Optimizer · Fast on Composer 2.5 · ~$0.02, saves ~$0.04`, `Cost Optimizer · done in chat on Grok 4.6`) via `lib/labels.mjs`; no internal names, reason codes or override hints reach the user.
 - User scope delivers the routing rule through the `sessionStart` context (every Cursor version with hooks, the CLI, and the current window without a reload); the runtime plugin path carries commands and skills only.
 

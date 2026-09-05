@@ -8,7 +8,7 @@ the Cursor plugin marketplace, and ships a self-contained hook binary for machin
 
 ## Getting started
 
-1. **Install it.** It turns itself on: one toast says so, with **Undo** and **How it works**. No question, no reload, nothing written into any project: the Cost Optimizer registers in Cursor's own user-level config (`~/.cursor/hooks.json` entries, `~/.cursor/agents/*-tier.md`) and keeps its state in the extension's storage, the way Copilot keeps its state in the editor. **Remove** in the status menu takes it all back out.
+1. **Install it.** It turns itself on, quietly: the status bar item switches to `⚡ AI Cost`; no popup, no question, no reload, nothing written into any project: the Cost Optimizer registers in Cursor's own user-level config (`~/.cursor/hooks.json` entries, `~/.cursor/agents/*-tier.md`) and keeps its state in the extension's storage, the way Copilot keeps its state in the editor. **Remove** in the status menu takes it all back out.
    - Prefer repo files? `AI Cost Optimizer: Turn On / Update Models` also offers **This project only**: 8 files under the project's `.cursor/`, shown to you before anything is written.
 2. **Work normally.** Keep your usual chat model. A routed task shows a **Fast Tier** (or Balanced / Deep) subagent card whose line reads `Fast on Composer 2.5 · ~$0.02, saves ~$0.04`; risky work goes to the strong tier and says so. The status bar shows what you have saved in the project; its tooltip shows the tiers, the last task and the total.
 3. **Steer when you want to.** **Choose tier models** in the status menu picks which model runs Fast, Balanced and Deep. `[cco:fast]`, `[cco:balanced]`, `[cco:deep]` in a prompt force a tier for one request; `[cco:off]` bypasses routing once. **Pause here** switches a project off without removing anything.
@@ -91,7 +91,7 @@ Measured against the bar set by the big first-party extensions (Copilot Chat, Am
 
 | | Everywhere (default) | This project only |
 | --- | --- | --- |
-| On install | Registers commands and a status bar item. No toast, no files, no settings changed. | same |
+| On install | Turns itself on (once per machine): hook entries and subagents in `~/.cursor`, state in the extension's storage. No popup, no files in any project. | Registers the commands and the status bar item; nothing until you choose it. |
 | On setup (you confirm first) | CCO entries merged into `~/.cursor/hooks.json`, five subagents in `~/.cursor/agents/`, state in the extension's storage. **No project files.** | 8 files under the project's `.cursor/` plus a git-ignored state folder; they show up in git status. |
 | While you chat | Chat start answers from cache in about 0.1 s (price and model refreshes run in a detached worker, never on the chat path). One hook process per tool call: about 0.05 s (44 ms measured with Node, 37 ms with the binary); a hung hook is killed after 5 s and the call proceeds (measured in Cursor: a failed or hung hook never blocks the chat, it costs at most its timeout). One footer line per routed task. Nothing blocked by default. | same |
 | Projects you paused / did not set up | Paused projects: the chat is told to work normally and any `cco-*` delegation is turned back into in-chat work (the rule and subagents are user-level and cannot be unloaded per project). | Untouched: no files, no messages, no hooks. |
