@@ -252,7 +252,29 @@ export function isEnabled(workspace) {
   return { enabled: true, reason: null };
 }
 
+/** First PATH hit for a command (absolute paths pass through); on Windows also tries .exe/.cmd/.bat. */
+export function resolveCommand(cmd) {
+  if (!cmd) return null;
+  if (path.isAbsolute(cmd)) return fs.existsSync(cmd) ? cmd : null;
+  const exts = process.platform === "win32" ? ["", ".exe", ".cmd", ".bat"] : [""];
+  for (const dir of String(process.env.PATH || "").split(path.delimiter).filter(Boolean)) {
+    for (const ext of exts) {
+      const candidate = path.join(dir, cmd + ext);
+      try {
+        if (fs.statSync(candidate).isFile()) return candidate;
+      } catch {}
+    }
+  }
+  return null;
+}
+
 export function run(cmd, args, options = {}) {
+  // Windows: a .cmd/.bat launcher (npm-style shims) cannot be spawned directly by Node 18+; it needs a shell.
+  const resolved = process.platform === "win32" ? resolveCommand(cmd) : null;
+  if (resolved && /\.(cmd|bat)$/i.test(resolved)) {
+    const quoted = [resolved, ...args].map((a) => (/[\s"&|<>^]/.test(a) ? `"${String(a).replace(/"/g, '\\"')}"` : a)).join(" ");
+    return spawnSync(quoted, { encoding: "utf8", maxBuffer: 1024 * 1024 * 16, shell: true, windowsHide: true, ...options });
+  }
   return spawnSync(cmd, args, {
     encoding: "utf8",
     maxBuffer: 1024 * 1024 * 16,

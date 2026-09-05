@@ -27,6 +27,7 @@ import {
   isEnabled, isMain, applyScopeArgs } from "./lib/common.mjs";
 applyScopeArgs();
 import { loadConfig } from "./lib/config.mjs";
+import { modelLimitedUntil, limitsPathFor } from "./lib/state.mjs";
 import { loadPricing, resolveModelPrice, blendedRatePerMillion } from "./lib/pricing.mjs";
 import { heuristicScores, decideTier, parseOverride, isQuestionLike, isTinyTask } from "./lib/scorer.mjs";
 import { loadSession, saveSession, userPromptFromTranscript, guessTranscriptPath, refineSessionModel, syncTurnFromTranscript, userPromptFromTranscriptTurn } from "./lib/session.mjs";
@@ -34,10 +35,19 @@ import { readWorkspaceAgentModel } from "./lib/agents.mjs";
 
 const DEFAULT_WORK_TOOLS = "^(Write|Edit|StrReplace|MultiEdit|Delete|Shell|Bash|NotebookEdit|ApplyPatch|CreateFile|EditFile|DeleteFile)$";
 
-function tierModels(workspace, runtime) {
+function tierModels(workspace, runtime, limitsPath = null) {
   const out = {};
   for (const tier of TIERS) {
     out[tier] = (workspace && readWorkspaceAgentModel(workspace, `cco-${tier}`)) || runtime?.profiles?.[tier]?.model || "inherit";
+  }
+  // A tier whose model is on cooldown (refused to start a subagent: usage limit) runs on the next usable lower tier.
+  if (limitsPath) {
+    const order = ["fast", "balanced", "deep"];
+    for (const tier of order) {
+      let idx = order.indexOf(tier);
+      while (idx > 0 && modelLimitedUntil(limitsPath, out[order[idx]])) idx -= 1;
+      if (order[idx] !== tier) out[tier] = out[order[idx]];
+    }
   }
   return out;
 }
@@ -217,7 +227,7 @@ async function main() {
     const config = loadConfig(workspace);
     const pricing = loadPricing(paths.pricingPath);
     const runtime = readJsonSafe(paths.runtimePath);
-    const models = tierModels(workspace, runtime);
+    const models = tierModels(workspace, runtime, paths ? limitsPathFor(paths.jointStatePath) : null);
     if (refineSessionModel(session, payload.model)) {
       saveSession(workspace, session);
     }
