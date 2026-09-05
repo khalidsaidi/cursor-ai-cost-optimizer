@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { run, stripAnsi, cursorAgentBinary, readJsonSafe, TIERS, asNumber } from "./common.mjs";
+import { run, stripAnsi, cursorAgentBinary, readJsonSafe, TIERS, asNumber, resolveCommand } from "./common.mjs";
 import { resolveModelPrice, blendedRatePerMillion } from "./pricing.mjs";
 
 export const CLI_CONFIG_PATH = path.join(os.homedir(), ".cursor", "cli-config.json");
@@ -51,19 +51,16 @@ export function listModels() {
 
 /** Where the CLI binary lives (first PATH hit), so its version can be cached by file identity. */
 function cliBinaryStat() {
-  const bin = cursorAgentBinary();
-  const candidates = path.isAbsolute(bin)
-    ? [bin]
-    : String(process.env.PATH || "").split(path.delimiter).filter(Boolean).flatMap((dir) =>
-        process.platform === "win32" ? [path.join(dir, `${bin}.cmd`), path.join(dir, `${bin}.exe`), path.join(dir, bin)] : [path.join(dir, bin)]
-      );
-  for (const candidate of candidates) {
-    try {
-      const st = fs.statSync(candidate);
-      return { file: candidate, key: `${candidate}|${st.size}|${Math.floor(st.mtimeMs)}` };
-    } catch {}
+  const file = resolveCommand(cursorAgentBinary());
+  if (!file) {
+    return null;
   }
-  return null;
+  try {
+    const st = fs.statSync(file);
+    return { file, key: `${file}|${st.size}|${Math.floor(st.mtimeMs)}` };
+  } catch {
+    return null;
+  }
 }
 
 const CLI_VERSION_CACHE = path.join(os.tmpdir(), `cco-cli-version-${os.userInfo().uid ?? os.userInfo().username}.json`);

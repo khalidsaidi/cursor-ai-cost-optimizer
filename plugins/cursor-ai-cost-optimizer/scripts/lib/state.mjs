@@ -1,3 +1,4 @@
+import path from "node:path";
 import { readJsonSafe, writeJson, nowIso, clamp, asNumber, TIERS } from "./common.mjs";
 
 export function defaultJointState() {
@@ -63,20 +64,31 @@ export function saveJointState(statePath, state) {
   }
 }
 
+/** Cooldowns live in their own small file: several hooks write joint-state.json at once, and a limit must not be lost to that race. */
+export function limitsPathFor(jointStatePath) {
+  return path.join(path.dirname(jointStatePath), "model-limits.json");
+}
+
+export function loadLimits(limitsPath) {
+  return readJsonSafe(limitsPath) || {};
+}
+
 /** A model that could not even start a subagent (usage limit / not available) is skipped for a while. */
-export function markModelLimited({ state, model, minutes = 360, reason = "startup_failure" }) {
-  const next = state && typeof state === "object" ? { ...state } : defaultJointState();
-  if (!model || model === "inherit") {
-    return next;
+export function markModelLimited({ limitsPath, model, minutes = 360, reason = "startup_failure" }) {
+  if (!limitsPath || !model || model === "inherit") {
+    return null;
   }
-  next.limits = { ...(next.limits || {}), [model]: { until: new Date(Date.now() + minutes * 60_000).toISOString(), reason, at: nowIso() } };
-  next.generatedAt = nowIso();
-  return next;
+  const limits = loadLimits(limitsPath);
+  limits[model] = { until: new Date(Date.now() + minutes * 60_000).toISOString(), reason, at: nowIso() };
+  try {
+    writeJson(limitsPath, limits);
+  } catch {}
+  return limits[model];
 }
 
 /** ISO time until which `model` is on cooldown, or null when it is usable. */
-export function modelLimitedUntil(state, model) {
-  const entry = state?.limits?.[model];
+export function modelLimitedUntil(limitsPath, model) {
+  const entry = limitsPath ? loadLimits(limitsPath)[model] : null;
   if (!entry?.until) {
     return null;
   }

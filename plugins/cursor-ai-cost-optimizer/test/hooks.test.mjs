@@ -533,6 +533,12 @@ test("a failed DEEP subagent (usage limit) hands the task back to the chat with 
   });
   assert.match(out.followup_message, /cco-deep did not complete/);
   assert.match(out.followup_message, /\[cco: DEEP in chat → cursor-grok-4\.6-high • 1x • subagent failed\]/);
+  // A DEEP subagent that ran and then errored (not a startup refusal) has nothing above it: the chat finishes.
+  const ran = runHook("cco-task-result.mjs", {
+    hook_event_name: "subagentStop", conversation_id: "deep-fail", subagent_type: "cco-deep", model: "claude-opus-5-thinking-high",
+    status: "error", message_count: 4, tool_call_count: 3, summary: "crashed midway", workspace_roots: [ws]
+  });
+  assert.match(ran.followup_message, /\[cco: DEEP in chat → cursor-grok-4\.6-high • 1x • subagent failed\]/);
   assert.match(String(loadSession(ws, "deep-fail")?.lastFooter), /subagent failed\]$/, "later reminders repeat the honest footer");
 });
 
@@ -545,8 +551,9 @@ test("a subagent that dies at startup puts its model on cooldown; later delegati
     hook_event_name: "subagentStop", conversation_id: "cool-1", subagent_type: "cco-deep", model: "claude-opus-5-thinking-high",
     status: "error", duration_ms: 1163, message_count: 0, tool_call_count: 0, workspace_roots: [ws]
   });
-  const limits = loadJointState(paths.jointStatePath).limits;
-  assert.ok(limits && limits["claude-opus-5-thinking-high"], "the failed model is recorded as limited");
+  const limitsFile = path.join(path.dirname(paths.jointStatePath), "model-limits.json");
+  const limits = JSON.parse(fs.readFileSync(limitsFile, "utf8"));
+  assert.ok(limits["claude-opus-5-thinking-high"], "the failed model is recorded as limited");
   const guard = runHook("cco-task-guard.mjs", {
     hook_event_name: "preToolUse", conversation_id: "cool-2", tool_name: "Task",
     tool_input: { subagent_type: "cco-deep", prompt: "CCO-SCORES: complexity=4 risk=8 breadth=3 uncertainty=2 latency=0\n[cco:deep]\nRotate the production signing key" }, workspace_roots: [ws]
@@ -556,5 +563,36 @@ test("a subagent that dies at startup puts its model on cooldown; later delegati
   assert.match(guard.user_message, /usage limit/);
   // A completed run does not mark anything.
   runHook("cco-task-result.mjs", { hook_event_name: "subagentStop", conversation_id: "cool-3", subagent_type: "cco-fast", model: "composer-2.5", status: "completed", message_count: 3, tool_call_count: 2, workspace_roots: [ws] });
-  assert.equal(loadJointState(paths.jointStatePath).limits["composer-2.5"], undefined);
+  assert.equal(JSON.parse(fs.readFileSync(limitsFile, "utf8"))["composer-2.5"], undefined);
+});
+
+test("a DEEP subagent refused at startup retries once on BALANCED; when that is limited too, the chat finishes it", () => {
+  const ws = readyWorkspace();
+  const paths = workspacePaths(ws);
+  createSession({ workspace: ws, conversationId: "down-1", model: "cursor-grok-4.6-high" });
+  const first = runHook("cco-task-result.mjs", { hook_event_name: "subagentStop", conversation_id: "down-1", subagent_type: "cco-deep", model: "claude-opus-5-thinking-high", status: "error", duration_ms: 900, message_count: 0, tool_call_count: 0, workspace_roots: [ws] });
+  assert.match(first.followup_message, /delegate this same task once to cco-balanced \(claude-sonnet-5-thinking-high\)/);
+  assert.doesNotMatch(first.followup_message, /escalating to DEEP/);
+  const second = runHook("cco-task-result.mjs", { hook_event_name: "subagentStop", conversation_id: "down-1", subagent_type: "cco-balanced", model: "claude-sonnet-5-thinking-high", status: "error", duration_ms: 500, message_count: 0, tool_call_count: 0, workspace_roots: [ws] });
+  assert.match(second.followup_message, /delegate this same task once to cco-fast \(composer-2\.5\)/, "BALANCED refused: try FAST, never escalate up");
+  const third = runHook("cco-task-result.mjs", { hook_event_name: "subagentStop", conversation_id: "down-1", subagent_type: "cco-fast", model: "composer-2.5", status: "error", duration_ms: 500, message_count: 0, tool_call_count: 0, workspace_roots: [ws] });
+  assert.match(third.followup_message, /\[cco: FAST in chat → cursor-grok-4\.6-high • 1x • subagent failed\]/, "nothing lower: the chat finishes it");
+  const guard = runHook("cco-task-guard.mjs", { hook_event_name: "preToolUse", conversation_id: "down-2", tool_name: "Task", tool_input: { subagent_type: "cco-deep", prompt: "CCO-SCORES: complexity=4 risk=8 breadth=3 uncertainty=2 latency=0\n[cco:deep]\nRotate the production signing key" }, workspace_roots: [ws] });
+  assert.equal(guard.permission, "allow", "all tiers limited: the delegation is left alone");
+  assert.equal(paths.jointStatePath.endsWith("joint-state.json"), true);
+});
+
+test("gate messages name the model that will actually run while a tier model is on cooldown", async () => {
+  const { markModelLimited, limitsPathFor } = await import("../scripts/lib/state.mjs");
+  const ws = readyWorkspace();
+  const paths = workspacePaths(ws);
+  fs.mkdirSync(path.join(ws, ".cursor"), { recursive: true });
+  fs.writeFileSync(path.join(ws, ".cursor", "cco.json"), JSON.stringify({ enforcement: { mode: "strict" } }));
+  markModelLimited({ limitsPath: limitsPathFor(paths.jointStatePath), model: "claude-opus-5-thinking-high", minutes: 60 });
+  createSession({ workspace: ws, conversationId: "gate-lim", model: "cursor-grok-4.6-high" });
+  runHook("cco-prompt-capture.mjs", { hook_event_name: "beforeSubmitPrompt", conversation_id: "gate-lim", prompt: "[cco:deep] rotate the production signing key", workspace_roots: [ws] });
+  const out = runHook("cco-tool-gate.mjs", { hook_event_name: "preToolUse", conversation_id: "gate-lim", tool_name: "Write", tool_input: { file_path: "x" }, workspace_roots: [ws] });
+  assert.equal(out.permission, "deny");
+  assert.match(out.agent_message, /runs on claude-sonnet-5-thinking-high/, "DEEP is limited: the message names BALANCED's model");
+  assert.doesNotMatch(String(out.user_message), /claude-opus/);
 });

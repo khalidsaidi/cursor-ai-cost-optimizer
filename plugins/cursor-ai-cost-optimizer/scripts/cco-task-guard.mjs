@@ -24,14 +24,14 @@ import {
 applyScopeArgs();
 import { loadConfig } from "./lib/config.mjs";
 import { parseOverride, parseScoresLine, heuristicScores, decideTier, applyStateEscalation, formatScoresLine } from "./lib/scorer.mjs";
-import { loadJointState, modelLimitedUntil } from "./lib/state.mjs";
+import { loadJointState, modelLimitedUntil, limitsPathFor } from "./lib/state.mjs";
 import { readWorkspaceAgentModel } from "./lib/agents.mjs";
 import { tierFor } from "./lib/models.mjs";
 import { detectTestCommand, estimateTaskCostUsd, formatUsd } from "./lib/project.mjs";
 import { updateSession, loadSession, createSession, normalizeModelId, syncTurnFromTranscript, guessTranscriptPath, saveSession } from "./lib/session.mjs";
 import { loadPricing, resolveModelPrice, blendedRatePerMillion } from "./lib/pricing.mjs";
 
-export function evaluateTask({ toolInput, config, state = null, lastPrompt = null, conversationId = null, runtime = null, workspace = null }) {
+export function evaluateTask({ toolInput, config, state = null, lastPrompt = null, conversationId = null, runtime = null, workspace = null, limitsPath = null }) {
   const requestedAgent = String(toolInput?.subagent_type || "");
   // Cursor's built-in `explore` subagent is the model's natural choice for research; take it over so the
   // research runs on the mapped FAST model and counts as the research step.
@@ -98,10 +98,10 @@ export function evaluateTask({ toolInput, config, state = null, lastPrompt = nul
   // A tier whose model is on cooldown (it refused to start a subagent recently: usage limit) steps down to the
   // nearest lower tier whose model is usable, rather than failing the same way again.
   let limited = null;
-  if (state) {
+  if (limitsPath) {
     let idx = tierOrder.indexOf(target);
-    while (idx > 0 && modelLimitedUntil(state, modelFor(tierOrder[idx]))) {
-      limited = limited || { tier: tierOrder[idx], model: modelFor(tierOrder[idx]), until: modelLimitedUntil(state, modelFor(tierOrder[idx])) };
+    while (idx > 0 && modelLimitedUntil(limitsPath, modelFor(tierOrder[idx]))) {
+      limited = limited || { tier: tierOrder[idx], model: modelFor(tierOrder[idx]), until: modelLimitedUntil(limitsPath, modelFor(tierOrder[idx])) };
       idx -= 1;
     }
     if (limited) {
@@ -181,7 +181,8 @@ async function main() {
       lastPrompt,
       conversationId: payload.conversation_id || null,
       runtime,
-      workspace
+      workspace,
+      limitsPath: paths ? limitsPathFor(paths.jointStatePath) : null
     });
     if (!result.applies) {
       emit({ permission: "allow" });
@@ -321,7 +322,7 @@ async function main() {
         }
       };
       output.agent_message = result.rewritten
-        ? `CCO rerouted this delegation from ${result.requestedAgent} to ${result.targetAgent} (${result.reason}; model ${result.model}). Continue with the ${result.targetTier.toUpperCase()} result; do not re-delegate to ${result.requestedAgent}. When it returns, relay its final message verbatim without re-reading files or re-running its checks.`
+        ? `CCO rerouted this delegation from ${result.requestedAgent} to ${result.targetAgent} (${result.reason}; model ${result.model}). Continue with the ${result.targetTier.toUpperCase()} result; do not re-delegate to ${result.requestedAgent}. When it returns, relay its final message verbatim without re-reading files or re-running its checks, then end with exactly this line: ${footer}`
         : `CCO: delegation to ${result.targetAgent} (${result.model}) logged. When it returns, relay its final message to the user verbatim (do not summarize, re-read files, or re-run its checks), then end with exactly this line: ${footer}`;
       const sessForHint = workspace && payload.conversation_id ? loadSession(workspace, payload.conversation_id) : null;
       const hint = sessForHint && !sessForHint.hintShown ? " · prefix a prompt with [cco:deep] or [cco:fast] to force a tier" : "";
