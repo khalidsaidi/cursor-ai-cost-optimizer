@@ -11,7 +11,7 @@ Keep whatever chat model you like. AI Cost Optimizer routes each task to the che
 Each routed task ends with one line, for example:
 
 ```
-[cco: FAST → composer-2.5 • 0.3x of claude-opus-5-thinking-high • est. $0.02]
+Cost Optimizer · Fast on Composer 2.5 · ~$0.02, saves ~$0.05
 ```
 
 Nothing is blocked. Cost routing is advice to the chat model; only your explicit `[cco:<tier>]` tokens and risky work (which always goes to the strong tier) are enforced.

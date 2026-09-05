@@ -385,13 +385,16 @@ test("user scope: nothing in the repo; ~/.cursor hooks + agents, private state r
   assert.match(cmd, /cco-hook\.mjs" preToolUse --scope user --state-root "/);
   assert.match(fs.readFileSync(path.join(home, ".cursor", "agents", "cco-fast.md"), "utf8"), /^model: composer-2\.5$/m);
   assert.ok(fs.existsSync(path.join(root, "plugin", ".cursor-plugin", "plugin.json")), "runtime plugin for pluginPaths");
-  assert.ok(fs.existsSync(path.join(root, "plugin", "rules", "cco-routing.mdc")));
+  assert.equal(fs.existsSync(path.join(root, "plugin", "rules")), false, "the rule rides the sessionStart context, not the plugin path (no reload needed)");
   assert.equal(fs.existsSync(path.join(root, "plugin", "agents")), false, "runtime plugin carries no agents (user agents win)");
   const run = (event, payload) => {
     const res = spawnSync(process.execPath, [path.join(scripts, "cco-hook.mjs"), event, "--scope", "user", "--state-root", root], { input: JSON.stringify(payload), encoding: "utf8", env, cwd: path.join(home, ".cursor"), timeout: 40_000 });
     assert.equal(res.status, 0, res.stderr);
     return JSON.parse(res.stdout.trim().split(/\r?\n/).filter(Boolean).pop());
   };
+  const start = run("sessionStart", { hook_event_name: "sessionStart", conversation_id: "u0", workspace_roots: [ws] });
+  assert.match(start.additional_context, /# CCO routing/, "user scope: the routing rule is delivered through the session context");
+  assert.match(start.additional_context, /Cost Optimizer · Fast on Composer 2\.5/, "the rule shows the footer format the hooks produce");
   const open = run("workspaceOpen", { hook_event_name: "workspaceOpen", workspace_roots: [ws] });
   assert.deepEqual(open.pluginPaths, [path.join(root, "plugin")]);
   const task = run("preToolUse", { hook_event_name: "preToolUse", tool_name: "Task", conversation_id: "u1", tool_input: { description: "d", prompt: "CCO-SCORES: complexity=2 risk=9 breadth=1 uncertainty=0 latency=0\nrefund flow", subagent_type: "cco-fast" }, workspace_roots: [ws] });
@@ -532,14 +535,14 @@ test("a failed DEEP subagent (usage limit) hands the task back to the chat with 
     status: "error", summary: "ActionRequiredError: You've hit your usage limit for Opus", workspace_roots: [ws]
   });
   assert.match(out.followup_message, /cco-deep did not complete/);
-  assert.match(out.followup_message, /\[cco: DEEP in chat → cursor-grok-4\.6-high • 1x • subagent failed\]/);
+  assert.match(out.followup_message, /Cost Optimizer · done in chat on Grok 4\.6 · Deep model unavailable/);
   // A DEEP subagent that ran and then errored (not a startup refusal) has nothing above it: the chat finishes.
   const ran = runHook("cco-task-result.mjs", {
     hook_event_name: "subagentStop", conversation_id: "deep-fail", subagent_type: "cco-deep", model: "claude-opus-5-thinking-high",
     status: "error", message_count: 4, tool_call_count: 3, summary: "crashed midway", workspace_roots: [ws]
   });
-  assert.match(ran.followup_message, /\[cco: DEEP in chat → cursor-grok-4\.6-high • 1x • subagent failed\]/);
-  assert.match(String(loadSession(ws, "deep-fail")?.lastFooter), /subagent failed\]$/, "later reminders repeat the honest footer");
+  assert.match(ran.followup_message, /Cost Optimizer · done in chat on Grok 4\.6 · Deep model unavailable/);
+  assert.match(String(loadSession(ws, "deep-fail")?.lastFooter), /model unavailable$/, "later reminders repeat the honest footer");
 });
 
 test("a subagent that dies at startup puts its model on cooldown; later delegations step down a tier", async () => {
@@ -576,7 +579,7 @@ test("a DEEP subagent refused at startup retries once on BALANCED; when that is 
   const second = runHook("cco-task-result.mjs", { hook_event_name: "subagentStop", conversation_id: "down-1", subagent_type: "cco-balanced", model: "claude-sonnet-5-thinking-high", status: "error", duration_ms: 500, message_count: 0, tool_call_count: 0, workspace_roots: [ws] });
   assert.match(second.followup_message, /delegate this same task once to cco-fast \(composer-2\.5\)/, "BALANCED refused: try FAST, never escalate up");
   const third = runHook("cco-task-result.mjs", { hook_event_name: "subagentStop", conversation_id: "down-1", subagent_type: "cco-fast", model: "composer-2.5", status: "error", duration_ms: 500, message_count: 0, tool_call_count: 0, workspace_roots: [ws] });
-  assert.match(third.followup_message, /\[cco: FAST in chat → cursor-grok-4\.6-high • 1x • subagent failed\]/, "nothing lower: the chat finishes it");
+  assert.match(third.followup_message, /Cost Optimizer · done in chat on Grok 4\.6 · Fast model unavailable/, "nothing lower: the chat finishes it");
   const guard = runHook("cco-task-guard.mjs", { hook_event_name: "preToolUse", conversation_id: "down-2", tool_name: "Task", tool_input: { subagent_type: "cco-deep", prompt: "CCO-SCORES: complexity=4 risk=8 breadth=3 uncertainty=2 latency=0\n[cco:deep]\nRotate the production signing key" }, workspace_roots: [ws] });
   assert.equal(guard.permission, "allow", "all tiers limited: the delegation is left alone");
   assert.equal(paths.jointStatePath.endsWith("joint-state.json"), true);

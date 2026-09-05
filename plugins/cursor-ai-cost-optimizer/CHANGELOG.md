@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+- Plain-language user lines: tool cards (`Fast on Composer 2.5 · ~$0.02, saves ~$0.04`, `Routing to Deep (Claude Opus 5) as requested.`, `Working in chat on Grok 4.6.`) and footers (`Cost Optimizer · Fast on Composer 2.5 · ~$0.02, saves ~$0.04`, `Cost Optimizer · done in chat on Grok 4.6`) via `lib/labels.mjs`; no internal names, reason codes or override hints reach the user.
+- User scope delivers the routing rule through the `sessionStart` context (every Cursor version with hooks, the CLI, and the current window without a reload); the runtime plugin path carries commands and skills only.
+
 ### Fixed
 - Discovery without a usable Cursor CLI mapped every tier to `inherit` when probing was requested; the bundled catalogue is now used unverified, and an account-level probe failure (`auth_required`, `workspace_trust`) ends probing instead of discarding every candidate.
 - `sessionStart`/`workspaceOpen` never wait on the network or CLI startup: stale price tables and model maps are refreshed by a detached `cco-hook refresh` worker (lock-guarded, 10 min cadence); `cliVersion()` is cached per binary identity; an empty `workspace_roots` array is not a workspace.

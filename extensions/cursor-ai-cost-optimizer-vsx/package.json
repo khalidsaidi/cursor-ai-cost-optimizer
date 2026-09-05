@@ -56,7 +56,7 @@
       {
         "command": "cco.installCursorAssets",
         "category": "AI Cost Optimizer",
-        "title": "Set Up / Update"
+        "title": "Turn On / Update Models"
       },
       {
         "command": "cco.uninstallCursorAssets",
@@ -67,7 +67,7 @@
       {
         "command": "cco.recommendTier",
         "category": "AI Cost Optimizer",
-        "title": "Show Tier Rates / Recommend a Tier"
+        "title": "Savings and Tier Rates"
       },
       {
         "command": "cco.insertOverrideFast",
@@ -92,7 +92,7 @@
       {
         "command": "cco.collectDiagnostics",
         "category": "AI Cost Optimizer",
-        "title": "Collect Diagnostics (copy to clipboard)"
+        "title": "Copy Diagnostics"
       },
       {
         "command": "cco.showMenu",
@@ -101,7 +101,7 @@
       },
       {
         "command": "cco.togglePause",
-        "title": "Pause / Resume in This Project",
+        "title": "Pause / Resume Here",
         "category": "AI Cost Optimizer",
         "enablement": "cco.mode != 'none'"
       },
@@ -162,7 +162,7 @@
       {
         "id": "cco.gettingStarted",
         "title": "Get started with AI Cost Optimizer",
-        "description": "Set it up in your project, start a new chat, steer with override tokens when you want to.",
+        "description": "Turn it on, start a new chat, and steer with [cco:fast] / [cco:deep] when you want to.",
         "steps": [
           {
             "id": "cco.step.install",

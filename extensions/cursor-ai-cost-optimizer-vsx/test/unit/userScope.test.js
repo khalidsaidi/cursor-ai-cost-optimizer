@@ -30,7 +30,8 @@ test("everywhere scope: nothing in the repo, ~/.cursor hooks + agents, pause per
     assert.deepEqual(hooks.hooks.afterFileEdit, [{ command: "other-tool" }], "foreign entry kept");
     assert.match(hooks.hooks.preToolUse[0].command, /cco-hook\.mjs" preToolUse --scope user --state-root "/);
     assert.equal(r.agents["cco-fast"], "composer-2.5");
-    assert.ok(fs.existsSync(path.join(stateRoot, "plugin", "rules", "cco-routing.mdc")));
+    assert.equal(fs.existsSync(path.join(stateRoot, "plugin", "rules")), false, "the rule is delivered by the sessionStart hook, not the plugin path");
+    assert.ok(fs.existsSync(path.join(stateRoot, "plugin", "commands")));
     assert.ok(fs.existsSync(userPaths(stateRoot).manifestPath));
     const s = userStatus(stateRoot);
     assert.equal(s.installed, true);

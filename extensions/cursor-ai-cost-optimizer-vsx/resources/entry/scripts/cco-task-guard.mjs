@@ -26,6 +26,7 @@ applyScopeArgs();
 import { loadConfig } from "./lib/config.mjs";
 import { parseOverride, parseScoresLine, heuristicScores, decideTier, applyStateEscalation, formatScoresLine } from "./lib/scorer.mjs";
 import { loadJointState, modelLimitedUntil, limitsPathFor } from "./lib/state.mjs";
+import { tierLabel, modelLabel, reasonLabel, footerLine } from "./lib/labels.mjs";
 import { readWorkspaceAgentModel } from "./lib/agents.mjs";
 import { tierFor } from "./lib/models.mjs";
 import { detectTestCommand, estimateTaskCostUsd, formatUsd } from "./lib/project.mjs";
@@ -160,7 +161,7 @@ async function main() {
         emit({
           permission: "deny",
           agent_message: "AI Cost Optimizer is paused in this project: do this task directly in this chat (no cco-* delegation) and do not add a [cco: …] footer.",
-          user_message: "CCO: paused in this project; running in chat."
+          user_message: "Cost Optimizer is paused here; working in chat."
         });
         return;
       }
@@ -199,7 +200,7 @@ async function main() {
       if (paths && config?.enforcement?.logDecisions !== false) {
         appendJsonl(paths.decisionsPath, { ts: nowIso(), conversation_id: payload.conversation_id ?? null, requested: result.requestedAgent, final: result.targetAgent, model: result.model, rewritten: false, reason: result.reason, description: String(payload.tool_input?.description || "").slice(0, 200) });
       }
-      const output = { permission: "allow", user_message: `CCO: ${result.targetAgent === "cco-explore" ? "research" : "verification"} → ${result.model}` };
+      const output = { permission: "allow", user_message: `${result.targetAgent === "cco-explore" ? "Research" : "Verification"} on ${modelLabel(result.model, loadPricing(paths?.pricingPath))}` };
       if (result.rewritten) {
         output.updated_input = { ...(payload.tool_input || {}), subagent_type: result.targetAgent };
         output.agent_message = `CCO: research runs on cco-explore (${result.model}) instead of the built-in explore subagent. Use its summary and continue.`;
@@ -226,7 +227,7 @@ async function main() {
         emit({
           permission: "deny",
           agent_message: `CCO: do this ${result.targetTier.toUpperCase()}-tier task directly in this chat. Its model (${result.model}) is not cheaper than your chat model (${sessionModel}), so a subagent would only add cost. Proceed with the tools you need; no delegation.`,
-          user_message: `CCO: ${result.targetTier.toUpperCase()} tier stays in this chat (${sessionModel} is already the right price).`
+          user_message: `Staying in chat: ${modelLabel(sessionModel, pricing)} is already the right price for this.`
         });
         return;
       }
@@ -289,7 +290,14 @@ async function main() {
       }
       updateSession(workspace, payload.conversation_id, (s) => ({ delegations: [...(s.delegations || []), { ts: record.ts, agent: result.targetAgent, model: result.model, rewritten: result.rewritten }] }));
     }
-    const footer = `[cco: ${result.targetTier.toUpperCase()} → ${result.model}${multiplier !== null ? ` • ${multiplier}x of ${sessionModel === "auto" ? "Auto" : "chat model"}` : ""}${estimateUsd !== null ? ` • est. ${formatUsd(estimateUsd)}` : ""}]`;
+    const labelPricing = loadPricing(paths?.pricingPath);
+    const tierName = tierLabel(result.targetTier);
+    const modelName = modelLabel(result.model, labelPricing);
+    const savedUsd = estimateUsd !== null && chatEstimateUsd !== null && chatEstimateUsd > estimateUsd ? chatEstimateUsd - estimateUsd : null;
+    const costPart = estimateUsd !== null ? (savedUsd !== null && savedUsd >= 0.005 ? `${formatUsd(estimateUsd)}, saves ${formatUsd(savedUsd)}` : `${formatUsd(estimateUsd)}${multiplier !== null && multiplier >= 1.5 ? " (stronger model)" : ""}`) : "";
+    const limitedPart = result.limited ? `${tierLabel(result.limited.tier)} model at its usage limit` : "";
+    const footer = footerLine([`${tierName} on ${modelName}`, costPart, limitedPart]);
+    const cardLine = [`${tierName} on ${modelName}`, costPart, limitedPart || (result.rewritten ? `moved from ${tierLabel(result.requestedTier)}: ${reasonLabel(result.reason)}` : "")].filter(Boolean).join(" · ");
     if (workspace && payload.conversation_id) {
       updateSession(workspace, payload.conversation_id, { lastFooter: footer }); // repeated when the delegation returns (postToolUse)
     }
@@ -328,20 +336,14 @@ async function main() {
       output.agent_message = result.rewritten
         ? `CCO rerouted this delegation from ${result.requestedAgent} to ${result.targetAgent} (${result.reason}; model ${result.model}).${limitedLine} Continue with the ${result.targetTier.toUpperCase()} result; do not re-delegate to ${result.requestedAgent}. When it returns, relay its final message verbatim without re-reading files or re-running its checks, then end with exactly this line: ${footer}`
         : `CCO: delegation to ${result.targetAgent} (${result.model}) logged. When it returns, relay its final message to the user verbatim (do not summarize, re-read files, or re-run its checks), then end with exactly this line: ${footer}`;
-      const sessForHint = workspace && payload.conversation_id ? loadSession(workspace, payload.conversation_id) : null;
-      const hint = sessForHint && !sessForHint.hintShown ? " · prefix a prompt with [cco:deep] or [cco:fast] to force a tier" : "";
-      if (hint) {
-        updateSession(workspace, payload.conversation_id, { hintShown: true });
-      }
-      const limitedNote = result.limited ? ` (${result.limited.model} hit its usage limit; ${result.limited.tier.toUpperCase()} runs on ${result.targetTier.toUpperCase()} until about ${new Date(result.limited.until).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})` : "";
-      output.user_message = `CCO: ${result.targetTier.toUpperCase()} tier → ${result.model}${estimate}${payoff}${budgetNote}${hint}${limitedNote || (result.rewritten ? ` (rerouted from ${result.requestedTier.toUpperCase()}: ${result.reason})` : "")}`;
+      output.user_message = `${cardLine}${budgetNote}`;
       emit(output);
       return;
     }
     emit({
       permission: "allow",
       agent_message: `CCO: delegation to ${result.targetAgent} (${result.model}) logged. When it returns, relay its final message to the user verbatim (do not summarize, re-read files, or re-run its checks), then end with exactly this line: ${footer}`,
-      user_message: `CCO: ${result.targetTier.toUpperCase()} tier → ${result.model}${estimate}${payoff}${budgetNote}${(() => { const sess = workspace && payload.conversation_id ? loadSession(workspace, payload.conversation_id) : null; if (sess && !sess.hintShown) { updateSession(workspace, payload.conversation_id, { hintShown: true }); return " · prefix a prompt with [cco:deep] or [cco:fast] to force a tier"; } return ""; })()}`
+      user_message: `${cardLine}${budgetNote}`
     });
   } catch (error) {
     hookLog(paths, { event: "preToolUse:Task", error: String(error?.message || error) });

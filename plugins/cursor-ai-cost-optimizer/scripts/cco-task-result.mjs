@@ -6,6 +6,8 @@
  * Fail-open.
  */
 import { loadSession, saveSession } from "./lib/session.mjs";
+import { tierLabel, modelLabel, footerLine } from "./lib/labels.mjs";
+import { loadPricing } from "./lib/pricing.mjs";
 import {
   readStdin,
   safeJsonParse,
@@ -174,8 +176,8 @@ async function main() {
     }
     if (analysis.isError && (analysis.tier === "deep" || analysis.startupFailure) && !lowerUsable) {
       const sessionModel = sess?.model || "the chat model";
-      const tierName = analysis.tier.toUpperCase();
-      const footer = `[cco: ${tierName} in chat → ${sessionModel} • 1x • subagent failed]`;
+      const tierName = tierLabel(analysis.tier).toUpperCase();
+      const footer = footerLine([`done in chat on ${modelLabel(sessionModel, loadPricing(paths?.pricingPath))}`, `${tierLabel(analysis.tier)} model unavailable`]);
       const cooldown = analysis.startupFailure ? ` Its model is skipped for the next few hours.` : "";
       const message = `CCO: ${analysis.subagentType} did not complete (${analysis.status || "error"}; often a usage limit on its model).${cooldown} Do the task directly in this chat on ${sessionModel}, tell the user in one line that the ${tierName} subagent failed, and end with exactly this line: ${footer}`;
       if (sess && workspace) {

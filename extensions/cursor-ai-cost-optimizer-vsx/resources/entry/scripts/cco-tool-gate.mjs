@@ -29,6 +29,7 @@ import {
 applyScopeArgs();
 import { loadConfig } from "./lib/config.mjs";
 import { modelLimitedUntil, limitsPathFor } from "./lib/state.mjs";
+import { tierLabel, modelLabel, footerLine } from "./lib/labels.mjs";
 import { loadPricing, resolveModelPrice, blendedRatePerMillion } from "./lib/pricing.mjs";
 import { heuristicScores, decideTier, parseOverride, isQuestionLike, isTinyTask } from "./lib/scorer.mjs";
 import { loadSession, saveSession, userPromptFromTranscript, guessTranscriptPath, refineSessionModel, syncTurnFromTranscript, userPromptFromTranscriptTurn } from "./lib/session.mjs";
@@ -295,14 +296,14 @@ async function main() {
       const message = denyMessage({ toolName: payload.tool_name, verdict, sessionModel: session.model });
       const userMessage =
         verdict.reason === "read_budget_use_explore"
-          ? `CCO: research goes to cco-explore (${verdict.model}) from here; the ${session.model} stays for the decisions and edits.`
+          ? `Research moves to ${modelLabel(verdict.model, pricing)}; ${modelLabel(session.model, pricing)} keeps the decisions and edits.`
           : verdict.phase === "post"
-          ? "CCO: result relayed from the tier subagent (no re-verification on the chat model)."
+          ? "Relaying the subagent's result."
           : String(verdict.reason).startsWith("override_")
-          ? `CCO: [cco:${verdict.tier}] → running on ${verdict.model}.`
+          ? `Routing to ${tierLabel(verdict.tier)} (${modelLabel(verdict.model, pricing)}) as requested.`
           : String(verdict.reason).startsWith("quality_")
-          ? `CCO: this looks risky${verdict.decision?.scores ? ` (risk ${verdict.decision.scores.risk}/10)` : ""}, so it runs on the ${String(verdict.tier).toUpperCase()} tier (${verdict.model}) instead of ${session.model || "the chat model"}. Prefix the prompt with [cco:fast] to keep it here.`
-          : `CCO: routing this to the ${String(verdict.tier).toUpperCase()} tier on ${verdict.model} (cheaper per token than ${session.model || "the chat model"}); prefix a prompt with [cco:deep] to force the strong model.`;
+          ? `Risky or complex change: routing to ${tierLabel(verdict.tier)} (${modelLabel(verdict.model, pricing)}).`
+          : `Routing to ${tierLabel(verdict.tier)} (${modelLabel(verdict.model, pricing)}).`;
       emit({ permission: "deny", agent_message: message, user_message: userMessage });
       return;
     }
@@ -315,13 +316,12 @@ async function main() {
     if (verdict.reason === "escape_hatch_after_denials" && !session.footerSent) {
       session.footerSent = true;
       saveSession(workspace, session);
-      const tier = String(session.lastDenial?.tier || session.decision?.tier || "").toUpperCase();
-      const model = session.model || "the chat model";
-      const footer = `[cco: ${tier || "AUTO"} in chat → ${model} • 1x • delegation skipped]`;
+      const model = modelLabel(session.model, pricing);
+      const footer = footerLine([`done in chat on ${model}`]);
       emit({
         permission: "allow",
-        agent_message: `CCO: no cco-* delegation was made; this work runs in this chat on ${model}. Do not claim another model. End your final message with exactly this line: ${footer}`,
-        user_message: `CCO: running in chat on ${model} (delegation skipped).`
+        agent_message: `CCO: no cco-* delegation was made; this work runs in this chat on ${session.model || "the chat model"}. Do not claim another model. End your final message with exactly this line: ${footer}`,
+        user_message: `Working in chat on ${model}.`
       });
       return;
     }
@@ -330,8 +330,9 @@ async function main() {
     if (workTool && !session.footerSent && /tier_.*_not_cheaper|session_model_already_matches_tier|no_savings_expected/.test(verdict.reason)) {
       session.footerSent = true;
       saveSession(workspace, session);
-      const tier = (session.decision?.tier || "deep").toUpperCase();
-      emit({ permission: "allow", agent_message: `CCO: this ${tier} work stays in this chat (${session.model || "chat model"} is the right price for it). End your final message with exactly this line: [cco: ${tier} in chat → ${session.model || "chat model"} • 1x]` });
+      const tier = tierLabel(session.decision?.tier || "deep");
+      const chatFooter = footerLine([`done in chat on ${modelLabel(session.model, pricing)}`]);
+      emit({ permission: "allow", agent_message: `CCO: this ${tier} work stays in this chat (${session.model || "chat model"} is the right price for it). End your final message with exactly this line: ${chatFooter}` });
       return;
     }
     emit({ permission: "allow" });

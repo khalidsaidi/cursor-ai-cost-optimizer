@@ -6,6 +6,12 @@ All notable changes to this extension are documented here. The format is based o
 
 ## [Unreleased]
 
+### Changed
+- UX pass to the Copilot bar. One offer, once: "Turn it on for Cursor?" with **Turn on** / **Not now**; turning on takes seconds, asks nothing else (no modal, no probing, no reload: the routing rule now arrives through the session hook, so the current window routes from its next chat), and ends with one line: "AI Cost Optimizer is on. Fast → Composer 2.5 · Balanced → Claude Sonnet 5 · Deep → Claude Opus 5." with **Details** and **Undo**.
+- The status bar shows the money: `⚡ Saved $4.12` (this project), `AI Cost: Off`, `AI Cost: Paused`; the tooltip is in plain words.
+- Everything the user reads in chat is plain language: tool cards say `Fast on Composer 2.5 · ~$0.02, saves ~$0.04` or `Risky or complex change: routing to Deep (Claude Opus 5)`; the footer is `Cost Optimizer · Fast on Composer 2.5 · ~$0.02, saves ~$0.04` or `Cost Optimizer · done in chat on Grok 4.6`. No "CCO:", no FAST/BALANCED/DEEP, no raw model ids, no reason codes, no repeated "[cco:deep]" hints.
+- Menu and commands renamed to what they do: Turn on, Savings and tier rates, Pause here / Resume here, Update models, Remove from Cursor.
+
 ### Fixed
 - Fresh IDE-only users (no logged-in Cursor CLI) ended up with every tier on `inherit`, i.e. no savings: setup probed each candidate through the CLI, every probe failed with "authentication required", and all candidates were discarded. Probing is skipped when the model list itself came from the bundled catalogue, and an account-level probe failure stops probing and keeps the ranked candidates unverified. Found in a fresh-user UI run on Cursor 3.17.
 - **Pause / Resume in This Project** only silenced the hooks; the routing rule and the user-level subagents still delegated, and the chat then invented a cost footer. A paused project now tells the chat to work normally and turns `cco-*` delegations back into in-chat work.

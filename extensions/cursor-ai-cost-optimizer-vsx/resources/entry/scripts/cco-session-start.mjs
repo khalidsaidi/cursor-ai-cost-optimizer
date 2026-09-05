@@ -20,7 +20,7 @@ import {
   hookLog,
   emit,
   nowIso,
-  asNumber, isMain, applyScopeArgs, scopeArgs } from "./lib/common.mjs";
+  asNumber, isMain, applyScopeArgs, scopeArgs, PLUGIN_ROOT } from "./lib/common.mjs";
 applyScopeArgs();
 import fs from "node:fs";
 import path from "node:path";
@@ -68,6 +68,21 @@ export function scheduleBackgroundRefresh({ workspace, paths }) {
   } catch (error) {
     return { action: "failed", error: String(error?.message || error).slice(0, 200) };
   }
+}
+
+let ruleCache = null;
+/** The routing rule body (frontmatter stripped), read once per process. */
+export function routingRuleText() {
+  if (ruleCache !== null) {
+    return ruleCache;
+  }
+  try {
+    const raw = fs.readFileSync(path.join(PLUGIN_ROOT, "rules", "cco-routing.mdc"), "utf8");
+    ruleCache = raw.replace(/^---[\s\S]*?---\s*/, "").trim();
+  } catch {
+    ruleCache = "";
+  }
+  return ruleCache;
 }
 
 export async function refreshPricingIfStale({ paths, config, background = false, workspace = null }) {
@@ -178,6 +193,14 @@ async function main() {
   let additionalContext = "";
   try {
     additionalContext = buildSessionContext({ workspace, config, sessionModel });
+    // User scope has no rule file in the project: the routing rule rides along here, for this very window,
+    // every Cursor version with hooks, and the CLI alike (no plugin path, no reload).
+    if (paths.scope === "user") {
+      const rule = routingRuleText();
+      if (rule) {
+        additionalContext += `\n\n${rule}`;
+      }
+    }
   } catch (error) {
     additionalContext = "";
     hookLog(paths, { event: "sessionStart", contextError: String(error?.message || error) });

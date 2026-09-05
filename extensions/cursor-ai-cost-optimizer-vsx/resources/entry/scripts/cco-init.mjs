@@ -23,7 +23,8 @@ import { GENERATED_MARKER } from "./lib/agents.mjs";
 /** User scope: a plugin directory (rule, commands, skills; no agents, no hooks) that workspaceOpen hands to Cursor. */
 function writeRuntimePlugin(dir) {
   fs.rmSync(dir, { recursive: true, force: true });
-  for (const sub of [".cursor-plugin", "rules", "commands", "skills"]) {
+  // The routing rule is injected by the sessionStart hook (no reload, every version); only commands/skills ride the plugin path.
+  for (const sub of [".cursor-plugin", "commands", "skills"]) {
     const from = path.join(PLUGIN_ROOT, sub);
     if (fs.existsSync(from)) {
       fs.cpSync(from, path.join(dir, sub), { recursive: true });

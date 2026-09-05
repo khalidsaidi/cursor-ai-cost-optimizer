@@ -108,8 +108,8 @@ test("gate hook process: end to end with session state, transcript prompt, denia
   assert.equal(strict2.permission, "deny");
   const strict3 = runHook("cco-tool-gate.mjs", base);
   assert.equal(strict3.permission, "allow", "escape hatch after two denials in strict mode");
-  assert.match(strict3.agent_message, /in chat → claude-opus-5-thinking-high • 1x • delegation skipped\]/, "honest footer when the model never delegated");
-  assert.match(strict3.user_message, /running in chat/);
+  assert.match(strict3.agent_message, /Cost Optimizer · done in chat on Claude Opus 5/, "honest footer when the model never delegated");
+  assert.match(strict3.user_message, /Working in chat/);
   const strict4 = runHook("cco-tool-gate.mjs", base);
   assert.equal(strict4.agent_message, undefined, "the in-chat footer is given once");
   assert.equal(loadSession(ws, "conv-A").denials, 2);
@@ -193,7 +193,7 @@ test("IDE replay: workspaceOpen + first prompt on Auto → router mode → deleg
   assert.match(grep.agent_message, /subagent_type="cco-fast"/);
   const task = runHook("cco-task-guard.mjs", { hook_event_name: "preToolUse", conversation_id: "ide-A", model: "default", tool_name: "Task", tool_input: { description: "slugify", prompt: "CCO-SCORES: complexity=3 risk=0 breadth=1 uncertainty=0 latency=2\nCreate utils/slugify.js ...", subagent_type: "cco-fast" }, workspace_roots: [ws] });
   assert.equal(task.permission, "allow");
-  assert.match(task.user_message, /FAST tier → composer-2\.5/);
+  assert.match(task.user_message, /Fast on Composer 2\.5/);
   const read = runHook("cco-tool-gate.mjs", { hook_event_name: "preToolUse", conversation_id: "ide-A", model: "default", tool_name: "Read", tool_input: {}, workspace_roots: [ws] });
   assert.equal(read.permission, "allow");
   assert.match(read.agent_message, /relaying the subagent's final message verbatim/);
@@ -223,7 +223,7 @@ test("step-level delegation: same-model deep task keeps edits in chat but sends 
   assert.match(fourth.agent_message, /subagent_type="cco-explore"/);
   const explore = runHook("cco-task-guard.mjs", { hook_event_name: "preToolUse", conversation_id: "conv-X", model: "claude-opus-5-thinking-high", tool_name: "Task", tool_input: { description: "find usages", prompt: "Where is the webhook key validated?", subagent_type: "cco-explore" }, workspace_roots: [ws] });
   assert.equal(explore.permission, "allow");
-  assert.match(explore.user_message, /research → composer-2\.5/);
+  assert.match(explore.user_message, /Research on Composer 2\.5/);
   const write = runHook("cco-tool-gate.mjs", { ...read, tool_name: "Write" });
   assert.equal(write.permission, "allow", "after research the deep work still happens in the chat (same model), not relay-only");
   assert.equal(loadSession(ws, "conv-X").denials || 0, 0, "the research nudge never counts toward the escape hatch");
@@ -241,7 +241,7 @@ test("task guard appends the project's acceptance test command and a cost estima
   const out = runHook("cco-task-guard.mjs", { hook_event_name: "preToolUse", conversation_id: "conv-T", model: "claude-opus-5-thinking-high", tool_name: "Task", tool_input: { description: "helper", prompt: "CCO-SCORES: complexity=3 risk=0 breadth=1 uncertainty=0 latency=0\nadd a helper", subagent_type: "cco-fast" }, workspace_roots: [ws] });
   assert.equal(out.permission, "allow");
   assert.match(out.updated_input.prompt, /Acceptance: after your changes run `npm test`/);
-  assert.match(out.user_message, /est\. (~\$0\.\d+|<\$0\.01)/);
+  assert.match(out.user_message, /(~\$0\.\d+|<\$0\.01)/);
   assert.ok(estimateTaskCostUsd({ tier: "deep", model: "claude-opus-5-thinking-high", pricing, config }) > estimateTaskCostUsd({ tier: "fast", model: "composer-2.5", pricing, config }));
 });
 
@@ -265,7 +265,7 @@ test("built-in explore delegations are rewritten to cco-explore and count as res
   const out = runHook("cco-task-guard.mjs", { hook_event_name: "preToolUse", conversation_id: "conv-B2", model: "claude-opus-5-thinking-high", tool_name: "Task", tool_input: { description: "find parser", prompt: "Where are override tokens parsed?", subagent_type: "explore" }, workspace_roots: [ws] });
   assert.equal(out.permission, "allow");
   assert.equal(out.updated_input.subagent_type, "cco-explore");
-  assert.match(out.user_message, /research → composer-2\.5/);
+  assert.match(out.user_message, /Research on Composer 2\.5/);
   assert.equal(loadSession(ws, "conv-B2").research.length, 1);
 });
 
@@ -274,8 +274,8 @@ test("Copilot-style footer: routed tasks get model • multiplier • estimate; 
   writeWorkspaceAgents(ws, { "cco-fast": "composer-2.5", "cco-balanced": "claude-sonnet-5-thinking-high", "cco-deep": "claude-opus-5-thinking-high", "cco-verifier": "composer-2.5", "cco-explore": "composer-2.5" });
   createSession({ workspace: ws, conversationId: "conv-F", model: "claude-opus-5-thinking-high" });
   const routed = runHook("cco-task-guard.mjs", { hook_event_name: "preToolUse", conversation_id: "conv-F", model: "claude-opus-5-thinking-high", tool_name: "Task", tool_input: { description: "helper", prompt: "CCO-SCORES: complexity=3 risk=0 breadth=1 uncertainty=0 latency=0\nadd a helper", subagent_type: "cco-fast" }, workspace_roots: [ws] });
-  assert.match(routed.agent_message, /\[cco: FAST → composer-2\.5 • 0\.\d+x of chat model • est\. (~\$0\.\d+|<\$0\.01)\]/);
-  assert.match(routed.user_message, /instead of/);
+  assert.match(routed.agent_message, /Cost Optimizer · Fast on Composer 2\.5/);
+  assert.match(routed.user_message, /saves /);
   const decisions = fs.readFileSync(workspacePaths(ws).decisionsPath, "utf8").trim().split("\n").map((l) => JSON.parse(l));
   assert.ok(decisions[0].multiplier < 1 && decisions[0].estimateUsd < decisions[0].chatEstimateUsd);
 
@@ -283,7 +283,7 @@ test("Copilot-style footer: routed tasks get model • multiplier • estimate; 
   runHook("cco-prompt-capture.mjs", { hook_event_name: "beforeSubmitPrompt", conversation_id: "conv-G", model: "claude-opus-5-thinking-high", prompt: "Rotate the production OAuth secret and payment webhook signing key across the services, delete the legacy keys, with a rollback path and tests", workspace_roots: [ws] });
   const first = runHook("cco-tool-gate.mjs", { hook_event_name: "preToolUse", conversation_id: "conv-G", model: "claude-opus-5-thinking-high", tool_name: "Write", tool_input: {}, workspace_roots: [ws] });
   assert.equal(first.permission, "allow");
-  assert.match(first.agent_message, /\[cco: DEEP in chat → claude-opus-5-thinking-high • 1x\]/);
+  assert.match(first.agent_message, /Cost Optimizer · done in chat on Claude Opus 5/);
   const second = runHook("cco-tool-gate.mjs", { hook_event_name: "preToolUse", conversation_id: "conv-G", model: "claude-opus-5-thinking-high", tool_name: "Write", tool_input: {}, workspace_roots: [ws] });
   assert.equal(second.agent_message, undefined, "footer instruction only once per turn");
 });
@@ -297,7 +297,7 @@ test("per-chat budget warns at 80% and, when enforced, forces FAST beyond 2x", (
   const task = () => runHook("cco-task-guard.mjs", { hook_event_name: "preToolUse", conversation_id: "conv-B", model: "composer-2.5", tool_name: "Task", tool_input: { description: "d", prompt: "CCO-SCORES: complexity=6 risk=3 breadth=3 uncertainty=2 latency=0\nrefactor", subagent_type: "cco-balanced" }, workspace_roots: [ws] });
   const a = task();
   assert.equal(a.permission, "allow");
-  assert.match(a.user_message, /BALANCED tier → claude-sonnet-5-thinking-high/);
+  assert.match(a.user_message, /Balanced on Claude Sonnet 5/);
   assert.equal(a.updated_input, undefined, "nothing rewritten while under budget");
   let last = a;
   for (let i = 0; i < 9; i += 1) { last = task(); }

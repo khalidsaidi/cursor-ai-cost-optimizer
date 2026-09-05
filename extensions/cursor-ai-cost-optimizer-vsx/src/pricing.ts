@@ -311,3 +311,24 @@ export function costStatement(workspace: string, bundledPricingPath: string, opt
   });
   return { chatModel, chatModelLabel, pricing, stale, lines, warnings: [...new Set(warnings)] };
 }
+
+/** "Claude Sonnet 5", "Composer 2.5", "Grok 4.6": the price table's row name when the id matches one, else a tidied id. */
+export function modelDisplayName(modelId: string, pricing: PricingTable | null): string {
+  if (!modelId || modelId === "inherit") {
+    return "the chat model";
+  }
+  if (/^auto$/i.test(modelId)) {
+    return "Auto";
+  }
+  const price = resolveModelPrice(modelId, pricing);
+  if (price.matchedRow) {
+    return price.matchedRow.replace(/\s*\(Fast\)\s*$/i, " Fast");
+  }
+  return modelId
+    .replace(/^cursor-/, "")
+    .split("-")
+    .filter(Boolean)
+    .map((w) => (/^\d/.test(w) ? w : w.charAt(0).toUpperCase() + w.slice(1)))
+    .join(" ")
+    .replace(/\bGpt\b/g, "GPT");
+}
