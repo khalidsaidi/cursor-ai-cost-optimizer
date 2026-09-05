@@ -190,6 +190,10 @@ export async function doctorUser(opts: Options, stateRoot: string): Promise<{ in
       actions.push("hooks_events_changed");
     }
   } catch {}
+  // A runtime plugin dir from an earlier build (slash commands in every chat): setup removes it.
+  if (fs.existsSync(p.pluginDir)) {
+    actions.push("runtime_plugin_removed");
+  }
   // Pre-0.3 tier subagents (cco-fast, cco-deep, …) still present: the model-named ones replace them.
   if (fs.existsSync(p.agentsDir) && fs.readdirSync(p.agentsDir).some((f) => /^cco-(fast|balanced|deep|explore|verifier)\.md$/.test(f))) {
     actions.push("legacy_agents_replaced");

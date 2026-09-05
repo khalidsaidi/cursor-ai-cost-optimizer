@@ -100,7 +100,10 @@ async function main() {
     runtime.health.notes.push(`${hooks.file} was not valid JSON (Cursor could not load any hooks from it); its previous content is kept at ${hooks.brokenBackup}`);
   }
   if (user) {
-    writeRuntimePlugin(paths.pluginDir); // rule + commands + skills, handed to Cursor per workspace via workspaceOpen.pluginPaths
+    // No runtime plugin in user scope: the plugin's slash commands and skills (/cco-init, /cco-model-config, …) are a
+    // project-setup surface that contradicts "nothing written into projects" and duplicates the status menu; the
+    // routing rule rides on the session context. Anything left from an earlier version is removed.
+    fs.rmSync(paths.pluginDir, { recursive: true, force: true });
   } else {
     // The state folder ignores itself so nothing new shows up in git status (no edit to the user's .gitignore).
     try {
@@ -145,7 +148,7 @@ async function main() {
   if (runtime.health.notes.length) {
     lines.push("", `Notes: ${runtime.health.notes.join("; ")}`);
   }
-  lines.push("", "Next: start a new chat and work normally. Force a tier with [cco:fast] / [cco:deep]; turn off with /cco-off.");
+  lines.push("", user ? "Next: start a new chat and work normally. Force a tier with [cco:fast] / [cco:deep]; pause or remove it from the AI Cost status menu." : "Next: start a new chat and work normally. Force a tier with [cco:fast] / [cco:deep]; turn off with /cco-off.");
   console.log(lines.join("\n"));
 }
 

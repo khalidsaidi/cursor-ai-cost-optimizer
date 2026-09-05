@@ -52,7 +52,10 @@ async function main() {
       }
       // The chat panel Cursor opens with the window never gets a sessionStart: without this, that chat (the
       // first one most users type into) would have no routing rule at all. Sent once per conversation.
-      if (!existing?.briefed) {
+      // An Ask chat has no tools to route: the briefing waits until the chat is in a mode with tools (Agent, Plan).
+      const mode = String(payload.composer_mode || "agent").toLowerCase();
+      const agentMode = !/^(chat|ask)$/.test(mode);
+      if (!existing?.briefed && agentMode) {
         briefing = fullSessionContext({ workspace, paths, config, sessionModel: normalizeModelId(payload.model) }) || null;
       }
     }

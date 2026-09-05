@@ -376,7 +376,7 @@ test("cco-init installs the agents from a CRLF checkout of the plugin (Windows a
   fs.rmSync(ws, { recursive: true, force: true });
 });
 
-test("user scope: nothing in the repo; ~/.cursor hooks + agents, private state root, pluginPaths on workspaceOpen, pause and uninstall", () => {
+test("user scope: nothing in the repo; ~/.cursor hooks + agents, private state root, no slash commands, pause and uninstall", () => {
   const { spawnSync } = require("node:child_process");
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "cco-home-"));
   const root = path.join(home, "ext-storage", "cco");
@@ -393,7 +393,7 @@ test("user scope: nothing in the repo; ~/.cursor hooks + agents, private state r
   const cmd = hooks.hooks.preToolUse[0].command;
   assert.match(cmd, /cco-hook\.mjs" preToolUse --scope user --state-root "/);
   assert.match(fs.readFileSync(path.join(home, ".cursor", "agents", "composer-2.5-fast.md"), "utf8"), /^model: composer-2\.5$/m);
-  assert.ok(fs.existsSync(path.join(root, "plugin", ".cursor-plugin", "plugin.json")), "runtime plugin for pluginPaths");
+  assert.equal(fs.existsSync(path.join(root, "plugin")), false, "no runtime plugin in user scope: no /cco-* slash commands in every chat");
   assert.equal(fs.existsSync(path.join(root, "plugin", "rules")), false, "the rule rides the sessionStart context, not the plugin path (no reload needed)");
   assert.equal(fs.existsSync(path.join(root, "plugin", "agents")), false, "runtime plugin carries no agents (user agents win)");
   const run = (event, payload) => {
@@ -407,7 +407,7 @@ test("user scope: nothing in the repo; ~/.cursor hooks + agents, private state r
   const start = run("sessionStart", { hook_event_name: "sessionStart", conversation_id: "u0", model: "claude-opus-5-thinking-high", workspace_roots: [ws] });
   assert.match(start.additional_context, /# CCO routing/, "user scope: the routing rule is delivered through the session context");
   const open = run("workspaceOpen", { hook_event_name: "workspaceOpen", workspace_roots: [ws] });
-  assert.deepEqual(open.pluginPaths, [path.join(root, "plugin")]);
+  assert.equal(open.pluginPaths, undefined, "workspaceOpen hands Cursor no plugin path");
   const task = run("preToolUse", { hook_event_name: "preToolUse", tool_name: "Task", conversation_id: "u1", tool_input: { description: "d", prompt: "CCO-SCORES: complexity=2 risk=9 breadth=1 uncertainty=0 latency=0\nrefund flow", subagent_type: "fast-tier" }, workspace_roots: [ws] });
   assert.equal(task.updated_input.subagent_type, "claude-opus-5-deep", "guard reroutes in user scope");
   assert.ok(fs.existsSync(path.join(root, "workspaces")), "state lives under the private root");
@@ -795,4 +795,12 @@ test("risky work whose DEEP and BALANCED models are both refused ends in the cha
   assert.doesNotMatch(balStop.additional_context, /composer-2\.5-fast/);
   const free = runHook("cco-tool-gate.mjs", { hook_event_name: "preToolUse", conversation_id: "risk2", model: "grok-4.6", tool_name: "Write", tool_input: { file_path: "a.js", content: "x" }, workspace_roots: [ws] });
   assert.equal(free.permission, "allow", "the chat finishes it");
+});
+
+test("an Ask chat is not briefed (no tools to route); the briefing arrives once the chat is in a mode with tools", () => {
+  const ws = readyWorkspace();
+  const ask = runHook("cco-prompt-capture.mjs", { hook_event_name: "beforeSubmitPrompt", conversation_id: "mode1", composer_mode: "chat", prompt: "what does calc.mjs export?", workspace_roots: [ws] });
+  assert.deepEqual(ask, { continue: true });
+  const plan = runHook("cco-prompt-capture.mjs", { hook_event_name: "beforeSubmitPrompt", conversation_id: "mode1", composer_mode: "plan", prompt: "plan a refactor", workspace_roots: [ws] });
+  assert.match(String(plan.additional_context), /composer-2\.5-fast/, "Plan mode explores with tools: routed like Agent mode");
 });

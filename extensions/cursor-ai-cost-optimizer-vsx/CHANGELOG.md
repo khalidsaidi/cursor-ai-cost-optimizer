@@ -20,6 +20,8 @@ All notable changes to this extension are documented here. The format is based o
 - Menu and commands renamed to what they do: Turn on, Savings and tier rates, Pause here / Resume here, Update models, Remove from Cursor.
 
 ### Fixed
+- Everywhere no longer adds `/cco-init`, `/cco-model-config`, `/cco-report` and the other plugin commands to the slash menu of every chat: `/cco-init` was a project-scope setup that contradicts "nothing written into projects", and the status menu covers the rest. A runtime plugin dir from an earlier build is removed by the repair pass.
+- An Ask chat (no tools) is no longer briefed with the routing rule on its first prompt; the briefing arrives once the chat is in Agent or Plan mode.
 - Every shell command paid a `beforeShellExecution` hook spawn (about 70 ms on Linux, 650 ms on Windows) for a guard that is off by default. That hook is now registered only when `shellGuard.enabled` is on; the routing gate still sees shell commands through `preToolUse`.
 - A hook binary that cannot run on the machine (a quarantined download on macOS, a noexec mount, an unexpected libc) used to turn the hooks off with a popup. The self-check now switches the hooks to Node.js (from PATH or Cursor's own runtime) and says so in a 4-second status message; only when that fails too are the hooks turned off, shown as "AI Cost: hooks off" with the reason in the tooltip, no popup. Verified live: binary replaced by a failing script → hooks on Node.js in 172 ms, routing unchanged.
 - On Auto, the chat's price is a guess until a hook payload names the model Cursor picked, so nothing is denied on that guess: the chat model's own routing choice stands and no advice is attached.
