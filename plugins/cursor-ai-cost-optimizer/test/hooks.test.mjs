@@ -656,3 +656,16 @@ test("user-scope global config (tier models chosen for all projects) layers betw
     if (prevRoot === undefined) delete process.env.CCO_STATE_ROOT; else process.env.CCO_STATE_ROOT = prevRoot;
   }
 });
+
+test("dispatcher: two subagents stopping in the same generation are two events, not a replay", async () => {
+  const { dispatch } = await import("../scripts/cco-hook.mjs");
+  const ws = readyWorkspace();
+  createSession({ workspace: ws, conversationId: "dd-1", model: "cursor-grok-4.6-high" });
+  const base = { hook_event_name: "subagentStop", conversation_id: "dd-1", generation_id: "gen-1", workspace_roots: [ws], duration_ms: 500, message_count: 0, tool_call_count: 0 };
+  const first = JSON.parse(await dispatch("subagentStop", JSON.stringify({ ...base, subagent_id: "a", subagent_type: "fast-research", status: "completed" })));
+  assert.equal(first.followup_message, undefined);
+  const second = JSON.parse(await dispatch("subagentStop", JSON.stringify({ ...base, subagent_id: "b", subagent_type: "deep-tier", model: "claude-opus-5-thinking-high", status: "error" })));
+  assert.match(String(second.followup_message), /deep-tier could not start/, "the second stop must be processed on its own");
+  const replay = JSON.parse(await dispatch("subagentStop", JSON.stringify({ ...base, subagent_id: "b", subagent_type: "deep-tier", model: "claude-opus-5-thinking-high", status: "error" })));
+  assert.match(String(replay.followup_message), /deep-tier could not start/, "an exact duplicate replays the same answer");
+});

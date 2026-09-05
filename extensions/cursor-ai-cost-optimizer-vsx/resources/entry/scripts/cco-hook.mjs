@@ -56,7 +56,8 @@ function dedupeKeyFor(eventName, raw) {
   try {
     p = JSON.parse(raw || "{}");
   } catch {}
-  const parts = [eventName, p.conversation_id || "", p.generation_id || "", p.tool_use_id || "", p.tool_name || "", JSON.stringify(p.tool_input || p.command || p.prompt || "")];
+  // Several subagents can stop within one generation: their ids and outcome are part of the identity.
+  const parts = [eventName, p.conversation_id || "", p.generation_id || "", p.tool_use_id || "", p.tool_name || "", p.subagent_id || "", p.subagent_type || "", p.status || "", JSON.stringify(p.tool_input || p.command || p.prompt || "")];
   return { key: crypto.createHash("sha1").update(parts.join("|")).digest("hex"), workspace: Array.isArray(p.workspace_roots) ? p.workspace_roots[0] : null, hasId: Boolean(p.conversation_id || p.generation_id) };
 }
 
