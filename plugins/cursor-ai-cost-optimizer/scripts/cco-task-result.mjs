@@ -18,7 +18,7 @@ import {
   isEnabled, isMain, applyScopeArgs } from "./lib/common.mjs";
 applyScopeArgs();
 import { loadConfig } from "./lib/config.mjs";
-import { loadJointState, recordOutcome, saveJointState } from "./lib/state.mjs";
+import { loadJointState, recordOutcome, saveJointState, markModelLimited } from "./lib/state.mjs";
 import { escalateTier } from "./lib/scorer.mjs";
 import { tierFor } from "./lib/models.mjs";
 import { readWorkspaceAgentModel } from "./lib/agents.mjs";
@@ -54,12 +54,18 @@ export function analyzeOutcome({ hookEvent, payload }) {
     /"is_error"\s*:\s*true|\berror\b.*\b(failed|exception|traceback)\b/i.test(outputText.slice(0, 2000));
   const requestedEscalation = escalateMatch ? escalateMatch[1].toLowerCase() : null;
   const nextTier = requestedEscalation || (isError && tier !== "deep" ? escalateTier(tier) : null);
+  // Died before doing anything (no messages, no tool calls, seconds): the model itself was refused, which on
+  // Cursor is almost always a plan/usage limit. Such a model is put on cooldown so the next delegation steps down.
+  const startupFailure =
+    hookEvent === "subagentStop" && status && status !== "completed" && asNumber(payload.message_count, 0) === 0 && asNumber(payload.tool_call_count, 0) === 0;
   return {
     applies: true,
     tier,
     subagentType,
     status: status || null,
     isError,
+    startupFailure,
+    failedModel: startupFailure ? String(payload.model || "") : null,
     rework: Boolean(requestedEscalation || verifyFail),
     requestedEscalation,
     nextTier,
@@ -89,13 +95,16 @@ async function main() {
     }
     if (paths && config?.learning?.enabled !== false) {
       const state = loadJointState(paths.jointStatePath);
-      const next = recordOutcome({
+      let next = recordOutcome({
         state,
         tier: analysis.tier,
         model,
         observation: { isError: analysis.isError, rework: analysis.rework, durationMs: analysis.durationMs, costUsd: NaN },
         config
       });
+      if (analysis.startupFailure) {
+        next = markModelLimited({ state: next, model: analysis.failedModel || model, minutes: asNumber(config?.learning?.limitCooldownMinutes, 360) });
+      }
       saveJointState(paths.jointStatePath, next);
     }
     hookLog(paths, {
@@ -148,7 +157,8 @@ async function main() {
     if (analysis.isError && analysis.tier === "deep" && !analysis.nextTier) {
       const sessionModel = sess?.model || "the chat model";
       const footer = `[cco: DEEP in chat → ${sessionModel} • 1x • subagent failed]`;
-      const message = `CCO: ${analysis.subagentType} did not complete (${analysis.status || "error"}; often a usage limit on its model). Do the task directly in this chat on ${sessionModel}, tell the user in one line that the DEEP subagent failed, and end with exactly this line: ${footer}`;
+      const cooldown = analysis.startupFailure ? ` Its model is skipped for the next few hours; DEEP tasks step down to BALANCED meanwhile.` : "";
+      const message = `CCO: ${analysis.subagentType} did not complete (${analysis.status || "error"}; often a usage limit on its model).${cooldown} Do the task directly in this chat on ${sessionModel}, tell the user in one line that the DEEP subagent failed, and end with exactly this line: ${footer}`;
       if (sess && workspace) {
         // Later postToolUse reminders repeat this footer, so the final reply stays honest even if the follow-up is skimmed.
         sess.lastFooter = footer;

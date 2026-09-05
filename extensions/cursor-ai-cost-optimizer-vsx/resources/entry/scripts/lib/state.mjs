@@ -62,3 +62,23 @@ export function saveJointState(statePath, state) {
     return false;
   }
 }
+
+/** A model that could not even start a subagent (usage limit / not available) is skipped for a while. */
+export function markModelLimited({ state, model, minutes = 360, reason = "startup_failure" }) {
+  const next = state && typeof state === "object" ? { ...state } : defaultJointState();
+  if (!model || model === "inherit") {
+    return next;
+  }
+  next.limits = { ...(next.limits || {}), [model]: { until: new Date(Date.now() + minutes * 60_000).toISOString(), reason, at: nowIso() } };
+  next.generatedAt = nowIso();
+  return next;
+}
+
+/** ISO time until which `model` is on cooldown, or null when it is usable. */
+export function modelLimitedUntil(state, model) {
+  const entry = state?.limits?.[model];
+  if (!entry?.until) {
+    return null;
+  }
+  return Date.parse(entry.until) > Date.now() ? entry.until : null;
+}

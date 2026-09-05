@@ -535,3 +535,26 @@ test("a failed DEEP subagent (usage limit) hands the task back to the chat with 
   assert.match(out.followup_message, /\[cco: DEEP in chat → cursor-grok-4\.6-high • 1x • subagent failed\]/);
   assert.match(String(loadSession(ws, "deep-fail")?.lastFooter), /subagent failed\]$/, "later reminders repeat the honest footer");
 });
+
+test("a subagent that dies at startup puts its model on cooldown; later delegations step down a tier", async () => {
+  const { loadJointState } = await import("../scripts/lib/state.mjs");
+  const ws = readyWorkspace();
+  const paths = workspacePaths(ws);
+  createSession({ workspace: ws, conversationId: "cool-1", model: "cursor-grok-4.6-high" });
+  runHook("cco-task-result.mjs", {
+    hook_event_name: "subagentStop", conversation_id: "cool-1", subagent_type: "cco-deep", model: "claude-opus-5-thinking-high",
+    status: "error", duration_ms: 1163, message_count: 0, tool_call_count: 0, workspace_roots: [ws]
+  });
+  const limits = loadJointState(paths.jointStatePath).limits;
+  assert.ok(limits && limits["claude-opus-5-thinking-high"], "the failed model is recorded as limited");
+  const guard = runHook("cco-task-guard.mjs", {
+    hook_event_name: "preToolUse", conversation_id: "cool-2", tool_name: "Task",
+    tool_input: { subagent_type: "cco-deep", prompt: "CCO-SCORES: complexity=4 risk=8 breadth=3 uncertainty=2 latency=0\n[cco:deep]\nRotate the production signing key" }, workspace_roots: [ws]
+  });
+  assert.equal(guard.permission, "allow");
+  assert.equal(guard.updated_input.subagent_type, "cco-balanced", "DEEP steps down to BALANCED while its model is limited");
+  assert.match(guard.user_message, /usage limit/);
+  // A completed run does not mark anything.
+  runHook("cco-task-result.mjs", { hook_event_name: "subagentStop", conversation_id: "cool-3", subagent_type: "cco-fast", model: "composer-2.5", status: "completed", message_count: 3, tool_call_count: 2, workspace_roots: [ws] });
+  assert.equal(loadJointState(paths.jointStatePath).limits["composer-2.5"], undefined);
+});

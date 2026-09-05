@@ -25,7 +25,7 @@ import {
 applyScopeArgs();
 import { loadConfig } from "./lib/config.mjs";
 import { parseOverride, parseScoresLine, heuristicScores, decideTier, applyStateEscalation, formatScoresLine } from "./lib/scorer.mjs";
-import { loadJointState } from "./lib/state.mjs";
+import { loadJointState, modelLimitedUntil } from "./lib/state.mjs";
 import { readWorkspaceAgentModel } from "./lib/agents.mjs";
 import { tierFor } from "./lib/models.mjs";
 import { detectTestCommand, estimateTaskCostUsd, formatUsd } from "./lib/project.mjs";
@@ -95,12 +95,24 @@ export function evaluateTask({ toolInput, config, state = null, lastPrompt = nul
     reason = `learning:${learning.reason}`;
   }
 
+  const modelFor = (t) => (workspace && readWorkspaceAgentModel(workspace, `cco-${t}`)) || runtime?.profiles?.[t]?.model || "inherit";
+  // A tier whose model is on cooldown (it refused to start a subagent recently: usage limit) steps down to the
+  // nearest lower tier whose model is usable, rather than failing the same way again.
+  let limited = null;
+  if (state) {
+    let idx = tierOrder.indexOf(target);
+    while (idx > 0 && modelLimitedUntil(state, modelFor(tierOrder[idx]))) {
+      limited = limited || { tier: tierOrder[idx], model: modelFor(tierOrder[idx]), until: modelLimitedUntil(state, modelFor(tierOrder[idx])) };
+      idx -= 1;
+    }
+    if (limited) {
+      target = tierOrder[idx];
+      reason = `model_limited:${limited.model}`;
+    }
+  }
   const rewritten = target !== requestedTier;
   const targetAgent = `cco-${target}`;
-  const model =
-    (workspace && readWorkspaceAgentModel(workspace, targetAgent)) ||
-    runtime?.profiles?.[target]?.model ||
-    "inherit";
+  const model = modelFor(target);
   const scoresLine = formatScoresLine(scores);
   let updatedPrompt = prompt;
   if (!/CCO-SCORES:/i.test(prompt)) {
@@ -127,6 +139,7 @@ export function evaluateTask({ toolInput, config, state = null, lastPrompt = nul
     guardrail: decision.guardrail,
     computedTier: decision.tier,
     learning,
+    limited,
     model,
     updatedPrompt,
     testCommand: testCommand?.command || null
@@ -316,7 +329,8 @@ async function main() {
       if (hint) {
         updateSession(workspace, payload.conversation_id, { hintShown: true });
       }
-      output.user_message = `CCO: ${result.targetTier.toUpperCase()} tier → ${result.model}${estimate}${payoff}${budgetNote}${hint}${result.rewritten ? ` (rerouted from ${result.requestedTier.toUpperCase()}: ${result.reason})` : ""}`;
+      const limitedNote = result.limited ? ` (${result.limited.model} hit its usage limit; ${result.limited.tier.toUpperCase()} runs on ${result.targetTier.toUpperCase()} until about ${new Date(result.limited.until).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})` : "";
+      output.user_message = `CCO: ${result.targetTier.toUpperCase()} tier → ${result.model}${estimate}${payoff}${budgetNote}${hint}${limitedNote || (result.rewritten ? ` (rerouted from ${result.requestedTier.toUpperCase()}: ${result.reason})` : "")}`;
       emit(output);
       return;
     }
