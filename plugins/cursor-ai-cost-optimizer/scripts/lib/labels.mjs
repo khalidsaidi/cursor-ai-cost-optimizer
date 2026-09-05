@@ -39,7 +39,7 @@ export function modelLabel(id, pricing = null) {
 export function reasonLabel(reason) {
   const r = String(reason || "");
   if (r.startsWith("override_")) return "as requested";
-  if (r.startsWith("quality_") || r === "risk_guardrail") return "risky or complex change";
+  if (r.startsWith("quality_") || r === "risk_guardrail" || r.startsWith("risk_")) return "risky or complex change";
   if (r.startsWith("learning:")) return "recent failures at the lower tier";
   if (r === "budget_exceeded_force_fast") return "over the chat budget";
   if (r.startsWith("model_limited")) return "usage limit";

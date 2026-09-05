@@ -5,7 +5,7 @@
  * cascade: when a cheaper tier asks to escalate, remind the parent to delegate one tier up.
  * Fail-open.
  */
-import { loadSession, saveSession } from "./lib/session.mjs";
+import { loadSession, saveSession, updateSession } from "./lib/session.mjs";
 import { tierLabel } from "./lib/labels.mjs";
 import {
   readStdin,
@@ -16,7 +16,7 @@ import {
   hookLog,
   emit,
   asNumber,
-  isEnabled, isMain, applyScopeArgs, agentForTier } from "./lib/common.mjs";
+  isEnabled, isMain, applyScopeArgs, agentForTier, appendJsonl, nowIso } from "./lib/common.mjs";
 applyScopeArgs();
 import { loadConfig } from "./lib/config.mjs";
 import { loadJointState, recordOutcome, saveJointState, markModelLimited, modelLimitedUntil, modelUnavailable } from "./lib/state.mjs";
@@ -137,6 +137,7 @@ async function main() {
       saveJointState(paths.jointStatePath, next);
     }
     if (paths && analysis.startupFailure) {
+      appendJsonl(paths.decisionsPath, { ts: nowIso(), event: "subagent_failed", conversation_id: payload.conversation_id ?? null, agent: analysis.subagentType, status: analysis.status });
       const failed = analysis.failedModel || model;
       markModelLimited({ limitsPath: paths.limitsPath, model: failed, minutes: asNumber(config?.learning?.limitCooldownMinutes, 360) });
       if (modelUnavailable(paths.limitsPath, failed)) {
@@ -193,17 +194,22 @@ async function main() {
     // chat model finishes the task itself and says so honestly instead of leaving a dead subagent card.
     const limitsPath = paths ? paths.limitsPath : null;
     const lowerModel = analysis.nextTier && workspace ? readWorkspaceAgentModel(workspace, agentForTier(analysis.nextTier, workspace)) : null;
-    const lowerUsable = analysis.startupFailure ? Boolean(analysis.nextTier) && lowerModel && lowerModel !== "inherit" && !modelLimitedUntil(limitsPath, lowerModel) : Boolean(analysis.nextTier);
+    // Risky work never steps down to the FAST tier (the risk guardrail): when BALANCED is out too, the chat model
+    // (stronger than the FAST model) finishes it and says so.
+    const riskGuard = /risk_/.test(String(sess?.decision?.guardrail || ""));
+    const stepDownAllowed = !(analysis.nextTier === "fast" && riskGuard);
+    const lowerUsable = analysis.startupFailure ? stepDownAllowed && Boolean(analysis.nextTier) && lowerModel && lowerModel !== "inherit" && !modelLimitedUntil(limitsPath, lowerModel) : Boolean(analysis.nextTier);
     if (analysis.startupFailure && lowerUsable && cascade) {
-      const message = `CCO: ${analysis.subagentType} could not start (its model ${analysis.failedModel || model} was refused: usage limit or not available on this account; it is skipped for a few hours). Tell the user in one line, then delegate this same task once to ${agentForTier(analysis.nextTier, workspace)} (${lowerModel}); do not retry ${analysis.subagentType}.`;
-      if (hookEvent === "subagentStop") {
-        if (config?.escalation?.followupOnSubagentFailure !== false) {
-          emit({ followup_message: message });
-          return;
-        }
-        emit({});
-        return;
+      // Until that retry happens, edits and commands in the chat are held (the parent must not quietly finish
+      // work that was routed to a stronger model itself).
+      if (workspace && payload.conversation_id) {
+        try {
+          updateSession(workspace, payload.conversation_id, () => ({ pendingRetry: { tier: analysis.nextTier, agent: agentForTier(analysis.nextTier, workspace), failed: analysis.subagentType, ts: nowIso() } }));
+        } catch {}
       }
+      const message = `CCO: ${analysis.subagentType} could not start (its model ${analysis.failedModel || model} was refused: usage limit or not available on this account; it is skipped for a few hours). Tell the user in one line, then delegate this same task once to ${agentForTier(analysis.nextTier, workspace)} (${lowerModel}); do not retry ${analysis.subagentType}.`;
+      // Cursor 3.17 acts on additional_context from subagentStop (a follow-up message is not delivered): the parent
+      // retries on the next tier, or finishes in the chat, from this instruction.
       emit({ additional_context: message });
       return;
     }
@@ -212,24 +218,14 @@ async function main() {
       const tierName = tierLabel(analysis.tier).toUpperCase();
       const cooldown = analysis.startupFailure ? ` Its model is skipped for the next few hours.` : "";
       const message = `CCO: ${analysis.subagentType} did not complete (${analysis.status || "error"}; often a usage limit on its model).${cooldown} Do the task directly in this chat on ${sessionModel}, tell the user in one line that the ${tierName} subagent failed, and do not add a Cost Optimizer line.`;
-      if (hookEvent === "subagentStop") {
-        if (config?.escalation?.followupOnSubagentFailure !== false) {
-          emit({ followup_message: message });
-          return;
-        }
-        emit({});
-        return;
-      }
+      // Cursor 3.17 acts on additional_context from subagentStop (a follow-up message is not delivered): the parent
+      // retries on the next tier, or finishes in the chat, from this instruction.
       emit({ additional_context: message });
       return;
     }
     if (cascade && analysis.nextTier && analysis.nextTier !== analysis.tier) {
       const message = `CCO cascade: ${analysis.subagentType} ${analysis.requestedEscalation ? "requested escalation" : "did not complete successfully"}. Tell the user in one line that you are escalating to ${analysis.nextTier.toUpperCase()}, then delegate once to ${agentForTier(analysis.nextTier, workspace)} with the findings above; do not retry ${analysis.subagentType}.`;
-      if (hookEvent === "subagentStop") {
-        if (config?.escalation?.followupOnSubagentFailure !== false && analysis.status && analysis.status !== "completed") {
-          emit({ followup_message: message });
-          return;
-        }
+      if (hookEvent === "subagentStop" && (!analysis.status || analysis.status === "completed")) {
         emit({});
         return;
       }

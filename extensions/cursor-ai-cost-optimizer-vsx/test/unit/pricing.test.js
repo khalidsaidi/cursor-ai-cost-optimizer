@@ -117,3 +117,17 @@ test("overrideMismatches: a typed tier model the account does not list is report
   assert.deepEqual(overrideMismatches(path.join(dir, "missing.json"), agents), []);
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test("readSavings takes a failed delegation (usage limit) back out of the figures", () => {
+  const { readSavings } = require("../../dist/pricing.js");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cco-fail-"));
+  fs.writeFileSync(path.join(dir, "decisions.jsonl"), [
+    JSON.stringify({ conversation_id: "c1", final: "composer-2.5-fast", estimateUsd: 0.02, chatEstimateUsd: 0.08 }),
+    JSON.stringify({ conversation_id: "c2", final: "claude-opus-5-deep", estimateUsd: 0.86, chatEstimateUsd: 0.9 }),
+    JSON.stringify({ event: "subagent_failed", conversation_id: "c2", agent: "claude-opus-5-deep", status: "error" }),
+  ].join("\n"));
+  const s = readSavings(dir, dir);
+  assert.equal(s.decisions, 1);
+  assert.ok(Math.abs(s.savedUsd - 0.06) < 1e-9);
+  fs.rmSync(dir, { recursive: true, force: true });
+});

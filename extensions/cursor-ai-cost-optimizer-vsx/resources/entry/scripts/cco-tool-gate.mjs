@@ -34,6 +34,7 @@ import { loadPricing, resolveModelPrice, blendedRatePerMillion } from "./lib/pri
 import { heuristicScores, decideTier, parseOverride, isQuestionLike, isTinyTask } from "./lib/scorer.mjs";
 import { loadSession, saveSession, userPromptFromTranscript, guessTranscriptPath, refineSessionModel, syncTurnFromTranscript, userPromptFromTranscriptTurn } from "./lib/session.mjs";
 import { agentNames, readWorkspaceAgentModel, agentNamesForWindow } from "./lib/agents.mjs";
+import { tierFor } from "./lib/models.mjs";
 
 const DEFAULT_WORK_TOOLS = "^(Write|Edit|StrReplace|MultiEdit|Delete|Shell|Bash|NotebookEdit|ApplyPatch|CreateFile|EditFile|DeleteFile)$";
 
@@ -108,6 +109,11 @@ export function gateDecision({ toolName, session, config, pricing, models, promp
     return { action: "allow", reason: "no_subagents_in_window" };
   }
 
+  // A delegation to a stronger model just failed at startup and a lower tier can run it: that retry comes first.
+  // Enforced even in advise mode (this is the safety net for work that was routed up for its risk).
+  if (session.pendingRetry?.agent && new RegExp(enforcement.gatedTools || DEFAULT_WORK_TOOLS, "i").test(tool)) {
+    return { action: "deny", reason: "retry_pending", phase: "pre", tier: session.pendingRetry.tier, model: null, decision: session.decision || null, pendingRetry: session.pendingRetry };
+  }
   const delegated = Array.isArray(session.delegations) && session.delegations.some((d) => d.agent !== "fast-research" && d.agent !== "tier-verifier");
   const workTool = new RegExp(enforcement.gatedTools || DEFAULT_WORK_TOOLS, "i").test(tool);
   const readTool = /^(Read|Grep|Glob|ListDir|List|Search|Codebase|SemanticSearch|WebSearch|Fetch)/i.test(tool);
@@ -199,6 +205,13 @@ export function gateDecision({ toolName, session, config, pricing, models, promp
 }
 
 export function denyMessage({ toolName, verdict, sessionModel, workspace = null }) {
+  if (verdict.reason === "retry_pending") {
+    const p = verdict.pendingRetry || {};
+    return [
+      `CCO: ${toolName} is not allowed here yet. ${p.failed || "The subagent"} could not start (its model was refused), and this work was routed to a stronger model for a reason.`,
+      `Your next action must be one Task call: subagent_type="${p.agent}" with the same task (same CCO-SCORES line, same prompt); relay its result when it returns. Do not do the work in this chat.`
+    ].join("\n");
+  }
   if (verdict.reason === "read_budget_use_explore") {
     return [
       `CCO: you have used the read budget for research on ${sessionModel || "the chat model"}. Delegate the remaining research to the cheap explorer instead of reading more here.`,
@@ -276,7 +289,7 @@ async function main() {
     // the user's explicit [cco:<tier>] override, and quality escalations (risky work / DEEP-scored tasks on a
     // weaker chat model). Cost-driven routing and relay-only are advice unless enforcement.mode is "strict".
     const strict = String(config?.enforcement?.mode || "advise") === "strict";
-    const mustEnforce = /^(quality_|override_)/.test(String(verdict.reason || ""));
+    const mustEnforce = /^(quality_|override_|retry_pending$)/.test(String(verdict.reason || ""));
     if (verdict.action === "deny" && !strict && !mustEnforce) {
       const adviseKey = `${verdict.reason}:${verdict.phase || ""}`;
       const already = Array.isArray(session.advised) && session.advised.includes(adviseKey);
@@ -312,6 +325,8 @@ async function main() {
           ? `Routing to ${tierLabel(verdict.tier)} (${modelLabel(verdict.model, pricing)}) as requested.`
           : String(verdict.reason).startsWith("quality_")
           ? `Risky or complex change: routing to ${tierLabel(verdict.tier)} (${modelLabel(verdict.model, pricing)}).`
+          : verdict.reason === "retry_pending"
+          ? `${tierLabel(verdict.pendingRetry?.failed ? tierFor(verdict.pendingRetry.failed) : "deep")} model at its usage limit: retrying on ${tierLabel(verdict.tier)} (${modelLabel(readWorkspaceAgentModel(workspace, verdict.pendingRetry?.agent) || "inherit", pricing)}).`
           : `Routing to ${tierLabel(verdict.tier)} (${modelLabel(verdict.model, pricing)}).`;
       emit({ permission: "deny", agent_message: message, user_message: userMessage });
       return;

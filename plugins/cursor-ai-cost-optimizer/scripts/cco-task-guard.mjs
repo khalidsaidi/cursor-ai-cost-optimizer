@@ -20,7 +20,7 @@ import {
   emit,
   nowIso,
   CCO_AGENT_NAMES,
-  isEnabled, isMain, applyScopeArgs, agentForTier, isCcoAgent } from "./lib/common.mjs";
+  isEnabled, isMain, applyScopeArgs, agentForTier, isCcoAgent, asNumber } from "./lib/common.mjs";
 applyScopeArgs();
 import { loadConfig } from "./lib/config.mjs";
 import { parseOverride, parseScoresLine, heuristicScores, decideTier, applyStateEscalation, formatScoresLine } from "./lib/scorer.mjs";
@@ -65,6 +65,17 @@ export function evaluateTask({ toolInput, config, state = null, lastPrompt = nul
   if (!scores) {
     scores = heuristicScores(`${description}\n${prompt}`);
     scoreSource = "heuristic";
+  }
+  // The parent's risk score is a floor, not the last word: the user's own prompt is scored too (production,
+  // auth, payments, secrets, data loss…) and the higher of the two counts. A model that rates a production
+  // OAuth-secret change risk=5 must not send it to the cheapest tier.
+  const userRisk = Math.max(
+    asNumber(lastPrompt?.heuristic?.scores?.risk, 0),
+    asNumber(heuristicScores(`${description}\n${prompt}`)?.risk, 0)
+  );
+  if (userRisk > asNumber(scores.risk, 0)) {
+    scores = { ...scores, risk: userRisk };
+    scoreSource = `${scoreSource}+risk_floor`;
   }
 
   const decision = decideTier({ scores, override, config });
@@ -173,7 +184,15 @@ async function main() {
     if (sessionForOverride && syncTurnFromTranscript(sessionForOverride, payload.transcript_path || guessTranscriptPath(workspace, payload.conversation_id))) {
       saveSession(workspace, sessionForOverride);
     }
-    const lastPrompt = sessionForOverride?.promptMeta?.override ? { conversation_id: payload.conversation_id, prompt: `[cco:${sessionForOverride.promptMeta.override}]` } : null;
+    // The session keeps what the user's own prompt scored (no prompt text is stored): the override token it carried
+    // and its heuristic scores, whose risk is a floor under the parent's own CCO-SCORES line.
+    const lastPrompt = sessionForOverride?.promptMeta?.override || sessionForOverride?.decision?.scores
+      ? {
+          conversation_id: payload.conversation_id,
+          prompt: sessionForOverride?.promptMeta?.override ? `[cco:${sessionForOverride.promptMeta.override}]` : "",
+          heuristic: sessionForOverride?.decision?.scores ? { scores: sessionForOverride.decision.scores } : undefined
+        }
+      : null;
     const runtime = paths ? readJsonSafe(paths.runtimePath) : null;
     const result = evaluateTask({
       toolInput: payload.tool_input || {},
@@ -289,7 +308,7 @@ async function main() {
       if (!loadSession(workspace, payload.conversation_id)) {
         createSession({ workspace, conversationId: payload.conversation_id, model: normalizeModelId(payload.model), payload });
       }
-      updateSession(workspace, payload.conversation_id, (s) => ({ delegations: [...(s.delegations || []), { ts: record.ts, agent: result.targetAgent, model: result.model, rewritten: result.rewritten }] }));
+      updateSession(workspace, payload.conversation_id, (s) => ({ pendingRetry: null, delegations: [...(s.delegations || []), { ts: record.ts, agent: result.targetAgent, model: result.model, rewritten: result.rewritten }] }));
     }
     const labelPricing = loadPricing(paths?.pricingPath);
     const tierName = tierLabel(result.targetTier);

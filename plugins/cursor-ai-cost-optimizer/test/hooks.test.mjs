@@ -173,7 +173,7 @@ test("task result hook process: records EMA state and injects cascade context", 
     { hook_event_name: "subagentStop", subagent_type: "balanced-tier", status: "aborted", workspace_roots: [ws] },
     ["subagentStop"]
   );
-  assert.match(stop.followup_message, /-deep/);
+  assert.match(stop.additional_context, /-deep/);
   const completed = runHook(
     "cco-task-result.mjs",
     { hook_event_name: "subagentStop", subagent_type: "balanced-tier", status: "completed", summary: "all good", workspace_roots: [ws] },
@@ -545,14 +545,14 @@ test("a failed DEEP subagent (usage limit) hands the task back to the chat with 
     hook_event_name: "subagentStop", conversation_id: "deep-fail", subagent_type: "deep-tier", model: "claude-opus-5-thinking-high",
     status: "error", summary: "ActionRequiredError: You've hit your usage limit for Opus", workspace_roots: [ws]
   });
-  assert.match(out.followup_message, /deep-tier did not complete/);
-  assert.match(out.followup_message, /do the task directly in this chat on cursor-grok-4\.6-high/i);
+  assert.match(out.additional_context, /deep-tier did not complete/);
+  assert.match(out.additional_context, /do the task directly in this chat on cursor-grok-4\.6-high/i);
   // A DEEP subagent that ran and then errored (not a startup refusal) has nothing above it: the chat finishes.
   const ran = runHook("cco-task-result.mjs", {
     hook_event_name: "subagentStop", conversation_id: "deep-fail", subagent_type: "deep-tier", model: "claude-opus-5-thinking-high",
     status: "error", message_count: 4, tool_call_count: 3, summary: "crashed midway", workspace_roots: [ws]
   });
-  assert.match(ran.followup_message, /do the task directly in this chat on cursor-grok-4\.6-high/i);
+  assert.match(ran.additional_context, /do the task directly in this chat on cursor-grok-4\.6-high/i);
 });
 
 test("a subagent that dies at startup puts its model on cooldown; later delegations step down a tier", async () => {
@@ -584,12 +584,12 @@ test("a DEEP subagent refused at startup retries once on BALANCED; when that is 
   const paths = workspacePaths(ws);
   createSession({ workspace: ws, conversationId: "down-1", model: "cursor-grok-4.6-high" });
   const first = runHook("cco-task-result.mjs", { hook_event_name: "subagentStop", conversation_id: "down-1", subagent_type: "deep-tier", model: "claude-opus-5-thinking-high", status: "error", duration_ms: 900, message_count: 0, tool_call_count: 0, workspace_roots: [ws] });
-  assert.match(first.followup_message, /delegate this same task once to claude-sonnet-5-balanced \(claude-sonnet-5-thinking-high\)/);
-  assert.doesNotMatch(first.followup_message, /escalating to DEEP/);
+  assert.match(first.additional_context, /delegate this same task once to claude-sonnet-5-balanced \(claude-sonnet-5-thinking-high\)/);
+  assert.doesNotMatch(first.additional_context, /escalating to DEEP/);
   const second = runHook("cco-task-result.mjs", { hook_event_name: "subagentStop", conversation_id: "down-1", subagent_type: "balanced-tier", model: "claude-sonnet-5-thinking-high", status: "error", duration_ms: 500, message_count: 0, tool_call_count: 0, workspace_roots: [ws] });
-  assert.match(second.followup_message, /delegate this same task once to composer-2\.5-fast \(composer-2\.5\)/, "BALANCED refused: try FAST, never escalate up");
+  assert.match(second.additional_context, /delegate this same task once to composer-2\.5-fast \(composer-2\.5\)/, "BALANCED refused: try FAST, never escalate up");
   const third = runHook("cco-task-result.mjs", { hook_event_name: "subagentStop", conversation_id: "down-1", subagent_type: "fast-tier", model: "composer-2.5", status: "error", duration_ms: 500, message_count: 0, tool_call_count: 0, workspace_roots: [ws] });
-  assert.match(third.followup_message, /do the task directly in this chat on cursor-grok-4\.6-high/i, "nothing lower: the chat finishes it");
+  assert.match(third.additional_context, /do the task directly in this chat on cursor-grok-4\.6-high/i, "nothing lower: the chat finishes it");
   const guard = runHook("cco-task-guard.mjs", { hook_event_name: "preToolUse", conversation_id: "down-2", tool_name: "Task", tool_input: { subagent_type: "deep-tier", prompt: "CCO-SCORES: complexity=4 risk=8 breadth=3 uncertainty=2 latency=0\n[cco:deep]\nRotate the production signing key" }, workspace_roots: [ws] });
   assert.equal(guard.permission, "allow", "all tiers limited: the delegation is left alone");
   assert.equal(paths.jointStatePath.endsWith("joint-state.json"), true);
@@ -675,11 +675,11 @@ test("dispatcher: two subagents stopping in the same generation are two events, 
   createSession({ workspace: ws, conversationId: "dd-1", model: "cursor-grok-4.6-high" });
   const base = { hook_event_name: "subagentStop", conversation_id: "dd-1", generation_id: "gen-1", workspace_roots: [ws], duration_ms: 500, message_count: 0, tool_call_count: 0 };
   const first = JSON.parse(await dispatch("subagentStop", JSON.stringify({ ...base, subagent_id: "a", subagent_type: "fast-research", status: "completed" })));
-  assert.equal(first.followup_message, undefined);
+  assert.equal(first.additional_context, undefined);
   const second = JSON.parse(await dispatch("subagentStop", JSON.stringify({ ...base, subagent_id: "b", subagent_type: "deep-tier", model: "claude-opus-5-thinking-high", status: "error" })));
-  assert.match(String(second.followup_message), /deep-tier could not start/, "the second stop must be processed on its own");
+  assert.match(String(second.additional_context), /deep-tier could not start/, "the second stop must be processed on its own");
   const replay = JSON.parse(await dispatch("subagentStop", JSON.stringify({ ...base, subagent_id: "b", subagent_type: "deep-tier", model: "claude-opus-5-thinking-high", status: "error" })));
-  assert.match(String(replay.followup_message), /deep-tier could not start/, "an exact duplicate replays the same answer");
+  assert.match(String(replay.additional_context), /deep-tier could not start/, "an exact duplicate replays the same answer");
 });
 
 test("a tier model the user picked is used as chosen, even when it is not cheaper than the chat model", () => {
@@ -752,4 +752,46 @@ test("a hooks.json that is not valid JSON is backed up next to itself before CCO
   assert.equal(backups.length, 1, "the unreadable file is kept next to itself");
   assert.match(fs.readFileSync(path.join(path.dirname(file), backups[0]), "utf8"), /other-tool/);
   assert.match(text, /not valid JSON/);
+});
+
+test("a parent that under-scores risk cannot send production or secret work to the cheapest tier: the user's prompt sets the risk floor", () => {
+  const ws = readyWorkspace();
+  runHook("cco-prompt-capture.mjs", { hook_event_name: "beforeSubmitPrompt", conversation_id: "risk1", model: "cursor-grok-4.6-high", prompt: "Rotate the production OAuth client secret handling in calc.mjs and add a security note", workspace_roots: [ws] });
+  const out = runHook("cco-task-guard.mjs", { hook_event_name: "preToolUse", conversation_id: "risk1", model: "grok-4.6", tool_name: "Task", tool_input: { subagent_type: "composer-2.5-fast", description: "Add rotateSecret", prompt: "CCO-SCORES: complexity=2 risk=5 breadth=2 uncertainty=2 latency=0\nAdd a rotateSecret function to calc.mjs" }, workspace_roots: [ws] });
+  assert.equal(out.permission, "allow");
+  assert.equal(out.updated_input.subagent_type, "claude-opus-5-deep", "rerouted to Deep");
+  const last = JSON.parse(fs.readFileSync(workspacePaths(ws).decisionsPath, "utf8").trim().split("\n").pop());
+  assert.equal(last.reason, "risk_force_deep");
+  assert.match(last.scoreSource, /risk_floor/);
+});
+
+test("a risk-routed delegation that dies at startup: edits are held until the retry on the lower tier is made, even in advise mode", () => {
+  const ws = readyWorkspace();
+  createSession({ workspace: ws, conversationId: "hold-1", model: "cursor-grok-4.6-high" });
+  runHook("cco-task-guard.mjs", { hook_event_name: "preToolUse", conversation_id: "hold-1", model: "grok-4.6", tool_name: "Task", tool_input: { subagent_type: "claude-opus-5-deep", prompt: "CCO-SCORES: complexity=3 risk=9 breadth=2 uncertainty=1 latency=0\nrotate the production secret" }, workspace_roots: [ws] });
+  const stop = runHook("cco-task-result.mjs", { hook_event_name: "subagentStop", conversation_id: "hold-1", subagent_type: "claude-opus-5-deep", model: "claude-opus-5-thinking-high", status: "error", duration_ms: 700, message_count: 0, tool_call_count: 0, workspace_roots: [ws] });
+  assert.match(stop.additional_context, /claude-sonnet-5-balanced/);
+  const write = runHook("cco-tool-gate.mjs", { hook_event_name: "preToolUse", conversation_id: "hold-1", model: "grok-4.6", tool_name: "Write", tool_input: { file_path: "a.js", content: "x" }, workspace_roots: [ws] });
+  assert.equal(write.permission, "deny", "the chat may not quietly finish risk-routed work itself");
+  assert.match(write.agent_message, /subagent_type="claude-sonnet-5-balanced"/);
+  const retry = runHook("cco-task-guard.mjs", { hook_event_name: "preToolUse", conversation_id: "hold-1", model: "grok-4.6", tool_name: "Task", tool_input: { subagent_type: "claude-sonnet-5-balanced", prompt: "CCO-SCORES: complexity=3 risk=9 breadth=2 uncertainty=1 latency=0\nrotate the production secret" }, workspace_roots: [ws] });
+  assert.equal(retry.permission, "allow");
+  assert.equal(loadSession(ws, "hold-1").pendingRetry, null, "the retry clears the hold");
+});
+
+test("risky work whose DEEP and BALANCED models are both refused ends in the chat, never on the FAST tier", () => {
+  const ws = readyWorkspace();
+  runHook("cco-prompt-capture.mjs", { hook_event_name: "beforeSubmitPrompt", conversation_id: "risk2", model: "cursor-grok-4.6-high", prompt: "Rotate the production OAuth client secret in calc.mjs", workspace_roots: [ws] });
+  runHook("cco-task-guard.mjs", { hook_event_name: "preToolUse", conversation_id: "risk2", model: "grok-4.6", tool_name: "Task", tool_input: { subagent_type: "claude-opus-5-deep", prompt: "CCO-SCORES: complexity=3 risk=10 breadth=1 uncertainty=0 latency=0\nrotate it" }, workspace_roots: [ws] });
+  const deepStop = runHook("cco-task-result.mjs", { hook_event_name: "subagentStop", conversation_id: "risk2", subagent_type: "claude-opus-5-deep", model: "claude-opus-5-thinking-high", status: "error", duration_ms: 700, message_count: 0, tool_call_count: 0, workspace_roots: [ws] });
+  assert.match(deepStop.additional_context, /claude-sonnet-5-balanced/);
+  const held = runHook("cco-tool-gate.mjs", { hook_event_name: "preToolUse", conversation_id: "risk2", model: "grok-4.6", tool_name: "Write", tool_input: { file_path: "a.js", content: "x" }, workspace_roots: [ws] });
+  assert.equal(held.permission, "deny");
+  assert.match(held.user_message, /Deep model at its usage limit: retrying on Balanced \(Claude Sonnet 5\)/);
+  runHook("cco-task-guard.mjs", { hook_event_name: "preToolUse", conversation_id: "risk2", model: "grok-4.6", tool_name: "Task", tool_input: { subagent_type: "claude-sonnet-5-balanced", prompt: "CCO-SCORES: complexity=3 risk=10 breadth=1 uncertainty=0 latency=0\nrotate it" }, workspace_roots: [ws] });
+  const balStop = runHook("cco-task-result.mjs", { hook_event_name: "subagentStop", conversation_id: "risk2", subagent_type: "claude-sonnet-5-balanced", model: "claude-sonnet-5-thinking-high", status: "error", duration_ms: 700, message_count: 0, tool_call_count: 0, workspace_roots: [ws] });
+  assert.match(balStop.additional_context, /Do the task directly in this chat/, "no step-down to FAST for risky work");
+  assert.doesNotMatch(balStop.additional_context, /composer-2\.5-fast/);
+  const free = runHook("cco-tool-gate.mjs", { hook_event_name: "preToolUse", conversation_id: "risk2", model: "grok-4.6", tool_name: "Write", tool_input: { file_path: "a.js", content: "x" }, workspace_roots: [ws] });
+  assert.equal(free.permission, "allow", "the chat finishes it");
 });

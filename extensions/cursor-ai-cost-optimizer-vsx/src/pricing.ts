@@ -242,6 +242,7 @@ export interface Savings {
 /** Σ max(0, chatEstimateUsd - estimateUsd) over <ws>/.cursor/cco/state/decisions.jsonl. */
 export function readSavings(workspace: string, stateDir?: string): Savings {
   const out: Savings = { decisions: 0, savedUsd: 0, estimatedUsd: 0 };
+  const counted: Array<{ final: string; conversation_id: string | null; saved: number; estimate: number }> = [];
   let text = "";
   try {
     text = fs.readFileSync(path.join(stateDir ?? path.join(workspace, ".cursor", "cco", "state"), "decisions.jsonl"), "utf8");
@@ -253,11 +254,23 @@ export function readSavings(workspace: string, stateDir?: string): Savings {
       continue;
     }
     try {
-      const d = JSON.parse(line) as { final?: string; estimateUsd?: number | null; chatEstimateUsd?: number | null };
+      const d = JSON.parse(line) as { event?: string; agent?: string; conversation_id?: string | null; final?: string; estimateUsd?: number | null; chatEstimateUsd?: number | null };
+      if (d.event === "subagent_failed") {
+        // the delegation never ran (usage limit): take its numbers back out
+        const i = counted.findIndex((c) => c.final === d.agent && (!d.conversation_id || c.conversation_id === d.conversation_id));
+        if (i >= 0) {
+          const c = counted.splice(i, 1)[0];
+          out.decisions -= 1;
+          out.savedUsd -= c.saved;
+          out.estimatedUsd -= c.estimate;
+        }
+        continue;
+      }
       if (d.final === "chat") {
         continue; // kept in the chat: not a routed task
       }
       out.decisions += 1;
+      counted.push({ final: String(d.final ?? ""), conversation_id: (d as { conversation_id?: string | null }).conversation_id ?? null, saved: typeof d.estimateUsd === "number" && typeof d.chatEstimateUsd === "number" ? Math.max(0, d.chatEstimateUsd - d.estimateUsd) : 0, estimate: typeof d.estimateUsd === "number" ? d.estimateUsd : 0 });
       if (Number.isFinite(d.estimateUsd)) {
         out.estimatedUsd += d.estimateUsd as number;
         if (Number.isFinite(d.chatEstimateUsd)) {
