@@ -287,7 +287,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Turns itself on at install, once per machine: the user installed a cost optimizer, so it optimizes. One
   // sentence says so, with Undo. Anyone who removed it is never re-enrolled (the flag stays set).
   const AUTO_ON_KEY = "cco.autoOnDone";
-  if (combined(firstWorkspace()).mode === "none" && !context.globalState.get<boolean>(AUTO_ON_KEY) && vscode.workspace.getConfiguration("cco").get<boolean>("autoEnable", true)) {
+  if (combined(firstWorkspace()).mode === "none" && !context.globalState.get<boolean>(AUTO_ON_KEY) && vscode.workspace.getConfiguration("cco").get<boolean>("autoEnable", true) && process.env.CCO_DISABLE_AUTO_ENABLE !== "1") {
     void context.globalState.update(AUTO_ON_KEY, true);
     const autoOn = setTimeout(() => {
       void vscode.commands.executeCommand("cco.installCursorAssets", { scope: "user", confirm: false, firstRun: true });
@@ -662,6 +662,7 @@ export function activate(context: vscode.ExtensionContext) {
   } catch (error) {
     log.warn(String((error as Error)?.message ?? error));
   }
+  return { stateRoot };
 }
 
 /**

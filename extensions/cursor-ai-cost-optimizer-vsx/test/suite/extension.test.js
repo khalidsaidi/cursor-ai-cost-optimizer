@@ -29,6 +29,24 @@ describe('AI Cost Optimizer extension', () => {
     fs.writeFileSync(path.join(outDir, 'test-proof.json'), `${JSON.stringify(proof, null, 2)}\n`, 'utf8');
   });
 
+  it('mirrors the Settings UI into the plugin config the hooks read', async () => {
+    const extension = vscode.extensions.getExtension('khalidsaidi.cursor-ai-cost-optimizer');
+    const api = await extension.activate();
+    assert.ok(api && api.stateRoot, 'activate() exposes the state root');
+    const file = path.join(api.stateRoot, 'cco.json');
+    assert.ok(fs.existsSync(file), 'settings are mirrored at activation');
+    const cfg = vscode.workspace.getConfiguration('cco');
+    await cfg.update('chatBudgetUsd', 3, vscode.ConfigurationTarget.Global);
+    await new Promise((r) => setTimeout(r, 1500));
+    const written = JSON.parse(fs.readFileSync(file, 'utf8'));
+    assert.equal(written.budget.sessionUsd, 3, 'a changed setting reaches the config file');
+    assert.equal(written.enforcement.mode, 'advise');
+    await cfg.update('chatBudgetUsd', undefined, vscode.ConfigurationTarget.Global);
+    await new Promise((r) => setTimeout(r, 1500));
+    assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).budget.sessionUsd, 0, 'reset reaches the file too');
+    proof.settingsSync = true;
+  });
+
   it('registers all commands', async () => {
     const extension = vscode.extensions.getExtension('khalidsaidi.cursor-ai-cost-optimizer');
     assert.ok(extension, 'Expected extension to be discoverable');

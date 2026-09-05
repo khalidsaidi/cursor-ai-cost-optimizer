@@ -29,6 +29,7 @@ async function main() {
       launchArgs: [workspacePath, '--disable-extensions', '--user-data-dir', userDataDir],
       extensionTestsEnv: {
         DONT_PROMPT_WSL_INSTALL: '1',
+        CCO_DISABLE_AUTO_ENABLE: '1',
         VSCODE_IPC_HOOK_CLI: '',
         CCO_CURSOR_AGENT_BIN: require('./fixtures/fake-agent-path.js'),
       },
