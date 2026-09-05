@@ -216,6 +216,10 @@ export function activate(context: vscode.ExtensionContext) {
       for (const line of cost.lines) {
         md.appendMarkdown(`- ${line.text}\n`);
       }
+      const fastLine = cost.lines.find((l) => l.tier === "fast");
+      if (fastLine && fastLine.multiplier !== null && fastLine.multiplier >= 0.995 && cost.chatModelLabel) {
+        md.appendMarkdown(`\n${vscode.l10n.t("{0} already costs no more than the Fast tier: routine work stays in this chat; risky or complex work still goes to Deep.", cost.chatModelLabel)}\n`);
+      }
       const savings = readSavings(ws, c.mode === "user" ? path.join(workspaceStateDir(stateRoot, ws), "state") : undefined);
       savedUsd = savings.savedUsd;
       const last = readLastDecision(ws, c.mode === "user" ? path.join(workspaceStateDir(stateRoot, ws), "state") : undefined);

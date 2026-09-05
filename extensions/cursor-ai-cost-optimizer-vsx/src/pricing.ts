@@ -253,7 +253,10 @@ export function readSavings(workspace: string, stateDir?: string): Savings {
       continue;
     }
     try {
-      const d = JSON.parse(line) as { estimateUsd?: number | null; chatEstimateUsd?: number | null };
+      const d = JSON.parse(line) as { final?: string; estimateUsd?: number | null; chatEstimateUsd?: number | null };
+      if (d.final === "chat") {
+        continue; // kept in the chat: not a routed task
+      }
       out.decisions += 1;
       if (Number.isFinite(d.estimateUsd)) {
         out.estimatedUsd += d.estimateUsd as number;
@@ -359,7 +362,7 @@ export function readLastDecision(workspace: string, stateDir?: string): LastDeci
   for (let i = lines.length - 1; i >= 0; i -= 1) {
     try {
       const d = JSON.parse(lines[i]) as { ts?: string; final?: string; model?: string; estimateUsd?: number | null; chatEstimateUsd?: number | null };
-      if (!d.final || d.final === "chat") {
+      if (d.final === "chat") {
         continue;
       }
       // model-named subagents (composer-2.5-fast), role names (fast-tier) and pre-0.3 names (cco-fast) all end in the tier

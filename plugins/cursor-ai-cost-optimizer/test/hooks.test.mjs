@@ -721,3 +721,18 @@ test("a window that still lists the old subagent names: the Task tool's error is
   const back = runHook("cco-tool-gate.mjs", { hook_event_name: "preToolUse", conversation_id: "w4", tool_name: "Write", tool_input: { file_path: "a.js", content: "x" }, workspace_roots: [ws] });
   assert.notEqual(back.reason, "no_subagents_in_window");
 });
+
+test("the chat model is re-read on every prompt: after a switch to the Fast tier's own model, work stays in the chat", () => {
+  const ws = readyWorkspace();
+  runHook("cco-prompt-capture.mjs", { hook_event_name: "beforeSubmitPrompt", conversation_id: "sw1", model: "composer-2.5-fast", prompt: "add a helper", workspace_roots: [ws] });
+  assert.equal(loadSession(ws, "sw1").model, "composer-2.5-fast");
+  const before = runHook("cco-tool-gate.mjs", { hook_event_name: "preToolUse", conversation_id: "sw1", model: "composer-2.5-fast", tool_name: "Write", tool_input: { file_path: "a.js", content: "x" }, workspace_roots: [ws] });
+  assert.match(String(before.agent_message || ""), /Task/, "on the 2x fast variant the plain Fast tier is worth a delegation");
+  runHook("cco-prompt-capture.mjs", { hook_event_name: "beforeSubmitPrompt", conversation_id: "sw1", model: "composer-2.5", prompt: "add another helper", workspace_roots: [ws] });
+  assert.equal(loadSession(ws, "sw1").model, "composer-2.5", "the switch in the picker is picked up");
+  const after = runHook("cco-tool-gate.mjs", { hook_event_name: "preToolUse", conversation_id: "sw1", model: "composer-2.5", tool_name: "Write", tool_input: { file_path: "a.js", content: "x" }, workspace_roots: [ws] });
+  assert.equal(after.permission, "allow");
+  assert.equal(after.agent_message, undefined, "same model as the Fast tier: nothing to gain, no advice");
+  const task = runHook("cco-task-guard.mjs", { hook_event_name: "preToolUse", conversation_id: "sw1", model: "composer-2.5", tool_name: "Task", tool_input: { subagent_type: "composer-2.5-fast", prompt: "CCO-SCORES: complexity=1 risk=0 breadth=0 uncertainty=0 latency=0\nadd another helper" }, workspace_roots: [ws] });
+  assert.equal(task.permission, "deny", "a delegation to the very same model is turned back into in-chat work");
+});

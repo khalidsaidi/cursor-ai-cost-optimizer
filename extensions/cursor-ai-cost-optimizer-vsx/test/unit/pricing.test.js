@@ -93,3 +93,16 @@ test("pickerModels: one row per model, plain id preferred, never a fast variant,
   assert.equal(byLabel["Composer 2.5 Fast"], "composer-2.5-fast", "fast variants are their own (2x) row");
   assert.equal(rows[0].label, "Composer 2.5", "cheapest first");
 });
+
+test("readSavings counts only real delegations, not tasks kept in the chat", () => {
+  const { readSavings } = require("../../dist/pricing.js");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cco-sav-"));
+  fs.writeFileSync(path.join(dir, "decisions.jsonl"), [
+    JSON.stringify({ final: "composer-2.5-fast", estimateUsd: 0.02, chatEstimateUsd: 0.08 }),
+    JSON.stringify({ final: "chat", reason: "tier_fast_not_cheaper_than_chat_model", estimateUsd: null, chatEstimateUsd: null }),
+  ].join("\n"));
+  const s = readSavings(dir, dir);
+  assert.equal(s.decisions, 1);
+  assert.ok(Math.abs(s.savedUsd - 0.06) < 1e-9);
+  fs.rmSync(dir, { recursive: true, force: true });
+});

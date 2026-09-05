@@ -56,8 +56,11 @@ async function main() {
         briefing = fullSessionContext({ workspace, paths, config, sessionModel: normalizeModelId(payload.model) }) || null;
       }
     }
-    // Each user turn is a new task: reset per-turn gate state so routing applies again.
+    // Each user turn is a new task: reset per-turn gate state so routing applies again. The chat model can change
+    // between turns (the picker, the Fast toggle): the prompt payload carries the one this turn runs on.
+    const turnModel = normalizeModelId(payload.model);
     updateSession(workspace, payload.conversation_id, (s) => ({
+      model: turnModel !== "auto" ? turnModel : s.model,
       userPrompt: null,
       promptMeta: { override, questionLike: isQuestionLike(prompt), tiny: isTinyTask(prompt), chars: prompt.length },
       decision: { tier: decision.tier, effort: decision.effort, guardrail: decision.guardrail, scores },
