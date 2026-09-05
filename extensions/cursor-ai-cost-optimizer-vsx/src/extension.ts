@@ -105,6 +105,15 @@ function priceLabel(modelId: string, pricing: ReturnType<typeof loadPricing>): s
   return `${money(p.input)}/M in · ${money(p.output)}/M out`;
 }
 
+/** "Saved about $0.49 (32%) in this project (14 routed tasks)." — the share is against what the chat model would have cost. */
+function savingsSentence(savings: { decisions: number; savedUsd: number; estimatedUsd: number }): string {
+  const wouldHave = savings.estimatedUsd + savings.savedUsd;
+  const share = wouldHave > 0 && savings.savedUsd > 0 ? ` (${Math.round((savings.savedUsd / wouldHave) * 100)}%)` : "";
+  return savings.decisions === 1
+    ? vscode.l10n.t("Saved about {0}{1} in this project (1 routed task).", formatUsd(savings.savedUsd), share)
+    : vscode.l10n.t("Saved about {0}{1} in this project ({2} routed tasks).", formatUsd(savings.savedUsd), share, String(savings.decisions));
+}
+
 /** Feedback for an action the user just took: 4 s in the status bar, never a popup. */
 function flash(text: string): void {
   vscode.window.setStatusBarMessage(`$(zap) ${text}`, 4000);
@@ -236,7 +245,7 @@ export function activate(context: vscode.ExtensionContext) {
         const numbers = last.estimateUsd !== null ? ` · ${formatUsd(last.estimateUsd)}${last.savedUsd !== null && last.savedUsd >= 0.005 ? `, ${vscode.l10n.t("saved {0}", formatUsd(last.savedUsd))}` : ""}` : "";
         md.appendMarkdown(`\n${vscode.l10n.t("Last task")}: ${tierName} ${vscode.l10n.t("on")} ${modelDisplayName(last.model, loadPricing(null, bundledPricing))}${numbers}\n`);
       }
-      md.appendMarkdown(`\n${savings.decisions === 1 ? vscode.l10n.t("Saved about {0} in this project (1 routed task).", formatUsd(savings.savedUsd)) : vscode.l10n.t("Saved about {0} in this project ({1} routed tasks).", formatUsd(savings.savedUsd), String(savings.decisions))}\n`);
+      md.appendMarkdown(`\n${savingsSentence(savings)}\n`);
       if (cost.warnings.length) {
         warn = true;
         md.appendMarkdown(`\n$(warning) ${cost.warnings.join("; ")} — ${vscode.l10n.t("run **Update models**")}\n`);
@@ -734,7 +743,7 @@ export function activate(context: vscode.ExtensionContext) {
       if (ws && cost) {
         const savings = readSavings(ws, stateDir);
         const last = readLastDecision(ws, stateDir);
-        items.push({ label: `$(zap) ${savings.decisions === 1 ? vscode.l10n.t("Saved about {0} in this project (1 routed task)", formatUsd(savings.savedUsd)) : vscode.l10n.t("Saved about {0} in this project ({1} routed tasks)", formatUsd(savings.savedUsd), String(savings.decisions))}` });
+        items.push({ label: `$(zap) ${savingsSentence(savings).replace(/\.$/, "")}` });
         if (last) {
           const tierName = last.tier === "fast" ? vscode.l10n.t("Fast") : last.tier === "balanced" ? vscode.l10n.t("Balanced") : vscode.l10n.t("Deep");
           items.push({ label: `$(history) ${vscode.l10n.t("Last task")}: ${tierName} ${vscode.l10n.t("on")} ${modelDisplayName(last.model, cost.pricing)}${last.estimateUsd !== null ? ` · ${formatUsd(last.estimateUsd)}` : ""}${last.savedUsd !== null && last.savedUsd >= 0.005 ? `, ${vscode.l10n.t("saved {0}", formatUsd(last.savedUsd))}` : ""}` });

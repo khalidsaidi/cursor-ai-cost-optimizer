@@ -7,6 +7,7 @@ All notable changes to this extension are documented here. The format is based o
 ## [0.3.0] - 2026-09-05
 
 ### Changed
+- The savings figure carries its share: "Saved about $0.49 (29%) in this project (14 routed tasks)" in the tooltip and the Savings view, since cents alone say little. The listing shows what a routed task, the tooltip, the picker and the Get Started page look like; the walkthrough says the subagent card can be clicked to see its steps and diffs.
 - No popups. Nothing is shown at install, on update, pause, remove or tier changes: the status bar item is the whole UI (state, savings, tooltip receipt, menu) and actions the user took get a 4-second status bar message. The only notifications left are errors. Confirmation dialogs are gone too (Remove and "This project only" act on the explicit menu choice).
 - Install and forget. The extension turns itself on at install (once per machine; anyone who removed it is never re-enrolled). Turning on takes seconds, asks nothing (no modal, no probing, no reload: the routing rule now arrives through the session hook, so the current window routes from its next chat), and ends with one line: "AI Cost Optimizer is on. Fast → Composer 2.5 · Balanced → Claude Sonnet 5 · Deep → Claude Opus 5." with **Details** and **Undo**.
 - The status bar is the receipt: `⚡ Saved ~$4.12` (this project), `AI Cost: Off`, `AI Cost: Paused`; the tooltip shows each tier's model next to your chat model's price, the last task (tier, model, cost, saved) and the project total, in plain words.
