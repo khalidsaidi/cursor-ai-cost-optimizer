@@ -81,7 +81,7 @@ export function estimateTaskCostUsd({ tier, model, pricing, config, delegation =
  */
 export function delegationWorth({ tier, tierModel, sessionModel, pricing, config, client = "ide" }) {
   // An Auto chat in the Cursor CLI: its subagents run and are billed as Auto too, so delegating buys nothing and pays
-  // a session start on top. Measured on Cursor's bill: the same task cost 15.2¢ direct and 17.6¢ routed. In the IDE
+  // a session start on top. Measured on Cursor's bill: the same task cost 13.7¢ direct and 24.9¢ with a Fast subagent (billed as Auto). In the IDE
   // the subagent runs on its own model (billed as Composer): 14.2¢ direct against 9.8¢ routed on the same task.
   if (client === "cli" && /^auto/i.test(String(sessionModel || ""))) {
     return { known: false, worth: null, tierCost: null, chatCost: null, factor: null, sessionUnpriced: true };
