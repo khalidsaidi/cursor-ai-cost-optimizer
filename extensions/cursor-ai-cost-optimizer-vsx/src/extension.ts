@@ -6,6 +6,7 @@ import * as os from "os";
 import * as path from "path";
 import { decideHookMode, doctorWorkspace, findBundledBinary, findNode, installWorkspace, plannedFiles, runPluginScriptAsync, stripCcoHooks, uninstallWorkspace, workspacePaths, workspaceStatus, type HookRuntimePreference, type HooksFile, type Options } from "./install";
 import { costStatement, formatUsd, readSavings, readLastDecision, readTierModels, loadPricing, modelDisplayName } from "./pricing";
+import { syncSettingsToPluginConfig } from "./settings";
 import { doctorUser, installUser, pauseWorkspace, stripUserHooks, uninstallUser, userHookCommand, userStatus, workspacePaused, workspaceStateDir } from "./userScope";
 import { runHookCommand } from "./selfcheck";
 import { decideTier, heuristicScores, overrideToken, parseOverride, DEFAULT_CONFIG } from "./scorer";
@@ -163,7 +164,7 @@ export function activate(context: vscode.ExtensionContext) {
     } else {
       md.appendMarkdown(`${vscode.l10n.t("Routes routine work to cheaper models and shows what it saves.")} [${vscode.l10n.t("Turn on")}](command:cco.installCursorAssets?%7B%22scope%22%3A%22user%22%2C%22confirm%22%3Afalse%7D)\n`);
     }
-    const savedText = savedUsd >= 0.01 ? vscode.l10n.t("Saved {0}", formatUsd(savedUsd)) : "AI Cost";
+    const savedText = savedUsd >= 0.01 && vscode.workspace.getConfiguration("cco").get<boolean>("showSavingsInStatusBar", true) ? vscode.l10n.t("Saved {0}", formatUsd(savedUsd)) : "AI Cost";
     status.text = warn ? "$(warning) AI Cost" : c.mode === "none" ? `$(zap) ${vscode.l10n.t("AI Cost: Off")}` : c.enabled ? `$(zap) ${savedText}` : `$(zap) ${vscode.l10n.t("AI Cost: Paused")}`;
     status.tooltip = md;
     status.show();
@@ -249,11 +250,33 @@ export function activate(context: vscode.ExtensionContext) {
     log.info(`[activate] ready in ${Date.now() - activationStarted} ms (${vscode.env.appHost}, remote=${vscode.env.remoteName ?? "none"})`);
     void runDoctor();
   }, 1500);
+  // Settings UI → plugin config files (hooks read them on every call). Tier model changes re-map at once.
+  const syncSettings = (reason: string) => {
+    try {
+      const c = combined(firstWorkspace());
+      const r = syncSettingsToPluginConfig(stateRoot, firstWorkspace());
+      if (r.tierModelsChanged && c.mode !== "none") {
+        log.info(`[settings] tier models changed (${reason}); re-mapping`);
+        void vscode.commands.executeCommand("cco.installCursorAssets", { scope: c.mode, confirm: false, quiet: true, workspace: firstWorkspace() ?? undefined }).then(() => refreshStatus());
+      } else if (r.tierModelsChanged) {
+        log.info(`[settings] tier models set (${reason}); applied when the optimizer is turned on`);
+      }
+    } catch (error) {
+      log.error(`[settings] ${String((error as Error)?.message ?? error)}`);
+    }
+  };
+  syncSettings("activation");
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration("cco.hookRuntime") || e.affectsConfiguration("cco.nodePath")) {
         log.info("[config] hook runtime settings changed; re-running the repair pass");
         void runDoctor();
+      }
+      if (e.affectsConfiguration("cco.tierModels") || e.affectsConfiguration("cco.enforceRouting") || e.affectsConfiguration("cco.alwaysDelegate") || e.affectsConfiguration("cco.chatBudgetUsd") || e.affectsConfiguration("cco.modelCooldownHours")) {
+        syncSettings("settings changed");
+      }
+      if (e.affectsConfiguration("cco.showSavingsInStatusBar")) {
+        refreshStatus();
       }
     })
   );
@@ -264,7 +287,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Turns itself on at install, once per machine: the user installed a cost optimizer, so it optimizes. One
   // sentence says so, with Undo. Anyone who removed it is never re-enrolled (the flag stays set).
   const AUTO_ON_KEY = "cco.autoOnDone";
-  if (combined(firstWorkspace()).mode === "none" && !context.globalState.get<boolean>(AUTO_ON_KEY)) {
+  if (combined(firstWorkspace()).mode === "none" && !context.globalState.get<boolean>(AUTO_ON_KEY) && vscode.workspace.getConfiguration("cco").get<boolean>("autoEnable", true)) {
     void context.globalState.update(AUTO_ON_KEY, true);
     const autoOn = setTimeout(() => {
       void vscode.commands.executeCommand("cco.installCursorAssets", { scope: "user", confirm: false, firstRun: true });
@@ -291,6 +314,7 @@ export function activate(context: vscode.ExtensionContext) {
     }
     try {
       const opts = options();
+      syncSettingsToPluginConfig(stateRoot, firstWorkspace());
       if (scope === "user") {
         // Seconds, not minutes: no per-model probing here (a model the plan refuses is caught at run time and stepped down).
         const result = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: vscode.l10n.t("AI Cost Optimizer: turning on…"), cancellable: true }, async (_progress, token) => {
@@ -455,7 +479,6 @@ export function activate(context: vscode.ExtensionContext) {
       return;
     }
     const runtimePath = c.mode === "user" ? path.join(stateRoot, "runtime.json") : path.join(ws as string, RUNTIME_REL);
-    const configPath = c.mode === "user" ? path.join(stateRoot, "cco.json") : path.join(ws as string, ".cursor", "cco.json");
     const readJson = (file: string): Record<string, unknown> | null => {
       try {
         return JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, unknown>;
@@ -471,9 +494,10 @@ export function activate(context: vscode.ExtensionContext) {
     }
     const pricing = loadPricing(null, bundledPricing);
     const current = readTierModels(ws ?? os.homedir(), c.mode === "user" ? path.join(os.homedir(), ".cursor", "agents") : undefined);
-    const cfg = (readJson(configPath) ?? {});
-    const overrides = { ...((cfg.modelOverrides as Record<string, string> | undefined) ?? {}) };
+    const cfg = vscode.workspace.getConfiguration("cco");
+    const target = c.mode === "user" ? vscode.ConfigurationTarget.Global : vscode.ConfigurationTarget.Workspace;
     const tierNames: Array<["fast" | "balanced" | "deep", string]> = [["fast", vscode.l10n.t("Fast")], ["balanced", vscode.l10n.t("Balanced")], ["deep", vscode.l10n.t("Deep")]];
+    const chosen: Record<string, string> = {};
     for (const [tier, label] of tierNames) {
       const now = current[tier] ?? "inherit";
       const items: Array<vscode.QuickPickItem & { id: string }> = [
@@ -484,10 +508,12 @@ export function activate(context: vscode.ExtensionContext) {
       if (!pick) {
         return;
       }
-      overrides[tier] = pick.id;
+      chosen[tier] = pick.id;
     }
-    fs.mkdirSync(path.dirname(configPath), { recursive: true });
-    fs.writeFileSync(configPath, `${JSON.stringify({ ...cfg, modelOverrides: overrides }, null, 2)}\n`, "utf8");
+    // Written as settings (Settings UI shows and edits the same values); the change handler re-maps the tiers.
+    for (const [tier, id] of Object.entries(chosen)) {
+      await cfg.update(`tierModels.${tier}`, id || undefined, target);
+    }
     await vscode.commands.executeCommand("cco.installCursorAssets", { scope: c.mode, confirm: false, workspace: ws ?? undefined, quiet: true });
     const after = readTierModels(ws ?? os.homedir(), c.mode === "user" ? path.join(os.homedir(), ".cursor", "agents") : undefined);
     void vscode.window.showInformationMessage(vscode.l10n.t("Tier models: Fast → {0} · Balanced → {1} · Deep → {2}.", modelDisplayName(after.fast ?? "inherit", pricing), modelDisplayName(after.balanced ?? "inherit", pricing), modelDisplayName(after.deep ?? "inherit", pricing)));

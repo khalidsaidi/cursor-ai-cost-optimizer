@@ -42,13 +42,21 @@ the Cursor plugin marketplace, and ships a self-contained hook binary for machin
 
 ## Settings
 
-| Setting | Default | Description |
-| --- | --- | --- |
-| `cco.hookRuntime` | `auto` | `auto` uses the bundled binary when this build has one for your platform, else Node.js; `binary` / `node` force one. |
-| `cco.nodePath` | `""` | Node.js executable used to run the plugin's setup scripts (default: `node` on PATH, then Cursor's own Node). |
+Everything a user is expected to touch is in Cursor's Settings UI under **AI Cost Optimizer** (search "cco"). User settings apply to every project; the same keys set at workspace level apply to that project only (and only then does a `.cursor/cco.json` appear there). Changes take effect on the next hook call; tier model changes re-map the tiers at once.
 
-Per-project settings live in `.cursor/cco.json` (`"enabled": false` opts a project out; `modelOverrides`
-pins models; `shellGuard.enabled` turns on the destructive-command guard).
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `cco.autoEnable` | on | Turn the optimizer on automatically after install (once per machine; Undo is on the notification). |
+| `cco.tierModels.fast` / `.balanced` / `.deep` | empty (automatic) | Model id that runs each tier, e.g. `composer-2.5`, `claude-sonnet-5-thinking-high`. **Choose tier models** in the status menu writes these from the list of models your account can use. |
+| `cco.enforceRouting` | off | Enforce cost routing instead of advising it: a chat model materially pricier than the tier's model may not edit or run commands itself. |
+| `cco.alwaysDelegate` | off | Route every request that needs tools through a tier subagent, even when it is not cheaper (keeps costs logged per tier). |
+| `cco.chatBudgetUsd` | 0 (off) | Estimated spend per chat after which you are warned (80%) and routing is forced to Fast beyond twice the budget. |
+| `cco.modelCooldownHours` | 6 | How long a model that refused to start (usage limit) is skipped; tasks step down a tier meanwhile. |
+| `cco.showSavingsInStatusBar` | on | `⚡ Saved ~$4.12` in the status bar, or just `AI Cost`. |
+| `cco.hookRuntime` | auto | Node.js when available, else the bundled binary. |
+| `cco.nodePath` | empty | Node.js executable for the setup scripts. |
+
+Advanced routing knobs (scoring weights, thresholds, per-tier tool budgets) stay in the plugin's `cco.json` (`plugins/cursor-ai-cost-optimizer/config/defaults.json` documents them) and are not needed day to day.
 
 ## Requirements
 

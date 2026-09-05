@@ -154,13 +154,81 @@
           ],
           "default": "auto",
           "scope": "machine",
-          "markdownDescription": "How the CCO hook entries in `.cursor/hooks.json` are executed. `auto` uses `node .cursor/cco-hook.mjs` when Node.js >= 18 is available (portable for teammates) and falls back to the bundled `cco-hook` binary, which makes the hook entries reference a machine-local path. Changing this takes effect on the next **Set Up / Update** or activation-time doctor run."
+          "markdownDescription": "How the hook entries are executed. `auto` uses Node.js >= 18 when available and falls back to the bundled `cco-hook` binary. Changing this takes effect on the next **Turn On / Update Models** or activation-time repair pass.",
+          "order": 20
         },
         "cco.nodePath": {
           "type": "string",
           "default": "",
           "scope": "machine",
-          "markdownDescription": "Absolute path of the Node.js executable used to run the plugin's setup scripts (`cco-init`, discovery). Default: `node` on PATH, then Cursor's own Node runtime. Ignored when `#cco.hookRuntime#` is `binary`."
+          "markdownDescription": "Absolute path of the Node.js executable used to run the plugin's setup scripts (`cco-init`, discovery). Default: `node` on PATH, then Cursor's own Node runtime. Ignored when `#cco.hookRuntime#` is `binary`.",
+          "order": 21
+        },
+        "cco.autoEnable": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "order": 1,
+          "markdownDescription": "Turn the Cost Optimizer on for Cursor automatically after it is installed (once per machine; **Undo** is on the notification). Off: nothing happens until you run **AI Cost Optimizer: Turn On / Update Models**."
+        },
+        "cco.tierModels.fast": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "order": 2,
+          "markdownDescription": "Model id that runs the **Fast** tier (quick answers, small edits), e.g. `composer-2.5`. Empty = the cheapest sufficient model on your account. The status menu's **Choose tier models** lists what your account can use."
+        },
+        "cco.tierModels.balanced": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "order": 3,
+          "markdownDescription": "Model id that runs the **Balanced** tier (typical implementation work), e.g. `claude-sonnet-5-thinking-high`. Empty = automatic."
+        },
+        "cco.tierModels.deep": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "order": 4,
+          "markdownDescription": "Model id that runs the **Deep** tier (risky or complex work), e.g. `claude-opus-5-thinking-high`. Empty = automatic."
+        },
+        "cco.enforceRouting": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "order": 5,
+          "markdownDescription": "Enforce cost routing instead of advising it. Off (default): the chat model is advised to delegate routine work and only your `[cco:…]` overrides and risk escalations are enforced. On: a chat model that is materially pricier than the tier's model may not edit or run commands itself; it must delegate."
+        },
+        "cco.alwaysDelegate": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "order": 6,
+          "markdownDescription": "Route every request that needs tools through a tier subagent, even when the tier's model is not cheaper than your chat model (useful to keep costs logged per tier)."
+        },
+        "cco.chatBudgetUsd": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "scope": "resource",
+          "order": 7,
+          "markdownDescription": "Estimated spend per chat, in USD, after which you are warned (at 80%) and routing is forced to the Fast tier beyond twice the budget. `0` = no budget."
+        },
+        "cco.modelCooldownHours": {
+          "type": "number",
+          "default": 6,
+          "minimum": 1,
+          "maximum": 168,
+          "scope": "application",
+          "order": 8,
+          "markdownDescription": "How long a model that refused to start a subagent (usage limit) is skipped before it is tried again. Tasks step down a tier meanwhile."
+        },
+        "cco.showSavingsInStatusBar": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "order": 9,
+          "markdownDescription": "Show the estimated savings for the current project in the status bar (`⚡ Saved ~$4.12`). Off: the item reads `AI Cost`."
         }
       }
     },
@@ -217,7 +285,7 @@
     "package:universal": "node ./scripts/package-extension.mjs --no-binaries",
     "publish:openvsx": "node ./scripts/publish-openvsx.mjs",
     "test": "npm run test:unit && npm run test:integration",
-    "test:unit": "npm run compile && node --test test/unit/binary.test.js test/unit/install.test.js test/unit/pricing.test.js test/unit/scorer.test.js test/unit/userScope.test.js test/unit/selfcheck.test.js",
+    "test:unit": "npm run compile && node --test test/unit/settings.test.js test/unit/binary.test.js test/unit/install.test.js test/unit/pricing.test.js test/unit/scorer.test.js test/unit/userScope.test.js test/unit/selfcheck.test.js",
     "test:integration": "npm run compile && xvfb-run -a node ./test/runTest.js",
     "test:cursor": "npm run compile && bash ./scripts/test-cursor.sh",
     "proof:ide-auth": "npm run compile && bash ./scripts/proof-ide-auth.sh",
