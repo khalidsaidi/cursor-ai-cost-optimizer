@@ -662,41 +662,50 @@ export function activate(context: vscode.ExtensionContext) {
   });
 
   // Copilot-style cost statement: tier → model • Nx of the chat model ("Rate is counted at Nx.")
-  const recommendCmd = vscode.commands.registerCommand("cco.recommendTier", async () => {
+  const recommendCmd = vscode.commands.registerCommand("cco.recommendTier", async (args?: { score?: boolean }) => {
     try {
+      const ws = firstWorkspace();
+      const userMode = ws ? combined(ws).mode === "user" : false;
+      const stateDir = ws && userMode ? path.join(workspaceStateDir(stateRoot, ws), "state") : undefined;
+      const cost = ws ? costStatement(ws, bundledPricing, userMode ? { stateRoot, workspaceStateDir: stateDir } : {}) : null;
+      type Item = vscode.QuickPickItem & { act?: () => Promise<void> };
+      const items: Item[] = [];
+      // Scoring a prompt (power users): only when asked for through the sub-item or with a selection in the editor.
       const editor = vscode.window.activeTextEditor;
       const selected = editor && !editor.selection.isEmpty ? editor.document.getText(editor.selection) : "";
-      const input = selected || (await vscode.window.showInputBox({ prompt: "Paste the task/prompt to score (leave empty to only show the tier rates)" })) || "";
-      const ws = firstWorkspace();
-      const cost = ws ? costStatement(ws, bundledPricing, combined(ws).mode === "user" ? { stateRoot, workspaceStateDir: path.join(workspaceStateDir(stateRoot, ws), "state") } : {}) : null;
-      const lines: string[] = [];
-      let token: string | null = null;
-      if (input.trim()) {
-        const decision = decideTier({ scores: heuristicScores(input), override: parseOverride(input), config: DEFAULT_CONFIG });
-        token = overrideToken(decision.tier);
-        lines.push(`Recommended: ${decision.tier.toUpperCase()}  Token: ${token}  Effort: ${decision.effort}${decision.guardrail ? `  Guardrail: ${decision.guardrail}` : ""}`);
-        lines.push(`Scores: ${JSON.stringify(decision.scores)}`);
-        lines.push("");
+      if (args?.score || selected) {
+        const input = selected || (await vscode.window.showInputBox({ prompt: vscode.l10n.t("Paste a prompt to see which tier it would get") })) || "";
+        if (input.trim()) {
+          const decision = decideTier({ scores: heuristicScores(input), override: parseOverride(input), config: DEFAULT_CONFIG });
+          const token = overrideToken(decision.tier);
+          items.push({ label: vscode.l10n.t("This prompt would go to {0} (effort {1}{2})", decision.tier.toUpperCase(), String(decision.effort), decision.guardrail ? `, ${decision.guardrail}` : "") });
+          items.push({ label: `$(copy) ${vscode.l10n.t("Copy {0} to force that tier", token)}`, act: async () => { await vscode.env.clipboard.writeText(token); flash(vscode.l10n.t("Copied {0}", token)); } });
+          items.push({ label: "", kind: vscode.QuickPickItemKind.Separator });
+        }
       }
-      if (cost) {
-        lines.push(cost.chatModel ? `Rates relative to your chat model (${cost.chatModelLabel}):` : "Tier rates (chat model unknown until the first chat in this project):");
-        lines.push(...cost.lines.map((l) => l.text));
+      if (ws && cost) {
+        const savings = readSavings(ws, stateDir);
+        const last = readLastDecision(ws, stateDir);
+        items.push({ label: `$(zap) ${savings.decisions === 1 ? vscode.l10n.t("Saved about {0} in this project (1 routed task)", formatUsd(savings.savedUsd)) : vscode.l10n.t("Saved about {0} in this project ({1} routed tasks)", formatUsd(savings.savedUsd), String(savings.decisions))}` });
+        if (last) {
+          const tierName = last.tier === "fast" ? vscode.l10n.t("Fast") : last.tier === "balanced" ? vscode.l10n.t("Balanced") : vscode.l10n.t("Deep");
+          items.push({ label: `$(history) ${vscode.l10n.t("Last task")}: ${tierName} ${vscode.l10n.t("on")} ${modelDisplayName(last.model, cost.pricing)}${last.estimateUsd !== null ? ` · ${formatUsd(last.estimateUsd)}` : ""}${last.savedUsd !== null && last.savedUsd >= 0.005 ? `, ${vscode.l10n.t("saved {0}", formatUsd(last.savedUsd))}` : ""}` });
+        }
+        items.push({ label: cost.chatModel ? vscode.l10n.t("Tier rates next to {0}", cost.chatModelLabel) : vscode.l10n.t("Tier rates"), kind: vscode.QuickPickItemKind.Separator });
+        for (const l of cost.lines) {
+          items.push({ label: l.text });
+        }
         if (cost.warnings.length) {
-          lines.push("", `Warning: ${cost.warnings.join("; ")} — run /cco-init in a new chat.`);
+          items.push({ label: `$(warning) ${cost.warnings.join("; ")}` });
         }
       } else {
-        lines.push("Open a folder to see tier rates.");
+        items.push({ label: vscode.l10n.t("Open a folder to see savings and tier rates.") });
       }
-      log.info(`[recommend] ${lines.join(" | ")}`);
-      type Item = vscode.QuickPickItem & { act?: () => Promise<void> };
-      const items: Item[] = lines.filter((l) => l.trim()).map((l) => ({ label: l }));
-      if (token && editor) {
-        items.unshift({ label: `$(insert) ${vscode.l10n.t("Insert {0} at the cursor", token)}`, act: async () => { await editor.edit((b) => b.insert(editor.selection.active, token)); } });
+      if (!args?.score) {
+        items.push({ label: "", kind: vscode.QuickPickItemKind.Separator });
+        items.push({ label: `$(search) ${vscode.l10n.t("Score a prompt…")}`, description: vscode.l10n.t("which tier a given request would get"), act: async () => { await vscode.commands.executeCommand("cco.recommendTier", { score: true }); } });
       }
-      if (token) {
-        items.unshift({ label: `$(copy) ${vscode.l10n.t("Copy {0}", token)}`, act: async () => { await vscode.env.clipboard.writeText(token); flash(vscode.l10n.t("Copied {0}", token)); } });
-      }
-      const picked = await vscode.window.showQuickPick(items, { placeHolder: cost?.chatModel ? vscode.l10n.t("Savings and tier rates (next to {0})", cost.chatModelLabel) : vscode.l10n.t("Savings and tier rates") });
+      const picked = await vscode.window.showQuickPick(items, { placeHolder: vscode.l10n.t("Savings and tier rates") });
       if (picked?.act) {
         await picked.act();
       }
