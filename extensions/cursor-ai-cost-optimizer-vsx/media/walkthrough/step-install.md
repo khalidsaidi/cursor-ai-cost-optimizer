@@ -1,9 +1,7 @@
-# It is already on
+# It is on. These are your tiers
 
-Nothing to set up. After install, the status bar shows `⚡ AI Cost`; after your first routed task it shows what you saved. Everything else is in the status bar menu (click **AI Cost**): pause for this project, choose which model runs each tier, remove it.
+Fast, Balanced and Deep each run on a model from your account. This page shows the current mapping once the extension has activated.
 
-Nothing is written into any project. The Cost Optimizer uses Cursor's own user-level config (`~/.cursor/hooks.json` entries, `~/.cursor/agents/*-tier.md`) and keeps its state in the extension's storage. **Remove** in the menu, or uninstalling the extension, takes all of it back out.
+**To change a tier's model:** the **Choose tier models** button on this page, the status bar **AI Cost** → **Choose tier models**, or Settings → search "cco" (`cco.tierModels.fast` / `.balanced` / `.deep`).
 
-Prefer repo files for a team? `AI Cost Optimizer: Turn On / Update Models` also offers **This project only**: 8 files under the project's `.cursor/`, shareable through git.
-
-Without a logged-in Cursor CLI the tiers are Fast → Composer 2.5, Balanced → Claude Sonnet 5, Deep → Claude Opus 5; with one, they are mapped from your account's model list. A model your plan refuses is skipped for a few hours and the task steps down a tier; one refused repeatedly is replaced.
+Nothing is written into any project. The Cost Optimizer uses Cursor's own user-level config (`~/.cursor/hooks.json` entries, `~/.cursor/agents/*.md` named after the model each tier runs on) and keeps its state in the extension's storage. **Remove from Cursor** in the status menu, or uninstalling the extension, takes all of it back out.

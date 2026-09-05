@@ -240,14 +240,13 @@
         "steps": [
           {
             "id": "cco.step.on",
-            "title": "It is already on",
-            "description": "Nothing to set up. The status bar shows **AI Cost**; after your first routed task it shows what you saved. Click it for the menu.\n[Open the status menu](command:cco.showMenu)",
+            "title": "It is on. These are your tiers",
+            "description": "Fast, Balanced and Deep each run on a model from your account (the table shows the mapping as of opening this page; hover **AI Cost** in the status bar for the current one). Change it any time; the same choice is in Settings under \"cco\".\n[Choose tier models](command:cco.chooseTierModels)",
             "media": {
               "markdown": "media/walkthrough/step-install.md"
             },
             "completionEvents": [
-              "onCommand:cco.showMenu",
-              "onContext:cco.mode != 'none'"
+              "onCommand:cco.chooseTierModels"
             ]
           },
           {
@@ -261,14 +260,13 @@
           {
             "id": "cco.step.steer",
             "title": "Steer when you want to",
-            "description": "Say it in the prompt (\"use the best model\", \"don't route this\") or use `[cco:deep]` / `[cco:fast]`. Pick the model behind each tier, pause a project, or set a per-chat budget from the status menu and Settings.\n[Choose tier models](command:cco.chooseTierModels)\n[Open settings](command:workbench.action.openSettings?%5B%22cco%22%5D)",
+            "description": "Say it in the prompt (\"use the best model\", \"don't route this\") or use `[cco:deep]` / `[cco:fast]`. Pause a project, set a per-chat budget, or enforce routing from the status menu and Settings.\n[Open settings](command:workbench.action.openSettings?%5B%22cco%22%5D)",
             "media": {
               "markdown": "media/walkthrough/step-override.md"
             },
             "completionEvents": [
-              "onCommand:cco.chooseTierModels",
-              "onSettingChanged:cco.tierModels.fast",
-              "onSettingChanged:cco.enforceRouting"
+              "onSettingChanged:cco.enforceRouting",
+              "onSettingChanged:cco.chatBudgetUsd"
             ]
           }
         ]

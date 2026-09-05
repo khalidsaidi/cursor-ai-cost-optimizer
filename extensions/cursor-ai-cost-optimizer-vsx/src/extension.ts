@@ -53,9 +53,9 @@ function writeWalkthroughMapping(extensionPath: string, agents: Record<string, s
       return `| ${label} | ${modelDisplayName(model, pricing)} | ${name} |`;
     };
     const body = [
-      "# It is already on",
+      "# It is on. These are your tiers",
       "",
-      "Nothing to set up. These are your tiers right now, mapped from the models your account can use:",
+      "Nothing to set up. These were your tiers when this page opened (hover **AI Cost** in the status bar for the current mapping):",
       "",
       "| Tier | Model | Card in the chat |",
       "|---|---|---|",
@@ -63,7 +63,7 @@ function writeWalkthroughMapping(extensionPath: string, agents: Record<string, s
       row("balanced-tier", "Balanced"),
       row("deep-tier", "Deep"),
       "",
-      "Change them any time: status bar **AI Cost** → **Choose tier models**, or Settings (search \"cco\"). Everything else stays as it was: your chat model, your project files (nothing is written into them), your workflow.",
+      "**To change a tier's model:** the **Choose tier models** button on this page, the status bar **AI Cost** → **Choose tier models**, or Settings → search \"cco\" (`cco.tierModels.fast` / `.balanced` / `.deep`). Everything else stays as it was: your chat model, your project files (nothing is written into them), your workflow.",
       "",
       "The status bar shows what you saved in the current project; its tooltip shows the last task. **Remove from Cursor** in the same menu takes everything back out.",
       "",
@@ -524,11 +524,21 @@ export function activate(context: vscode.ExtensionContext) {
       }
       chosen[tier] = pick.id;
     }
-    // Written as settings (Settings UI shows and edits the same values); the change handler re-maps the tiers.
+    // Written as settings (Settings UI shows and edits the same values); the change handler re-maps the tiers once.
+    let changed = false;
     for (const [tier, id] of Object.entries(chosen)) {
-      await cfg.update(`tierModels.${tier}`, id || undefined, target);
+      const before = cfg.inspect<string>(`tierModels.${tier}`);
+      const prev = target === vscode.ConfigurationTarget.Global ? before?.globalValue : before?.workspaceValue;
+      if ((prev ?? "") !== id) {
+        changed = true;
+        await cfg.update(`tierModels.${tier}`, id || undefined, target);
+      }
     }
-    await vscode.commands.executeCommand("cco.installCursorAssets", { scope: c.mode, confirm: false, workspace: ws ?? undefined, quiet: true });
+    if (!changed) {
+      flash(vscode.l10n.t("Tier models unchanged"));
+      return;
+    }
+    await new Promise((r) => setTimeout(r, 4000));
     const after = readTierModels(ws ?? os.homedir(), c.mode === "user" ? path.join(os.homedir(), ".cursor", "agents") : undefined, c.mode === "user" ? path.join(stateRoot, "agent-names.json") : undefined);
     flash(vscode.l10n.t("Tier models: Fast → {0} · Balanced → {1} · Deep → {2}", modelDisplayName(after.fast ?? "inherit", pricing), modelDisplayName(after.balanced ?? "inherit", pricing), modelDisplayName(after.deep ?? "inherit", pricing)));
     refreshStatus();

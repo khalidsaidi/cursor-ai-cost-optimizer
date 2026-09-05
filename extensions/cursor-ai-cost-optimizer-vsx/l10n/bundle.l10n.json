@@ -45,6 +45,7 @@
   "cheapest sufficient model for this tier (now {0})": "cheapest sufficient model for this tier (now {0})",
   "current": "current",
   "{0} tier: which model should run it?": "{0} tier: which model should run it?",
+  "Tier models unchanged": "Tier models unchanged",
   "Tier models: Fast → {0} · Balanced → {1} · Deep → {2}": "Tier models: Fast → {0} · Balanced → {1} · Deep → {2}",
   "AI Cost Optimizer hooks are off (Update models restores)": "AI Cost Optimizer hooks are off (Update models restores)",
   "No AI Cost Optimizer hooks were active": "No AI Cost Optimizer hooks were active",
