@@ -204,6 +204,23 @@ export function gateDecision({ toolName, session, config, pricing, models, promp
   return { action: "allow", reason: routerInfo.factor ? "no_savings_expected" : "no_price_signal", phase: "pre" };
 }
 
+/** "Routing to Deep (Claude Opus 5)." — or, when that tier's model is on cooldown, which tier stands in and why. */
+function routingLine(verdict, workspace, pricing) {
+  const reason = String(verdict.reason || "");
+  if (reason === "retry_pending") {
+    const p = verdict.pendingRetry || {};
+    return `${tierLabel(p.failed ? tierFor(p.failed) : "deep")} model at its usage limit: retrying on ${tierLabel(verdict.tier)} (${modelLabel((workspace && readWorkspaceAgentModel(workspace, p.agent)) || "inherit", pricing)}).`;
+  }
+  const prefix = reason.startsWith("override_") ? "As requested; " : reason.startsWith("quality_") ? "Risky or complex change; " : "";
+  const configured = workspace ? readWorkspaceAgentModel(workspace, agentForTier(verdict.tier, workspace)) : null;
+  if (configured && verdict.model && configured !== verdict.model) {
+    const subTier = ["balanced", "fast"].find((t) => workspace && readWorkspaceAgentModel(workspace, agentForTier(t, workspace)) === verdict.model) || verdict.tier;
+    return `${prefix}${tierLabel(verdict.tier)} model at its usage limit: routing to ${tierLabel(subTier)} (${modelLabel(verdict.model, pricing)}).`;
+  }
+  const plain = `Routing to ${tierLabel(verdict.tier)} (${modelLabel(verdict.model, pricing)})`;
+  return reason.startsWith("override_") ? `${plain} as requested.` : reason.startsWith("quality_") ? `Risky or complex change: ${plain.charAt(0).toLowerCase()}${plain.slice(1)}.` : `${plain}.`;
+}
+
 export function denyMessage({ toolName, verdict, sessionModel, workspace = null }) {
   if (verdict.reason === "retry_pending") {
     const p = verdict.pendingRetry || {};
@@ -321,21 +338,7 @@ async function main() {
           ? `Research moves to ${modelLabel(verdict.model, pricing)}; ${modelLabel(session.model, pricing)} keeps the decisions and edits.`
           : verdict.phase === "post"
           ? "Relaying the subagent's result."
-          : String(verdict.reason).startsWith("override_")
-          ? `Routing to ${tierLabel(verdict.tier)} (${modelLabel(verdict.model, pricing)}) as requested.`
-          : String(verdict.reason).startsWith("quality_")
-          ? (() => {
-              // the tier's own model may be on cooldown (usage limit): the model named is the substitute's
-              const configured = workspace ? readWorkspaceAgentModel(workspace, agentForTier(verdict.tier, workspace)) : null;
-              if (configured && verdict.model && configured !== verdict.model) {
-                const subTier = ["balanced", "fast"].find((t) => workspace && readWorkspaceAgentModel(workspace, agentForTier(t, workspace)) === verdict.model) || verdict.tier;
-                return `Risky or complex change; ${tierLabel(verdict.tier)} model at its usage limit: routing to ${tierLabel(subTier)} (${modelLabel(verdict.model, pricing)}).`;
-              }
-              return `Risky or complex change: routing to ${tierLabel(verdict.tier)} (${modelLabel(verdict.model, pricing)}).`;
-            })()
-          : verdict.reason === "retry_pending"
-          ? `${tierLabel(verdict.pendingRetry?.failed ? tierFor(verdict.pendingRetry.failed) : "deep")} model at its usage limit: retrying on ${tierLabel(verdict.tier)} (${modelLabel(readWorkspaceAgentModel(workspace, verdict.pendingRetry?.agent) || "inherit", pricing)}).`
-          : `Routing to ${tierLabel(verdict.tier)} (${modelLabel(verdict.model, pricing)}).`;
+          : routingLine(verdict, workspace, pricing);
       emit({ permission: "deny", agent_message: message, user_message: userMessage });
       return;
     }
