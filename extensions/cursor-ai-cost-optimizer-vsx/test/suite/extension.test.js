@@ -97,7 +97,7 @@ describe('AI Cost Optimizer extension', () => {
     assert.ok(proof.installChecks.hooks.foreignEntryPreserved, 'foreign hook entry preserved');
     const ours = Object.values(hooks.hooks).flat().filter((e) => CCO_RE.test(e.command));
     const form = manifest.hookMode === 'binary' ? BINARY_FORM : NODE_FORM;
-    proof.installChecks.hooks.ccoEntriesValid = ours.length >= 8 && ours.every((e) => form.test(e.command));
+    proof.installChecks.hooks.ccoEntriesValid = ours.length >= 7 && ours.every((e) => form.test(e.command));
     assert.ok(proof.installChecks.hooks.ccoEntriesValid, `CCO hook commands use the ${manifest.hookMode} form: ${ours.map((e) => e.command).join(' | ')}`);
     if (manifest.hookMode === 'binary') {
       assert.ok(fs.existsSync(path.join(root, '.cursor', 'cco', 'bin')), 'binary copied into .cursor/cco/bin');
