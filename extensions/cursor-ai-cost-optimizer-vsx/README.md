@@ -8,10 +8,10 @@ the Cursor plugin marketplace, and ships a self-contained hook binary for machin
 
 ## Getting started
 
-1. **Turn it on.** After installing, one toast offers it; or click **AI Cost** in the status bar → **Turn on**, or run `AI Cost Optimizer: Turn On / Update Models`. It takes a few seconds, asks nothing else, and needs no reload. Nothing is written into any project: the Cost Optimizer registers in Cursor's own user-level config (`~/.cursor/hooks.json` entries, `~/.cursor/agents/cco-*.md`) and keeps its state in the extension's storage, the way Copilot keeps its state in the editor. **Undo** is on the confirmation toast; **Remove** takes it all back out later.
-   - Prefer repo files? The palette command also offers **This project only**: 8 files under the project's `.cursor/`, shown to you before anything is written, shareable with teammates through git.
-2. **Start a new chat and work normally.** Keep your usual chat model. A routed task shows a subagent card with a line like `Fast on Composer 2.5 · ~$0.02, saves ~$0.04` and ends with `Cost Optimizer · Fast on Composer 2.5 · ~$0.02, saves ~$0.04`. Risky work goes to the strong tier and says so. The status bar shows what you have saved in the project.
-3. **Steer when you want to** — `[cco:fast]`, `[cco:balanced]`, `[cco:deep]` in a prompt force a tier, `[cco:off]` bypasses routing for one request. **Pause here** in the status menu switches a project off without removing anything.
+1. **Install it.** It turns itself on: one toast says so, with **Undo** and **How it works**. No question, no reload, nothing written into any project: the Cost Optimizer registers in Cursor's own user-level config (`~/.cursor/hooks.json` entries, `~/.cursor/agents/*-tier.md`) and keeps its state in the extension's storage, the way Copilot keeps its state in the editor. **Remove** in the status menu takes it all back out.
+   - Prefer repo files? `AI Cost Optimizer: Turn On / Update Models` also offers **This project only**: 8 files under the project's `.cursor/`, shown to you before anything is written.
+2. **Work normally.** Keep your usual chat model. A routed task shows a **Fast Tier** (or Balanced / Deep) subagent card whose line reads `Fast on Composer 2.5 · ~$0.02, saves ~$0.04`; risky work goes to the strong tier and says so. The status bar shows what you have saved in the project; its tooltip shows the tiers, the last task and the total.
+3. **Steer when you want to.** **Choose tier models** in the status menu picks which model runs Fast, Balanced and Deep. `[cco:fast]`, `[cco:balanced]`, `[cco:deep]` in a prompt force a tier for one request; `[cco:off]` bypasses routing once. **Pause here** switches a project off without removing anything.
 
 ## Features
 
@@ -31,6 +31,7 @@ the Cursor plugin marketplace, and ships a self-contained hook binary for machin
 | Command | What it does |
 | --- | --- |
 | AI Cost Optimizer: Turn On / Update Models | Turns the Cost Optimizer on for all projects (seconds, nothing written into projects) or for the open folder only (shows the 8 files first); re-maps the tiers when already on. |
+| AI Cost Optimizer: Choose Tier Models | Picks which model runs Fast, Balanced and Deep from the models this account can use; applies to all projects (or this project). |
 | AI Cost Optimizer: Remove | Removes everything the setup wrote (everywhere, or from the open folder); other tools' hook entries and your own files are kept. |
 | AI Cost Optimizer: Pause / Resume Here | Switches routing off or on for the open folder without removing anything; paused chats work as before. |
 | AI Cost Optimizer: Savings and Tier Rates | What you have saved in this project, each tier's model and its price next to your chat model, and, for selected text, the recommended tier. |

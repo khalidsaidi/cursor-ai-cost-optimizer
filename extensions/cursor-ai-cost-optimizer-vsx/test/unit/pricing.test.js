@@ -47,16 +47,16 @@ test("rate multipliers, staleness, savings and the cost statement", () => {
     // chat model unknown -> absolute prices
     let c = P.costStatement(ws, BUNDLED);
     assert.equal(c.chatModel, null);
-    assert.match(c.lines[0].text, /^FAST → composer-2\.5 • \$[0-9.]+\/M in, \$[0-9.]+\/M out$/);
-    assert.match(c.lines[2].text, /^DEEP → inherit$/);
-    assert.ok(c.warnings.includes("deep-tier is inherit"));
+    assert.match(c.lines[0].text, /^Fast → Composer 2\.5 · \$[0-9.]+\/M in, \$[0-9.]+\/M out$/);
+    assert.match(c.lines[2].text, /^Deep → your chat model$/);
+    assert.ok(c.warnings.includes("Deep tier has no model yet"));
 
     // latest session -> relative rates, Copilot wording
     fs.writeFileSync(path.join(ws, ".cursor", "cco", "state", "sessions", "a.json"), JSON.stringify({ model: "claude-opus-5-thinking-high", updatedAt: "2026-01-01T00:00:00Z" }));
     fs.writeFileSync(path.join(ws, ".cursor", "cco", "state", "sessions", "b.json"), JSON.stringify({ model: "auto", updatedAt: "2025-01-01T00:00:00Z" }));
     c = P.costStatement(ws, BUNDLED);
     assert.equal(c.chatModel, "claude-opus-5-thinking-high");
-    assert.match(c.lines[0].text, /^FAST → composer-2\.5 • [0-9.]+x of claude-opus-5-thinking-high \(Rate is counted at [0-9.]+x\.\)$/);
+    assert.match(c.lines[0].text, /^Fast → Composer 2\.5 · [0-9.]+x the price of Claude Opus 5$/);
     assert.equal(P.costStatement(ws, BUNDLED, "auto").chatModelLabel, "Auto");
   } finally {
     fs.rmSync(ws, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });

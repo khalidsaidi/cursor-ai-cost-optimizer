@@ -4,12 +4,15 @@ All notable changes to this extension are documented here. The format is based o
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.3.0] - 2026-09-05
 
 ### Changed
-- UX pass to the Copilot bar. One offer, once: "Turn it on for Cursor?" with **Turn on** / **Not now**; turning on takes seconds, asks nothing else (no modal, no probing, no reload: the routing rule now arrives through the session hook, so the current window routes from its next chat), and ends with one line: "AI Cost Optimizer is on. Fast → Composer 2.5 · Balanced → Claude Sonnet 5 · Deep → Claude Opus 5." with **Details** and **Undo**.
-- The status bar shows the money: `⚡ Saved $4.12` (this project), `AI Cost: Off`, `AI Cost: Paused`; the tooltip is in plain words.
-- Everything the user reads in chat is plain language: tool cards say `Fast on Composer 2.5 · ~$0.02, saves ~$0.04` or `Risky or complex change: routing to Deep (Claude Opus 5)`; the footer is `Cost Optimizer · Fast on Composer 2.5 · ~$0.02, saves ~$0.04` or `Cost Optimizer · done in chat on Grok 4.6`. No "CCO:", no FAST/BALANCED/DEEP, no raw model ids, no reason codes, no repeated "[cco:deep]" hints.
+- Install and forget. The extension turns itself on at install (once per machine; **Undo** on the one toast; anyone who removed it is never re-enrolled). Turning on takes seconds, asks nothing (no modal, no probing, no reload: the routing rule now arrives through the session hook, so the current window routes from its next chat), and ends with one line: "AI Cost Optimizer is on. Fast → Composer 2.5 · Balanced → Claude Sonnet 5 · Deep → Claude Opus 5." with **Details** and **Undo**.
+- The status bar is the receipt: `⚡ Saved ~$4.12` (this project), `AI Cost: Off`, `AI Cost: Paused`; the tooltip shows each tier's model next to your chat model's price, the last task (tier, model, cost, saved) and the project total, in plain words.
+- Subagents are named for the user, because Cursor shows the name on the card: **Fast Tier**, **Balanced Tier**, **Deep Tier**, Fast Research, Tier Verifier (files `fast-tier.md` …). Old `cco-*` names still route; generated `cco-*.md` files are replaced on update and removed on uninstall.
+- No model-written cost lines in chat: the chat model relays the subagent's result and adds nothing; the card and the status bar carry the numbers.
+- **Choose tier models** (status menu): pick which model runs Fast, Balanced and Deep from the models this account can use; applies to all projects (or this project) at once.
+- Everything the user reads is plain language: the card line says `Fast on Composer 2.5 · ~$0.02, saves ~$0.04`, `Risky or complex change: routing to Deep (Claude Opus 5)` or `Working in chat on Grok 4.6.` No "CCO:", no FAST/BALANCED/DEEP, no raw model ids, no reason codes, no repeated "[cco:deep]" hints.
 - Menu and commands renamed to what they do: Turn on, Savings and tier rates, Pause here / Resume here, Update models, Remove from Cursor.
 
 ### Fixed
@@ -18,6 +21,8 @@ All notable changes to this extension are documented here. The format is based o
 - Chat start waited on the network: the `sessionStart` hook refreshed the price table inline (20 s behind a blackholing proxy) and ran `cursor-agent --version` on every chat (0.65 s). Refreshes now run in a detached worker; the CLI version is cached per binary identity; chat start answers in about 0.1 s.
 - A tier model at its usage limit (seen with Opus on a Pro account) failed every DEEP task the same way; the model is now put on a 6-hour cooldown, delegations step down a tier with a one-line note, and the chat finishes the task itself when nothing lower is usable.
 - Honest footers: when the chat never delegated (escape hatch) or a subagent died, the hook now gives the exact in-chat footer instead of letting the model name a model it never used.
+- A model the account keeps refusing (three refusals across 12+ hours: a plan or team restriction, or a disabled model) is dropped from the tier candidates and the tier is re-mapped at once; a usage limit stays a 6-hour cooldown with a step-down. Limits are shared by all projects.
+- Two subagents stopping in the same turn were collapsed into one event by the duplicate filter, so the second one's failure went unhandled.
 - Windows: `.cmd`/`.bat` launchers of `cursor-agent` are spawned through a shell (Node 18+ refuses them directly).
 - Status bar reads `AI Cost: set up` until the extension is set up.
 

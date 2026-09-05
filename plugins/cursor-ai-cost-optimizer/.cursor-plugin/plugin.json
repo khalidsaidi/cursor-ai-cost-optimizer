@@ -1,7 +1,7 @@
 {
   "name": "cursor-ai-cost-optimizer",
   "displayName": "AI Cost Optimizer",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Routes each request to the cheapest sufficient effort tier (fast/balanced/deep), runs it on a tier-specific model via subagents, and enforces the routing with hooks that apply risk guardrails, learn from outcomes, and log decisions.",
   "author": {
     "name": "Khalid Saidi",

@@ -285,7 +285,7 @@ export function costStatement(workspace: string, bundledPricingPath: string, opt
   const pricing = loadPricing(o.stateRoot ? path.join(o.stateRoot, "pricing.json") : path.join(workspace, ".cursor", "cco", "pricing.json"), bundledPricingPath);
   const models = readTierModels(workspace, o.stateRoot ? path.join(os.homedir(), ".cursor", "agents") : undefined);
   const chatModel = o.chatModelOverride === undefined ? readLatestChatModel(workspace, o.workspaceStateDir) : o.chatModelOverride;
-  const chatModelLabel = !chatModel ? "" : chatModel === "auto" ? "Auto" : chatModel;
+  const chatModelLabel = !chatModel ? "" : modelDisplayName(chatModel, pricing);
   const stale = pricingIsStale(pricing);
   const warnings: string[] = [];
   if (stale) {
@@ -293,21 +293,19 @@ export function costStatement(workspace: string, bundledPricingPath: string, opt
   }
   const lines: TierLine[] = TIERS.map((tier) => {
     const model = models[tier];
-    const label = tier.toUpperCase();
+    const label = tier === "fast" ? "Fast" : tier === "balanced" ? "Balanced" : "Deep";
     if (!model || model === "inherit") {
-      if (!model) {
-        warnings.push(`${tier}-tier agent missing`);
-      } else {
-        warnings.push(`${tier}-tier is inherit`);
-      }
-      return { tier, model, multiplier: null, price: null, text: `${label} → ${model ?? "(no agent file)"}` };
+      warnings.push(`${label} tier has no model yet`);
+      return { tier, model, multiplier: null, price: null, text: `${label} → ${model ? "your chat model" : "not set up"}` };
     }
     const price = resolveModelPrice(model, pricing);
+    const name = modelDisplayName(model, pricing);
     if (chatModel) {
       const m = rateMultiplier(model, chatModel, pricing);
-      return { tier, model, multiplier: m, price, text: m === null ? `${label} → ${model} • rate unknown` : `${label} → ${model} • ${formatMultiplier(m)} of ${chatModelLabel} (Rate is counted at ${formatMultiplier(m)}.)` };
+      const rel = m === null ? "rate unknown" : m < 0.995 ? `${formatMultiplier(m)} the price of ${chatModelLabel}` : m > 1.005 ? `${formatMultiplier(m)} the price of ${chatModelLabel}` : `same price as ${chatModelLabel}`;
+      return { tier, model, multiplier: m, price, text: `${label} → ${name} · ${rel}` };
     }
-    return { tier, model, multiplier: null, price, text: Number.isFinite(price.input) ? `${label} → ${model} • $${price.input}/M in, $${price.output}/M out` : `${label} → ${model} • price unknown` };
+    return { tier, model, multiplier: null, price, text: Number.isFinite(price.input) ? `${label} → ${name} · $${price.input}/M in, $${price.output}/M out` : `${label} → ${name} · price unknown` };
   });
   return { chatModel, chatModelLabel, pricing, stale, lines, warnings: [...new Set(warnings)] };
 }

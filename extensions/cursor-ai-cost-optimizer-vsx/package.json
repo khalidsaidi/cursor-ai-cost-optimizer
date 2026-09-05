@@ -2,7 +2,7 @@
   "name": "cursor-ai-cost-optimizer",
   "displayName": "AI Cost Optimizer",
   "publisher": "khalidsaidi",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Cuts your Cursor AI bill: routes each request to the cheapest model tier that can do it well, with quality guardrails. Sets up in Cursor's user-level config (nothing written into projects) or per project.",
   "license": "SEE LICENSE IN LICENSE",
   "pricing": "Free",

@@ -20,9 +20,9 @@ CCO routes each request to the cheapest effort tier that can do it well (FAST / 
 
 ## What a user sees
 
-Install, one toast: "AI Cost Optimizer can send routine work to cheaper models and show what it saves. Turn it on for Cursor?" **Turn on** takes a few seconds and answers with "AI Cost Optimizer is on. Fast → Composer 2.5 · Balanced → Claude Sonnet 5 · Deep → Claude Opus 5. Start a new chat." (**Undo** is right there). No reload, nothing written into any project. From then on the status bar reads `⚡ Saved $4.12`.
+Install it. One toast: "AI Cost Optimizer is on: routine work goes to cheaper models and the status bar shows what you save. Fast → Composer 2.5 · Balanced → Claude Sonnet 5 · Deep → Claude Opus 5." with **Undo** and **How it works**. Nothing to answer, no reload, nothing written into any project. From then on the status bar reads `⚡ Saved ~$4.12`; its tooltip shows each tier's model next to your chat model's price, the last task, and the project total.
 
-In chat, on Auto or any model: the request, a subagent card whose line reads `Fast on Composer 2.5 · ~$0.02, saves ~$0.04`, the answer, and one closing line `Cost Optimizer · Fast on Composer 2.5 · ~$0.02, saves ~$0.04`. Risky work reads `Risky or complex change: routing to Deep (Claude Opus 5)`. When a task rightly stays in chat the line is `Cost Optimizer · done in chat on Grok 4.6`. Nothing else appears: no jargon, no reminders, no configuration.
+In chat, on Auto or any model: the request, a **Fast Tier** subagent card (hover shows the model; its line reads `Fast on Composer 2.5 · ~$0.02, saves ~$0.04`), the answer. Risky work shows a **Deep Tier** card and `Risky or complex change: routing to Deep (Claude Opus 5)`. The chat model writes no cost lines of its own. A model your plan refuses is skipped for a few hours and the task steps down a tier, with a one-line note; a model refused repeatedly is replaced. **Choose tier models** in the status menu picks which model runs each tier.
 
 ## Measured results (maintainer's account, Pro plan, 2026-09-02)
 
