@@ -14,6 +14,10 @@ function ToolRow({ tool, turnId, expanded, onToggle, canDecide }: { tool: ToolRo
   // canDecide is true only for the last edit of a file in the turn: one Keep/Undo per file, not per edit.
   const key = `${turnId}:${tool.id}`;
   const isEdit = Boolean(tool.diff && tool.path);
+  // Deep paths crowd out what matters: show "Edit chatRunner.test.js" and the directory dimmed after it.
+  const verb = tool.path && tool.label.endsWith(tool.path) ? tool.label.slice(0, tool.label.length - tool.path.length).trim() : null;
+  const base = tool.path ? tool.path.split("/").pop() : null;
+  const dir = tool.path && tool.path.includes("/") ? tool.path.slice(0, tool.path.lastIndexOf("/")) : null;
   const mark = tool.status === "started" ? <span className="spinner" aria-label="running" /> : tool.ok === false ? <span className="mark-fail">✗</span> : tool.ok === null ? <span className="muted" title="interrupted">–</span> : <span className="mark-ok">✓</span>;
   const hasBody = Boolean(tool.diff || tool.detail);
   return (
@@ -21,7 +25,14 @@ function ToolRow({ tool, turnId, expanded, onToggle, canDecide }: { tool: ToolRo
       <div className="tool-line">
         {mark}
         <span className="tool-label" title={tool.label}>
-          {tool.label}
+          {verb && base ? (
+            <>
+              {verb} {base}
+              {dir ? <span className="muted tool-dir"> {dir}</span> : null}
+            </>
+          ) : (
+            tool.label
+          )}
         </span>
         {tool.path ? (
           <a

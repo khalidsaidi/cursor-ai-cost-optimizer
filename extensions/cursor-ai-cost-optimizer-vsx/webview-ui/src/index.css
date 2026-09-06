@@ -432,3 +432,6 @@ pre.output {
 .decision { margin-left: 6px; font-size: 0.85em; }
 
 .error-detail { margin: 2px 0 4px 16px; color: var(--vscode-errorForeground); }
+
+.tool-dir { font-size: 0.85em; }
+.tool-label { flex: 1 1 auto; min-width: 0; }
