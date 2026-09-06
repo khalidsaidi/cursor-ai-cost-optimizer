@@ -412,6 +412,8 @@ export interface LastRun {
   where: "chat" | "subagent";
   tier: string | null;
   model: string;
+  /** "panel" when the cost-routed chat ran it, "hooks" when Cursor's chat did. */
+  source: "panel" | "hooks";
 }
 
 /**
@@ -428,15 +430,16 @@ export function readLastRun(workspace: string, stateDir?: string): LastRun | nul
   const lines = text.trim().split("\n").filter(Boolean);
   for (let i = lines.length - 1; i >= 0; i -= 1) {
     try {
-      const d = JSON.parse(lines[i]) as { ts?: string; final?: string; model?: string; chatModel?: string | null };
+      const d = JSON.parse(lines[i]) as { ts?: string; final?: string; model?: string; chatModel?: string | null; source?: string };
       if (!d.final) {
         continue;
       }
+      const source = d.source === "panel" ? "panel" : "hooks";
       if (d.final === "chat") {
-        return { ts: String(d.ts ?? ""), where: "chat", tier: null, model: String(d.chatModel || d.model || "") };
+        return { ts: String(d.ts ?? ""), where: "chat", tier: null, model: String(d.chatModel || d.model || ""), source };
       }
       const m = /(fast|balanced|deep)(?:-tier)?$/.exec(String(d.final));
-      return { ts: String(d.ts ?? ""), where: "subagent", tier: m ? m[1] : null, model: String(d.model ?? "") };
+      return { ts: String(d.ts ?? ""), where: "subagent", tier: m ? m[1] : null, model: String(d.model ?? ""), source };
     } catch {
       continue;
     }

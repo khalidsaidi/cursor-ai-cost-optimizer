@@ -222,7 +222,7 @@ export function activate(context: vscode.ExtensionContext) {
       return;
     }
     announcedDecisionTs = run.ts;
-    if (run.where !== "subagent" || Date.now() - Date.parse(run.ts) > 120_000 || !vscode.workspace.getConfiguration("costOptimizer").get<boolean>("showRoutingNotifications", true)) {
+    if (run.where !== "subagent" || run.source === "panel" || Date.now() - Date.parse(run.ts) > 120_000 || !vscode.workspace.getConfiguration("costOptimizer").get<boolean>("showRoutingNotifications", true)) {
       return;
     }
     const tierName = run.tier === "fast" ? vscode.l10n.t("Fast") : run.tier === "balanced" ? vscode.l10n.t("Balanced") : run.tier === "deep" ? vscode.l10n.t("Deep") : "";

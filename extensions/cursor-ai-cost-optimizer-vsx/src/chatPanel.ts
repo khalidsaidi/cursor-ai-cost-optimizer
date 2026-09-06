@@ -20,6 +20,7 @@ import {
   consolidateText,
   endParagraph,
   parseCliErrorLine,
+  parseCliStatus,
   parseStreamLine,
   priceTurn,
   relativeTo,
@@ -32,6 +33,7 @@ import {
 import { loadPricing, modelDisplayName, readTierModels, type PricingTable } from "./pricing";
 import { DEFAULT_CONFIG, TIERS, type Tier } from "./scorer";
 import { RepoPerTaskCheckpointService } from "./vendor/roo/services/checkpoints";
+import { workspaceStateDir } from "./userScope";
 
 interface ToolRow {
   id: string;
@@ -179,6 +181,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private availableModels: Set<string> | null = null;
   private checkpoints: { conversationId: string; service: RepoPerTaskCheckpointService } | null = null;
   private checkpointsBroken: string | null = null;
+  private setup: { cli: "checking" | "ok" | "missing" | "not_logged_in"; account: string | null; git: boolean } = { cli: "checking", account: null, git: true };
 
   constructor(private readonly context: vscode.ExtensionContext, private readonly deps: ChatDeps) {
     this.includeContext = vscode.workspace.getConfiguration("costOptimizer").get<boolean>("chat.includeActiveFile", true);
@@ -203,7 +206,25 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           }
           this.pushState();
           this.post({ type: "focus" });
+          void this.checkSetup();
           break;
+        case "recheck":
+          void this.checkSetup();
+          break;
+        case "setupInstall": {
+          // The official installer, run by the user in a terminal they can see (never silently).
+          const term = vscode.window.createTerminal({ name: "Cursor CLI" });
+          term.show();
+          term.sendText(process.platform === "win32" ? "irm https://cursor.com/install -useb | iex" : "curl https://cursor.com/install -fsS | bash", false);
+          break;
+        }
+        case "setupLogin": {
+          const term = vscode.window.createTerminal({ name: "Cursor CLI login" });
+          term.show();
+          const bin = findCursorAgent(vscode.workspace.getConfiguration("costOptimizer").get<string>("chat.cliPath", "")) ?? "cursor-agent";
+          term.sendText(`${bin.includes(" ") ? JSON.stringify(bin) : bin} login`, true);
+          break;
+        }
         case "send":
           void this.send(String(m.text ?? ""), (m.forced as Tier | "auto" | undefined) ?? "auto");
           break;
@@ -255,6 +276,34 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       return;
     }
     void vscode.commands.executeCommand("cco.chatView.focus");
+  }
+
+  // ---------- setup ----------
+
+  /** Is the CLI there and logged in, is git there: shown as a card in the panel until it is all in order. */
+  private async checkSetup(): Promise<void> {
+    const bin = findCursorAgent(vscode.workspace.getConfiguration("costOptimizer").get<string>("chat.cliPath", ""));
+    let git = true;
+    try {
+      execFileSync("git", ["--version"], { encoding: "utf8", timeout: 5000 });
+    } catch {
+      git = false;
+    }
+    if (!bin) {
+      this.setup = { cli: "missing", account: null, git };
+      this.pushState();
+      return;
+    }
+    this.setup = { cli: "checking", account: null, git };
+    this.pushState();
+    await new Promise<void>((resolve) => {
+      execFile(bin, ["status"], { timeout: 15_000, env: { ...process.env, CCO_DISABLED: "1" } }, (_err, stdout, stderr) => {
+        const status = parseCliStatus(`${stdout ?? ""}\n${stderr ?? ""}`);
+        this.setup = { cli: status.loggedIn ? "ok" : "not_logged_in", account: status.account, git };
+        this.pushState();
+        resolve();
+      });
+    });
   }
 
   // ---------- state ----------
@@ -536,6 +585,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           turn.atAutoRateUsd = cost.atAutoRateUsd;
           conversation.totalUsd += cost.usd ?? 0;
           conversation.totalAtAutoRateUsd += cost.atAutoRateUsd;
+          this.recordDecision(conversation, turn);
         }
         break;
       }
@@ -563,6 +613,21 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       this.child = null;
       this.persist();
       this.pushState();
+    }
+  }
+
+  /**
+   * One line in the same decisions log the hooks write, so the status bar shows one savings figure and names the
+   * panel's run as the last task. `chatEstimateUsd` is the same tokens at Auto's billed rate.
+   */
+  private recordDecision(conversation: Conversation, turn: Turn): void {
+    try {
+      const dir = this.deps.userScope() ? path.join(workspaceStateDir(this.deps.stateRoot, conversation.workspace), "state") : path.join(conversation.workspace, ".cursor", "cco", "state");
+      fs.mkdirSync(dir, { recursive: true });
+      const line = { ts: new Date().toISOString(), conversation_id: conversation.id, source: "panel", requested: "chat-panel", final: `${turn.model}-${turn.tier}`, model: turn.model, tier: turn.tier, rewritten: false, reason: "chat_panel", estimateUsd: turn.usd ?? null, chatEstimateUsd: turn.atAutoRateUsd ?? null, usage: turn.usage ?? null };
+      fs.appendFileSync(path.join(dir, "decisions.jsonl"), `${JSON.stringify(line)}\n`);
+    } catch (err) {
+      this.deps.output.appendLine(`[chat] could not record the decision: ${String((err as Error).message || err)}`);
     }
   }
 
@@ -643,7 +708,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
     c.updatedAt = new Date().toISOString();
     const rest = this.history().filter((h) => h.id !== c.id);
-    void this.context.globalState.update(HISTORY_KEY, [c, ...rest].slice(0, HISTORY_LIMIT));
+    const next = [c, ...rest].slice(0, HISTORY_LIMIT);
+    for (const dropped of rest.slice(HISTORY_LIMIT - 1)) {
+      this.removeCheckpointRepo(dropped.id);
+    }
+    void this.context.globalState.update(HISTORY_KEY, next);
   }
 
   private restoreLatest(): void {
@@ -676,8 +745,19 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     void this.context.globalState.update(HISTORY_KEY, this.history().filter((h) => h.id !== id));
     if (this.conversation?.id === id) {
       this.conversation = null;
+      this.checkpoints = null;
     }
+    this.removeCheckpointRepo(id);
     this.pushState();
+  }
+
+  /** A conversation's shadow repository holds a copy of the workspace's tracked files: it goes when the conversation does. */
+  private removeCheckpointRepo(id: string): void {
+    try {
+      fs.rmSync(path.join(this.context.globalStorageUri.fsPath, "tasks", id), { recursive: true, force: true });
+    } catch {
+      // best effort
+    }
   }
 
   // ---------- webview ----------
@@ -696,7 +776,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       running: Boolean(this.child),
       workspace: ws ? path.basename(ws) : "",
       conversationId: c?.id ?? null,
-      checkpointsAvailable: !this.checkpointsBroken && vscode.workspace.getConfiguration("costOptimizer").get<boolean>("chat.checkpoints", true),
+      setup: this.setup,
+      folders: (vscode.workspace.workspaceFolders ?? []).length,
+      checkpointsAvailable: !this.checkpointsBroken && this.setup.git && vscode.workspace.getConfiguration("costOptimizer").get<boolean>("chat.checkpoints", true),
+      checkpointsReason: !vscode.workspace.getConfiguration("costOptimizer").get<boolean>("chat.checkpoints", true) ? "off in Settings" : !this.setup.git ? "git is not installed" : this.checkpointsBroken,
       context: { include: this.includeContext, file: ctx?.file ?? null, selection: ctx?.selection ?? null },
       history: this.history()
         .filter((h) => h.workspace === ws)

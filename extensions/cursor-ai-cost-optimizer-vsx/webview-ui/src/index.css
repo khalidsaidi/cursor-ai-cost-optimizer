@@ -416,3 +416,6 @@ pre.output {
 .diff-view td { padding-top: 0; padding-bottom: 0; line-height: 1.45; }
 
 .confirm-row { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 0.9em; }
+
+.setup-card { margin: 10px 12px 0; padding: 8px 10px; border: 1px solid var(--vscode-notificationsWarningIcon-foreground, orange); border-radius: 6px; background: var(--vscode-textBlockQuote-background); line-height: 1.5; }
+.setup-card p { margin: 4px 0; }

@@ -288,3 +288,12 @@ export function parseCliErrorLine(line: string): { kind: "usage_limit" | "not_lo
   }
   return null;
 }
+
+/** `cursor-agent status` prints "✓ Logged in as <email>" or "Not logged in". */
+export function parseCliStatus(output: string): { loggedIn: boolean; account: string | null } {
+  const m = output.match(/Logged in as\s+(\S+)/i);
+  if (m) {
+    return { loggedIn: true, account: m[1] };
+  }
+  return { loggedIn: false, account: null };
+}

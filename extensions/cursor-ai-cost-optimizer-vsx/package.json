@@ -287,8 +287,19 @@
       {
         "id": "cco.gettingStarted",
         "title": "Get started with AI Cost Optimizer",
-        "description": "It is already on. Here is what you will see, and how to steer it.",
+        "description": "Two ways to spend less: a chat where every reply names the model that did the work, and guardrails inside Cursor's own chat.",
         "steps": [
+          {
+            "id": "cco.step.panel",
+            "title": "Chat with the model that fits the task",
+            "description": "Open the **AI Cost Chat** view (activity bar, or Ctrl+Shift+Alt+C). Each request is routed to the Fast, Balanced or Deep tier and runs on that tier's model through the Cursor CLI on your own account; the reply names the model, lists what it read, ran and changed, shows the diff, and prices the turn against Auto's rate. A checkpoint before every turn means **Restore** puts your files back.\n[Open the chat](command:cco.openChat)",
+            "media": {
+              "markdown": "media/walkthrough/step-chat.md"
+            },
+            "completionEvents": [
+              "onCommand:cco.openChat"
+            ]
+          },
           {
             "id": "cco.step.on",
             "title": "It is on. These are your tiers",
@@ -379,7 +390,14 @@
           "icon": "media/chat-icon.svg"
         }
       ]
-    }
+    },
+    "keybindings": [
+      {
+        "command": "cco.openChat",
+        "key": "ctrl+shift+alt+c",
+        "mac": "cmd+shift+alt+c"
+      }
+    ]
   },
   "scripts": {
     "sync:assets": "node ./scripts/sync-assets.mjs",

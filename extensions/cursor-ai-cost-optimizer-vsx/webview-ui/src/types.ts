@@ -54,6 +54,9 @@ export interface ChatState {
   running: boolean;
   workspace: string;
   conversationId: string | null;
+  setup: { cli: "checking" | "ok" | "missing" | "not_logged_in"; account: string | null; git: boolean };
+  folders: number;
+  checkpointsReason: string | null;
   context: { include: boolean; file: string | null; selection: string | null };
   history: HistoryEntry[];
   checkpointsAvailable: boolean;
@@ -83,6 +86,9 @@ export type WebviewMessage =
   | { type: "historyDelete"; id: string }
   | { type: "settings" }
   | { type: "models" }
+  | { type: "recheck" }
+  | { type: "setupInstall" }
+  | { type: "setupLogin" }
   | { type: "open"; path: string };
 
 declare global {

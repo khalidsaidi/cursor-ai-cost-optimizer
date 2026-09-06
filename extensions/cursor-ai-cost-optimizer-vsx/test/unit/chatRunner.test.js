@@ -133,3 +133,9 @@ test("chat runner: a recorded streamed run with a tool call in the middle render
   assert.equal((text.match(/I'll add/g) || []).length, 1, "the consolidated repeat is not shown twice");
   assert.equal((text.match(/Created/g) || []).length, 1);
 });
+
+test("chat runner: the CLI's login status line is read", () => {
+  const { parseCliStatus } = require("../../dist/chatRunner.js");
+  assert.deepEqual(parseCliStatus("✓ Logged in as someone@example.com\n"), { loggedIn: true, account: "someone@example.com" });
+  assert.deepEqual(parseCliStatus("Not logged in\n"), { loggedIn: false, account: null });
+});

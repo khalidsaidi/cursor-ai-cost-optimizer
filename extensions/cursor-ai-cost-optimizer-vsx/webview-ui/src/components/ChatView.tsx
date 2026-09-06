@@ -78,6 +78,34 @@ export default function ChatView({ state, notice, focusTick, onDismissNotice }: 
   return (
     <div className="chat">
       {state.turns.length ? <TaskHeader state={state} /> : null}
+      {state.setup.cli !== "ok" ? (
+        <div className="setup-card" role="status">
+          {state.setup.cli === "checking" ? (
+            <p>Checking the Cursor CLI…</p>
+          ) : state.setup.cli === "missing" ? (
+            <>
+              <p>
+                <strong>The Cursor CLI is not installed.</strong> This chat runs every request through it, on your own Cursor account.
+              </p>
+              <div className="row">
+                <button className="button" onClick={() => vscode.postMessage({ type: "setupInstall" })}>Install it in a terminal</button>
+                <button className="button secondary" onClick={() => vscode.postMessage({ type: "recheck" })}>I installed it, check again</button>
+              </div>
+              <p className="muted">If it is installed somewhere unusual, set its path in Settings (costOptimizer.chat.cliPath).</p>
+            </>
+          ) : (
+            <>
+              <p>
+                <strong>The Cursor CLI is not logged in.</strong> Log in once with your Cursor account; it opens the browser.
+              </p>
+              <div className="row">
+                <button className="button" onClick={() => vscode.postMessage({ type: "setupLogin" })}>Log in</button>
+                <button className="button secondary" onClick={() => vscode.postMessage({ type: "recheck" })}>Check again</button>
+              </div>
+            </>
+          )}
+        </div>
+      ) : null}
       <div className="list">
         {state.turns.length === 0 ? (
           <div className="empty">
@@ -85,7 +113,12 @@ export default function ChatView({ state, notice, focusTick, onDismissNotice }: 
               <strong>Every reply here names the model that produced it.</strong>
             </p>
             <p>Routine work goes to the Fast tier's model, medium work to Balanced, risky or complex work to Deep. Pick a tier below to force one.</p>
-            <p>Runs through the Cursor CLI on your own Cursor account, in {state.workspace || "this workspace"}. Edits land in your files; each turn can be undone from its checkpoint.</p>
+            <p>
+              Runs through the Cursor CLI on your own Cursor account{state.setup.account ? ` (${state.setup.account})` : ""}, in {state.workspace || "this workspace"}
+              {state.folders > 1 ? ", the first folder of this workspace" : ""}. Edits land in your files
+              {state.checkpointsAvailable ? "; each turn can be put back from its checkpoint." : state.checkpointsReason ? `; checkpoints are off (${state.checkpointsReason}), so use Source Control to undo.` : "."}
+            </p>
+            <p className="muted">Drag this view's icon to the right side bar to sit beside Cursor's chat. Shortcut: Ctrl+Shift+Alt+C.</p>
             {others.length ? (
               <p>
                 <a href="#" onClick={(e) => { e.preventDefault(); setShowHistory(true); }}>
