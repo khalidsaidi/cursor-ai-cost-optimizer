@@ -1,0 +1,24 @@
+{
+  "name": "cco-chat-webview",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "The cost-routed chat webview. Structure follows Cline and Roo Code (Apache-2.0): a React app, react-markdown with remark-gfm and rehype-highlight for replies, react-virtuoso for the message list, unified diffs parsed with `diff` and rendered like VS Code's diff editor. Bundled with the extension's esbuild (scripts/build-webview.mjs).",
+  "scripts": {
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "diff": "^8.0.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-markdown": "^9.0.1",
+    "react-textarea-autosize": "^8.5.4",
+    "react-virtuoso": "^4.12.3",
+    "rehype-highlight": "^7.0.1",
+    "remark-gfm": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1"
+  }
+}

@@ -116,6 +116,12 @@
         "title": "Emergency Stop",
         "category": "AI Cost Optimizer",
         "enablement": "cco.mode != 'none'"
+      },
+      {
+        "command": "cco.openChat",
+        "title": "Open cost-routed chat",
+        "category": "AI Cost Optimizer",
+        "icon": "$(comment-discussion)"
       }
     ],
     "menus": {
@@ -236,6 +242,23 @@
           "scope": "application",
           "order": 10,
           "markdownDescription": "When a task goes to a tier subagent, show a short notification naming the model that is doing it (`Composer 2.5 (Fast tier) is doing this task`). The chat's own model picker keeps showing the chat model, so this is where you see what actually ran; the status bar names it too."
+        },
+        "costOptimizer.chat.runCommands": {
+          "type": "string",
+          "enum": [
+            "auto-review",
+            "force",
+            "none"
+          ],
+          "enumDescriptions": [
+            "Safe commands (tests, builds, reads) run; the rest are declined and shown as not run.",
+            "Every command the model issues runs (the Cursor CLI's --force).",
+            "No commands run."
+          ],
+          "default": "auto-review",
+          "scope": "application",
+          "order": 20,
+          "markdownDescription": "Which shell commands the cost-routed chat may run. It runs through the Cursor CLI (`cursor-agent`) on your Cursor account."
         }
       }
     },
@@ -315,20 +338,40 @@
           }
         ]
       }
-    ]
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "cco",
+          "title": "AI Cost Chat",
+          "icon": "media/chat-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "cco": [
+        {
+          "type": "webview",
+          "id": "cco.chatView",
+          "name": "Cost-routed chat",
+          "contextualTitle": "AI Cost Chat",
+          "icon": "media/chat-icon.svg"
+        }
+      ]
+    }
   },
   "scripts": {
     "sync:assets": "node ./scripts/sync-assets.mjs",
-    "compile": "tsc -p .",
+    "compile": "tsc -p . && npx tsc -p webview-ui",
     "compile:binaries": "node ./scripts/compile-binaries.mjs --current-only",
     "compile:binaries:all": "node ./scripts/compile-binaries.mjs",
-    "package": "node ./scripts/package-extension.mjs",
+    "package": "npm run build:webview && node ./scripts/package-extension.mjs",
     "package:all": "node ./scripts/package-extension.mjs --all",
     "verify:vsix": "node ./scripts/verify-vsix.mjs",
     "package:universal": "node ./scripts/package-extension.mjs --no-binaries",
     "publish:openvsx": "node ./scripts/publish-openvsx.mjs",
     "test": "npm run test:unit && npm run test:integration",
-    "test:unit": "npm run compile && node --test test/unit/hooksLog.test.js test/unit/settings.test.js test/unit/binary.test.js test/unit/install.test.js test/unit/pricing.test.js test/unit/scorer.test.js test/unit/userScope.test.js test/unit/selfcheck.test.js",
+    "test:unit": "npm run compile && node --test test/unit/hooksLog.test.js test/unit/settings.test.js test/unit/binary.test.js test/unit/install.test.js test/unit/pricing.test.js test/unit/scorer.test.js test/unit/userScope.test.js test/unit/selfcheck.test.js test/unit/chatRunner.test.js",
     "test:integration": "npm run compile && xvfb-run -a node ./test/runTest.js",
     "test:cursor": "npm run compile && bash ./scripts/test-cursor.sh",
     "proof:ide-auth": "npm run compile && bash ./scripts/proof-ide-auth.sh",
@@ -336,7 +379,8 @@
     "proof:no-stone": "bash ./scripts/proof-no-stone-unturned.sh",
     "vscode:uninstall": "node ./scripts/uninstall.js",
     "lint": "eslint src",
-    "vscode:prepublish": "npm run lint && npm run compile"
+    "vscode:prepublish": "npm run lint && npm run compile",
+    "build:webview": "cd webview-ui && npm ci --no-audit --no-fund && cd .. && node ./scripts/build-webview.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

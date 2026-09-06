@@ -11,6 +11,7 @@ import { hooksLoadedInWindow } from "./hooksLog";
 import { doctorUser, installUser, pauseWorkspace, stripUserHooks, uninstallUser, userHookCommand, userStatus, workspacePaused, workspaceStateDir, findPluginCopies, retirePluginCopies, recordAgentsWrittenAfterOpen, generatedAgentNames } from "./userScope";
 import { runHookCommand } from "./selfcheck";
 import { decideTier, heuristicScores, overrideToken, parseOverride, DEFAULT_CONFIG } from "./scorer";
+import { ChatViewProvider } from "./chatPanel";
 
 const RUNTIME_REL = ".cursor/cco/runtime.json";
 const EXTENSION_ID = "khalidsaidi.cursor-ai-cost-optimizer";
@@ -323,6 +324,10 @@ export function activate(context: vscode.ExtensionContext) {
   }
   const ticker = setInterval(() => { try { refreshStatus(); } catch {} }, 30_000);
   context.subscriptions.push({ dispose: () => clearInterval(ticker) });
+  // The cost-routed chat: our own panel, so every reply is shown under the model that produced it.
+  const chat = new ChatViewProvider(context, { stateRoot, bundledPricing, userScope: () => userStatus(stateRoot).installed, output: log });
+  context.subscriptions.push(vscode.window.registerWebviewViewProvider(ChatViewProvider.viewId, chat, { webviewOptions: { retainContextWhenHidden: true } }));
+  context.subscriptions.push(vscode.commands.registerCommand("cco.openChat", () => chat.reveal()));
 
   // ---- doctor + self-check, deferred off activation and fully async (never blocks the extension host) ----
   const SELF_CHECK_KEY = "cco.selfCheckDisabledNotified";
@@ -725,6 +730,7 @@ export function activate(context: vscode.ExtensionContext) {
     const ws = firstWorkspace();
     const c = combined(ws);
     const items: Array<vscode.QuickPickItem & { run: () => unknown }> = [];
+    items.push({ label: `$(comment-discussion) ${vscode.l10n.t("Open cost-routed chat")}`, description: vscode.l10n.t("every reply names the model that produced it"), run: () => vscode.commands.executeCommand("cco.openChat") });
     if (pluginCopyHint && c.mode !== "none") {
       items.push({ label: vscode.l10n.t("$(extensions) Uninstall the Cursor plugin"), description: vscode.l10n.t("the extension replaces it; its subagents run on your chat model"), run: () => vscode.commands.executeCommand("aiSettings.action.open").then(undefined, () => flash(vscode.l10n.t("Cursor Settings → Plugins → AI Cost Optimizer → Uninstall"))) });
     }

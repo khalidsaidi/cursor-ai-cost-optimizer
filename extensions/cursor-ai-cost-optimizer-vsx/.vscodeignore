@@ -20,3 +20,4 @@ CONTRIBUTING.md
 .vscode-test-ext-*/
 .vscode-test-user-*/
 package.json.orig
+webview-ui/**
