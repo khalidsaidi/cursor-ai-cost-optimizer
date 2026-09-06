@@ -51,12 +51,13 @@ export default function ChatView({ state, notice, focusTick, onDismissNotice }: 
     setText("");
   }, [text, forced, state.running]);
 
-  const last = state.turns[state.turns.length - 1];
+  // A new turn scrolls into view; while it streams, Virtuoso's followOutput keeps the bottom only if the reader is
+  // already there (scrolling up to read must not be undone by the next delta).
   useEffect(() => {
     if (state.turns.length) {
       listRef.current?.scrollToIndex({ index: state.turns.length - 1, align: "end", behavior: "auto" });
     }
-  }, [state.turns.length, last?.tools.length, last?.text, last?.status]);
+  }, [state.turns.length]);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -118,7 +119,7 @@ export default function ChatView({ state, notice, focusTick, onDismissNotice }: 
               {state.folders > 1 ? ", the first folder of this workspace" : ""}. Edits land in your files
               {state.checkpointsAvailable ? "; each turn can be put back from its checkpoint." : state.checkpointsReason ? `; checkpoints are off (${state.checkpointsReason}), so use Source Control to undo.` : "."}
             </p>
-            <p className="muted">Drag this view's icon to the right side bar to sit beside Cursor's chat. Shortcut: Ctrl+Shift+Alt+C.</p>
+            <p className="muted">Drag this view's icon to the right side bar to sit beside Cursor's chat. Shortcut: Ctrl+Alt+C.</p>
             {others.length ? (
               <p>
                 <a href="#" onClick={(e) => { e.preventDefault(); setShowHistory(true); }}>

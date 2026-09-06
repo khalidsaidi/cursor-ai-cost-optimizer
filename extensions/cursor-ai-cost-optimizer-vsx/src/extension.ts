@@ -328,6 +328,12 @@ export function activate(context: vscode.ExtensionContext) {
   const chat = new ChatViewProvider(context, { stateRoot, bundledPricing, userScope: () => userStatus(stateRoot).installed, output: log });
   context.subscriptions.push(vscode.window.registerWebviewViewProvider(ChatViewProvider.viewId, chat, { webviewOptions: { retainContextWhenHidden: true } }));
   context.subscriptions.push(vscode.commands.registerCommand("cco.openChat", () => chat.reveal()));
+  // First activation after install: show the chat once, so it is found without hunting the activity bar's
+  // overflow menu (a narrow side bar hides new containers behind "…"; measured on a fresh profile).
+  if (!context.globalState.get<boolean>("cco.chat.revealedOnce")) {
+    void context.globalState.update("cco.chat.revealedOnce", true);
+    setTimeout(() => void vscode.commands.executeCommand("cco.chatView.focus"), 1500);
+  }
 
   // ---- doctor + self-check, deferred off activation and fully async (never blocks the extension host) ----
   const SELF_CHECK_KEY = "cco.selfCheckDisabledNotified";

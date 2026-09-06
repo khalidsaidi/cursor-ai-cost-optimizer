@@ -292,7 +292,7 @@
           {
             "id": "cco.step.panel",
             "title": "Chat with the model that fits the task",
-            "description": "Open the **AI Cost Chat** view (activity bar, or Ctrl+Shift+Alt+C). Each request is routed to the Fast, Balanced or Deep tier and runs on that tier's model through the Cursor CLI on your own account; the reply names the model, lists what it read, ran and changed, shows the diff, and prices the turn against Auto's rate. A checkpoint before every turn means **Restore** puts your files back.\n[Open the chat](command:cco.openChat)",
+            "description": "Open the **AI Cost Chat** view (activity bar, or Ctrl+Alt+C). Each request is routed to the Fast, Balanced or Deep tier and runs on that tier's model through the Cursor CLI on your own account; the reply names the model, lists what it read, ran and changed, shows the diff, and prices the turn against Auto's rate. A checkpoint before every turn means **Restore** puts your files back.\n[Open the chat](command:cco.openChat)",
             "media": {
               "markdown": "media/walkthrough/step-chat.md"
             },
@@ -394,8 +394,8 @@
     "keybindings": [
       {
         "command": "cco.openChat",
-        "key": "ctrl+shift+alt+c",
-        "mac": "cmd+shift+alt+c"
+        "key": "ctrl+alt+c",
+        "mac": "cmd+alt+c"
       }
     ]
   },

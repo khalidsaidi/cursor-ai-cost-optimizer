@@ -262,7 +262,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           if (m.path) {
             const ws = this.workspace();
             const abs = path.isAbsolute(m.path) ? m.path : path.join(ws ?? "", m.path);
-            void vscode.window.showTextDocument(vscode.Uri.file(abs), { preview: true });
+            vscode.window.showTextDocument(vscode.Uri.file(abs), { preview: true }).then(undefined, () => this.post({ type: "notice", text: vscode.l10n.t("{0} is not there any more (restored or deleted).", m.path as string) }));
           }
           break;
       }
@@ -463,6 +463,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     this.child = child;
     let stderr = "";
     let cliError: ReturnType<typeof parseCliErrorLine> = null;
+    let gotResult = false;
     let segment = "";
     child.stderr?.on("data", (b: Buffer) => {
       stderr += b.toString();
@@ -493,6 +494,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         segment = "";
         turn.text = endParagraph(turn.text);
       }
+      if (ev.kind === "result") {
+        gotResult = true;
+      }
       this.onEvent(conversation, turn, ev, pricing);
     });
     child.on("close", (code) => {
@@ -519,7 +523,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             return;
           }
         }
-        turn.status = code === 0 && !cliError ? "done" : "error";
+        // A completed run (result event, exit 0) is done even if the CLI printed a warning with "error" in it.
+        const fatal = cliError && (cliError.kind !== "error" || !gotResult);
+        turn.status = code === 0 && !fatal ? "done" : "error";
         if (turn.status === "error") {
           turn.error = cliError?.message || stderr.trim().split("\n").slice(-3).join("\n") || vscode.l10n.t("The Cursor CLI exited with code {0}.", String(code));
           if (cliError?.kind === "not_logged_in" || /not logged in|login|unauthorized|401/i.test(stderr)) {
@@ -601,6 +607,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       if (turn && turn.status === "running") {
         turn.status = "stopped";
         turn.thinking = false;
+        for (const t of turn.tools) {
+          if (t.status === "started") {
+            t.status = "completed";
+            t.ok = undefined; // interrupted: neither done nor failed
+          }
+        }
         if (turn.tools.some((t) => t.diff)) {
           turn.notes.push(vscode.l10n.t("Stopped. The edits made so far are in your files; Restore puts them back."));
         }

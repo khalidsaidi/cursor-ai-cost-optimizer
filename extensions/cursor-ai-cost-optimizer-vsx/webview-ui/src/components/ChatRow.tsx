@@ -12,7 +12,7 @@ const TIER_NAME: Record<string, string> = { fast: "Fast", balanced: "Balanced", 
 
 function ToolRow({ tool, turnId, expanded, onToggle }: { tool: ToolRowState; turnId: number; expanded: Record<string, boolean>; onToggle: (key: string) => void }) {
   const key = `${turnId}:${tool.id}`;
-  const mark = tool.status === "started" ? <span className="spinner" aria-label="running" /> : tool.ok === false ? <span className="mark-fail">✗</span> : <span className="mark-ok">✓</span>;
+  const mark = tool.status === "started" ? <span className="spinner" aria-label="running" /> : tool.ok === false ? <span className="mark-fail">✗</span> : tool.ok === null ? <span className="muted" title="interrupted">–</span> : <span className="mark-ok">✓</span>;
   const hasBody = Boolean(tool.diff || tool.detail);
   return (
     <div className={`tool-row${tool.ok === false ? " failed" : ""}`}>
