@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import ChatView from "./components/ChatView";
 import { vscode, type ChatState, type ExtensionMessage } from "./types";
 
-const EMPTY: ChatState = { type: "state", running: false, workspace: "", conversationId: null, setup: { cli: "checking", account: null, git: true }, folders: 1, checkpointsReason: null, context: { include: true, file: null, selection: null, attached: [] }, history: [], checkpointsAvailable: false, turns: [], totals: null };
+const EMPTY: ChatState = { type: "state", running: false, workspace: "", conversationId: null, setup: { cli: "checking", account: null, git: true }, folders: 1, checkpointsReason: null, context: { include: true, file: null, selection: null, attached: [] }, history: [], checkpointsAvailable: false, undoAvailable: true, turns: [], totals: null };
 
 export default function App() {
   const [state, setState] = useState<ChatState>(EMPTY);

@@ -24,11 +24,10 @@ export default function TaskHeader({ state }: { state: ChatState }) {
           {t.cacheReadTokens ? <span>→ {formatTokens(t.cacheReadTokens)}</span> : null}
         </span>
       ) : null}
-      <span className="metric">
+      <span className="metric" title={`This conversation cost ${formatUsd(t.usd)}. Auto would have billed ${formatUsd(t.atAutoRateUsd)} for the same work.`}>
         <span className="metric-label">Cost</span>
         <span className="cost">{formatUsd(t.usd)}</span>
-        <span className="muted">at Auto's rate {formatUsd(t.atAutoRateUsd)}</span>
-        {saved > 0.0005 ? <span className="saved">saved {formatUsd(saved)}</span> : null}
+        {saved > 0.0005 ? <span className="saved">saved {formatUsd(saved)} vs Auto</span> : <span className="muted">Auto: {formatUsd(t.atAutoRateUsd)}</span>}
       </span>
     </div>
   );

@@ -304,3 +304,67 @@ export function parseCliStatus(output: string): { loggedIn: boolean; account: st
   }
   return { loggedIn: false, account: null };
 }
+
+interface Hunk {
+  oldStart: number;
+  newStart: number;
+  lines: string[];
+}
+
+function parseHunks(diff: string): { newFile: boolean; hunks: Hunk[] } {
+  const hunks: Hunk[] = [];
+  let current: Hunk | null = null;
+  let newFile = false;
+  for (const line of diff.split("\n")) {
+    if (line.startsWith("--- ")) {
+      newFile = /^--- \/dev\/null/.test(line);
+      continue;
+    }
+    if (line.startsWith("+++ ")) {
+      continue;
+    }
+    const m = line.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+    if (m) {
+      current = { oldStart: Number(m[1]), newStart: Number(m[2]), lines: [] };
+      hunks.push(current);
+      continue;
+    }
+    if (current && (line.startsWith(" ") || line.startsWith("+") || line.startsWith("-"))) {
+      current.lines.push(line);
+    }
+  }
+  return { newFile, hunks };
+}
+
+/**
+ * Undo an edit without git: apply its unified diff backwards to the file's current text. Each hunk's "after" side
+ * (context and added lines) must still be at its place; it is replaced by the "before" side. Returns the restored
+ * text, `{ deleteFile: true }` for a diff that created the file, or null when the file has changed since.
+ * Used when checkpoints are unavailable (no git on the machine); otherwise the checkpoint is the undo.
+ */
+export function revertUnifiedDiff(currentText: string, diff: string): { text: string } | { deleteFile: true } | null {
+  const { newFile, hunks } = parseHunks(diff);
+  if (newFile) {
+    return { deleteFile: true };
+  }
+  if (!hunks.length) {
+    return null;
+  }
+  const eol = currentText.includes("\r\n") ? "\r\n" : "\n";
+  const fileLines = currentText.split(/\r?\n/);
+  for (const hunk of [...hunks].sort((a, b) => b.newStart - a.newStart)) {
+    const after = hunk.lines.filter((l) => !l.startsWith("-")).map((l) => l.slice(1));
+    const before = hunk.lines.filter((l) => !l.startsWith("+")).map((l) => l.slice(1));
+    let at = Math.max(0, hunk.newStart - 1);
+    const matches = (pos: number) => after.every((l, i) => fileLines[pos + i] === l);
+    if (!matches(at)) {
+      const found = [1, -1, 2, -2, 3, -3, 5, -5, 10, -10].map((d) => at + d).find((p) => p >= 0 && matches(p));
+      if (found === undefined) {
+        return null;
+      }
+      at = found;
+    }
+    fileLines.splice(at, after.length, ...before);
+  }
+  return { text: fileLines.join(eol) };
+}

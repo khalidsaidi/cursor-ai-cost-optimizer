@@ -125,7 +125,7 @@ export default function ChatView({ state, notice, focusTick, onDismissNotice }: 
             </p>
             <p className="muted small">
               Runs with the Cursor CLI on your account{state.setup.account ? ` (${state.setup.account})` : ""}, in the {state.workspace || "current"} folder. Changes are written to your files
-              {state.checkpointsAvailable ? "; every edited file gets Keep and Undo, and a whole turn can be undone." : state.checkpointsReason ? `. Undo needs git, which is not available (${state.checkpointsReason}), so use Source Control to revert.` : "."}
+              {state.checkpointsAvailable ? "; every edited file gets Keep and Undo, and a whole turn can be undone." : `; every edited file gets Keep and Undo (${state.checkpointsReason ? `without git, ${state.checkpointsReason}, by reversing the edit` : "by reversing the edit"}).`}
               {" "}Shortcut: Ctrl+Alt+C.
             </p>
             {others.length ? (

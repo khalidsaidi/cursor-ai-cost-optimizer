@@ -24,6 +24,7 @@ import {
   parseStreamLine,
   priceTurn,
   relativeTo,
+  revertUnifiedDiff,
   routePrompt,
   stickyRoute,
   stripOverrideTag,
@@ -219,6 +220,22 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     this.includeContext = vscode.workspace.getConfiguration("costOptimizer").get<boolean>("chat.includeActiveFile", true);
     context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(() => this.pushState()), vscode.window.onDidChangeTextEditorSelection(() => this.pushState()));
     void this.loadAvailableModels();
+    this.pruneCheckpointRepos();
+  }
+
+  /** Shadow repositories of conversations older than a week go: each holds a copy of the workspace's tracked files. */
+  private pruneCheckpointRepos(): void {
+    try {
+      const tasks = path.join(this.context.globalStorageUri.fsPath, "tasks");
+      const keep = new Set(this.history().filter((h) => Date.now() - Date.parse(h.updatedAt) < 7 * 24 * 3600 * 1000).map((h) => h.id));
+      for (const id of fs.readdirSync(tasks)) {
+        if (!keep.has(id)) {
+          fs.rmSync(path.join(tasks, id), { recursive: true, force: true });
+        }
+      }
+    } catch {
+      // no tasks directory yet
+    }
   }
 
   resolveWebviewView(view: vscode.WebviewView): void {
@@ -814,14 +831,16 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     const conversation = this.conversation;
     const turn = conversation?.turns.find((t) => t.id === turnId);
     const ws = this.workspace();
-    if (!conversation || !turn || !turn.checkpoint || !rel || !ws) {
+    if (!conversation || !turn || !rel || !ws) {
       return;
     }
-    const service = await this.checkpointService(conversation);
+    const service = turn.checkpoint ? await this.checkpointService(conversation) : null;
     if (!service) {
-      this.post({ type: "notice", text: vscode.l10n.t("Checkpoints are not available here ({0}). Use Source Control to revert {1}.", this.checkpointsBroken ?? "off", rel) });
+      // No git on this machine: apply the turn's diffs for this file backwards, latest first.
+      this.undoFileByDiff(turn, rel, ws);
       return;
     }
+    const checkpoint = turn.checkpoint as string;
     const gitDir = path.join(service.checkpointsDir, ".git");
     const env: Record<string, string> = {};
     for (const [k, v] of Object.entries(process.env)) {
@@ -834,9 +853,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         execFile("git", ["--git-dir", gitDir, "--work-tree", ws, ...args], { env, cwd: ws, timeout: 30_000 }, (err, stdout, stderr) => resolve({ ok: !err, out: `${stdout}${stderr}` }));
       });
     try {
-      const existed = await git(["cat-file", "-e", `${turn.checkpoint}:${rel}`]);
+      const existed = await git(["cat-file", "-e", `${checkpoint}:${rel}`]);
       if (existed.ok) {
-        const co = await git(["checkout", turn.checkpoint, "--", rel]);
+        const co = await git(["checkout", checkpoint, "--", rel]);
         if (!co.ok) {
           throw new Error(co.out.trim());
         }
@@ -849,21 +868,61 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
+  private undoFileByDiff(turn: Turn, rel: string, ws: string): boolean {
+    const edits = turn.tools.filter((t) => t.diff && t.path === rel);
+    const abs = path.join(ws, rel);
+    try {
+      let current = fs.existsSync(abs) ? fs.readFileSync(abs, "utf8") : "";
+      let deleted = false;
+      for (const edit of [...edits].reverse()) {
+        const result = revertUnifiedDiff(current, edit.diff as string);
+        if (!result) {
+          throw new Error(vscode.l10n.t("the file has changed since the edit"));
+        }
+        if ("deleteFile" in result) {
+          deleted = true;
+          current = "";
+        } else {
+          current = result.text;
+          deleted = false;
+        }
+      }
+      if (deleted) {
+        fs.rmSync(abs, { force: true });
+      } else {
+        fs.writeFileSync(abs, current);
+      }
+      this.decideFile(turn.id, rel, "undone");
+      return true;
+    } catch (err) {
+      this.post({ type: "notice", text: vscode.l10n.t("Could not undo {0}: {1}. Use Source Control to revert it.", rel, String((err as Error).message || err)) });
+      return false;
+    }
+  }
+
   /** Put the workspace back as it was before a turn ran: `git clean` + `git reset --hard` in the shadow repo. */
   private async restore(turnId: number): Promise<void> {
     const conversation = this.conversation;
     const turn = conversation?.turns.find((t) => t.id === turnId);
-    if (!conversation || !turn || !turn.checkpoint) {
+    const ws = this.workspace();
+    if (!conversation || !turn || !ws) {
       return;
     }
-    const service = await this.checkpointService(conversation);
+    const service = turn.checkpoint ? await this.checkpointService(conversation) : null;
     if (!service) {
-      this.post({ type: "notice", text: vscode.l10n.t("Checkpoints are not available here ({0}). Use Source Control to restore files.", this.checkpointsBroken ?? "off") });
+      // No git on this machine: undo every edited file of the turn by its diffs.
+      const files = [...new Set(turn.tools.filter((t) => t.diff && t.path && t.decision !== "undone").map((t) => t.path as string))];
+      const ok = files.map((rel) => this.undoFileByDiff(turn, rel, ws)).every(Boolean);
+      if (ok) {
+        turn.restored = true;
+        this.persist();
+        this.pushState();
+      }
       return;
     }
     // The confirmation is in the panel itself (two clicks, Cline's pattern): no native dialog to hunt for.
     try {
-      await service.restoreCheckpoint(turn.checkpoint);
+      await service.restoreCheckpoint(turn.checkpoint as string);
       turn.restored = true;
       for (const t of conversation.turns) {
         if (t.id > turn.id) {
@@ -951,6 +1010,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private pushState(): void {
     const c = this.conversation;
     const ws = this.workspace();
+    const lastTurn = c?.turns[c.turns.length - 1];
+    if (lastTurn && lastTurn.status !== "running") {
+      this.deps.output.appendLine(`[chat] state: running=${Boolean(this.child)} turns=${c?.turns.length} last={status:${lastTurn.status}, restored:${Boolean(lastTurn.restored)}, checkpoint:${lastTurn.checkpoint ? "yes" : "no"}, diffs:${lastTurn.tools.filter((t) => t.diff && t.path).length}}`);
+    }
     const sum = (k: keyof Usage) => (c?.turns ?? []).reduce((acc, t) => acc + (t.usage?.[k] ?? 0), 0);
     const ctx = ws ? this.activeContext(ws) : null;
     this.post({
@@ -962,6 +1025,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       folders: (vscode.workspace.workspaceFolders ?? []).length,
       checkpointsAvailable: !this.checkpointsBroken && this.setup.git && vscode.workspace.getConfiguration("costOptimizer").get<boolean>("chat.checkpoints", true),
       checkpointsReason: !vscode.workspace.getConfiguration("costOptimizer").get<boolean>("chat.checkpoints", true) ? "off in Settings" : !this.setup.git ? "git is not installed" : this.checkpointsBroken,
+      undoAvailable: true,
       context: { include: this.includeContext, file: ctx?.file ?? null, selection: ctx?.selection ?? null, attached: this.attached },
       history: this.history()
         .filter((h) => h.workspace === ws)

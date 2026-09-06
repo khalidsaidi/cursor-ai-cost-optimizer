@@ -147,3 +147,13 @@ test("chat runner: Windows paths from the CLI are shown relative to the workspac
   assert.equal(relativeTo("/home/k/ws/units.mjs", "/home/k/ws"), "units.mjs");
   assert.equal(relativeTo("/other/place/deep/file.js", "/home/k/ws"), "deep/file.js");
 });
+
+test("chat runner: an edit is undone without git by applying its diff backwards", () => {
+  const { revertUnifiedDiff } = require("../../dist/chatRunner.js");
+  const before = "export function add(a, b) { return a + b; }\nexport function mul(a, b) { return a * b; }\n";
+  const after = "export function add(a, b) { return a + b; }\nexport function mul(a, b) { return a * b; }\nexport function sub(a, b) { return a - b; }\n";
+  const diff = "--- a/calc.mjs\n+++ b/calc.mjs\n@@ -1,2 +1,3 @@\n export function add(a, b) { return a + b; }\n export function mul(a, b) { return a * b; }\n+export function sub(a, b) { return a - b; }\n";
+  assert.deepEqual(revertUnifiedDiff(after, diff), { text: before });
+  assert.deepEqual(revertUnifiedDiff("anything", "--- /dev/null\n+++ b/new.mjs\n@@ -0,0 +1,1 @@\n+export const x = 1;\n"), { deleteFile: true });
+  assert.equal(revertUnifiedDiff("changed since\n", diff), null, "a file that no longer matches is left alone");
+});

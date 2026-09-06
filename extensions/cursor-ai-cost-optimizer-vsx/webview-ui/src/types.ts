@@ -62,6 +62,8 @@ export interface ChatState {
   context: { include: boolean; file: string | null; selection: string | null; attached: string[] };
   history: HistoryEntry[];
   checkpointsAvailable: boolean;
+  /** Undo works either from the checkpoint (git) or by reversing the edit's diff. */
+  undoAvailable: boolean;
   turns: TurnState[];
   totals: { usd: number; atAutoRateUsd: number; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; turns: number } | null;
 }

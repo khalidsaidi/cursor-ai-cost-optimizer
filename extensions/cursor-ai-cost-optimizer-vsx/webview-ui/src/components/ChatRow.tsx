@@ -3,7 +3,7 @@
  * "api request" row, with the cost on it), the tool calls as Cline's CodeAccordian (edits with Roo Code's diff
  * view, commands with their output), and the reply as Markdown.
  */
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import CodeAccordian from "@/components/common/CodeAccordian";
 import { formatTokens, formatUsd, vscode, type ToolRowState, type TurnState } from "../types";
 import MarkdownBlock from "./MarkdownBlock";
@@ -88,6 +88,13 @@ export default function ChatRow({ turn, expanded, onToggle, checkpointsAvailable
   const edited = turn.tools.some((t) => t.diff);
   const editedFiles = new Set(turn.tools.filter((t) => t.diff && t.path).map((t) => t.path)).size;
   const [confirmRestore, setConfirmRestore] = useState(false);
+  const confirmRef = useRef<HTMLSpanElement>(null);
+  // The confirm row grows the last turn past the bottom of the list: bring its buttons into view.
+  useEffect(() => {
+    if (confirmRestore) {
+      confirmRef.current?.scrollIntoView({ block: "nearest" });
+    }
+  }, [confirmRestore]);
   const lastEditFor = new Map<string, string>();
   for (const t of turn.tools) {
     if (t.diff && t.path) {
@@ -102,13 +109,13 @@ export default function ChatRow({ turn, expanded, onToggle, checkpointsAvailable
       </div>
       <div className="model-row">
         {running ? <span className="spinner" aria-label="running" /> : null}
-        <span className="model-name">{turn.modelLabel}</span>
-        <span className="tier-badge">{TIER_NAME[turn.tier] ?? turn.tier}</span>
+        <span className="model-name" title="The model that did this work">{turn.modelLabel}</span>
+        <span className="tier-badge" title="The tier it was routed to">{TIER_NAME[turn.tier] ?? turn.tier} tier</span>
         {turn.usd !== null ? (
-          <span className="turn-cost" title={u ? `↑ ${formatTokens(u.inputTokens)} ↓ ${formatTokens(u.outputTokens)} cache → ${formatTokens(u.cacheReadTokens)}` : undefined}>
-            {formatUsd(turn.usd)}
-            {turn.atAutoRateUsd !== null ? <span className="muted"> · at Auto's rate {formatUsd(turn.atAutoRateUsd)}</span> : null}
-            {turn.seconds ? <span className="muted"> · {turn.seconds}s</span> : null}
+          <span className="turn-cost" title={`This turn cost ${formatUsd(turn.usd)} on ${turn.modelLabel}${turn.atAutoRateUsd !== null ? `. Auto bills ${formatUsd(turn.atAutoRateUsd)} for the same amount of work` : ""}.${u ? ` Tokens: ${formatTokens(u.inputTokens)} in, ${formatTokens(u.outputTokens)} out, ${formatTokens(u.cacheReadTokens)} read from cache.` : ""}`}>
+            cost {formatUsd(turn.usd)}
+            {turn.atAutoRateUsd !== null && turn.atAutoRateUsd > (turn.usd ?? 0) + 0.0005 ? <span className="saved"> · saved {formatUsd(turn.atAutoRateUsd - (turn.usd ?? 0))} vs Auto</span> : null}
+            {turn.seconds ? <span className="muted"> · {turn.seconds} s</span> : null}
           </span>
         ) : null}
         {turn.status === "stopped" ? <span className="muted">stopped</span> : null}
@@ -122,7 +129,7 @@ export default function ChatRow({ turn, expanded, onToggle, checkpointsAvailable
       {turn.tools.length ? (
         <div className="tools">
           {turn.tools.map((tool) => (
-            <ToolRow key={tool.id} tool={tool} turnId={turn.id} expanded={expanded} onToggle={onToggle} canDecide={!running && Boolean(turn.checkpoint) && checkpointsAvailable && !turn.restored && lastEditFor.get(tool.path ?? "") === tool.id} />
+            <ToolRow key={tool.id} tool={tool} turnId={turn.id} expanded={expanded} onToggle={onToggle} canDecide={!running && !turn.restored && lastEditFor.get(tool.path ?? "") === tool.id} />
           ))}
         </div>
       ) : null}
@@ -132,15 +139,19 @@ export default function ChatRow({ turn, expanded, onToggle, checkpointsAvailable
         </div>
       ) : null}
       {turn.error ? <div className="error">{turn.error}</div> : null}
-      {!running && edited && turn.checkpoint && checkpointsAvailable ? (
+      {!running && edited ? (
         <div className="turn-actions">
           {turn.restored ? (
             <span className="muted">Files restored to how they were before this turn.</span>
           ) : confirmRestore ? (
-            <span className="confirm-row">
-              <span>Put {editedFiles} {editedFiles === 1 ? "file" : "files"} back as before this turn? Everything changed in the workspace since then is undone, your own edits included.</span>
+            <span className="confirm-row" ref={confirmRef}>
+              <span>
+                {turn.checkpoint && checkpointsAvailable
+                  ? `Put ${editedFiles} ${editedFiles === 1 ? "file" : "files"} back as before this turn? Everything changed in the workspace since then is undone, your own edits included.`
+                  : `Undo this turn's edits to ${editedFiles} ${editedFiles === 1 ? "file" : "files"}? Each edit is reversed; a file you changed since may not undo cleanly.`}
+              </span>
               <button className="button small" onClick={() => { setConfirmRestore(false); vscode.postMessage({ type: "restore", turnId: turn.id }); }}>
-                Restore
+                {turn.checkpoint && checkpointsAvailable ? "Restore" : "Undo"}
               </button>
               <button className="button secondary small" onClick={() => setConfirmRestore(false)}>
                 Cancel
