@@ -35,12 +35,20 @@ coverage/
 __pycache__/
 *.py[cod]
 
-# AI agent artifacts (keep README only)
+# AI agent artifacts at any depth (keep README only)
 .ai/*
 !.ai/README.md
+**/.ai/*
+!**/.ai/README.md
 
 # Local Cursor workspace data
 .cursor/
 
 # Local source image (logo is embedded in logo.svg)
 plugins/cursor-ai-cost-optimizer/assets/logo.png
+
+# Packaged extensions
+*.vsix
+
+# VS Code extension test downloads
+.vscode-test/

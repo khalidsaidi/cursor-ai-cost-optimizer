@@ -1,144 +1,109 @@
-# AI Cost Optimizer (Cursor Plugin)
+# AI Cost Optimizer
 
-Spend less on Cursor usage without forcing your team into manual model micromanagement.
+Routes each Cursor request to the cheapest tier that can do it well, runs that tier on a model chosen for quality first, and enforces the routing with hooks. Keep whatever chat model you like, including Auto.
 
-AI Cost Optimizer auto-selects the cheapest sufficient model+tier for each request, then enforces safety guardrails for high-risk work.
+## Installation
 
-What you get:
-- Lower spend on routine and medium-risk tasks
-- Faster average response times
-- Safety-first behavior for critical-risk requests
-
-- **FAST**: short answers, minimal tool use
-- **BALANCED**: normal workflow
-- **DEEP**: thorough + verification for risky/complex tasks
-
-## Proven in real Cursor runs
-Latest benchmark (February 21, 2026) with real `cursor-agent` calls, isolated chaos workspace, 24 paired runs:
-
-- **78.89% lower estimated cost** (`$0.194389` -> `$0.041031`)
-- **~62% lower average API latency** (`14379.7ms` -> `5466.8ms`)
-- **Quality pass rate preserved** (`75.00%` baseline vs `75.00%` joint)
-- **Quality not worse in 95.83% of paired cases**
-
-![Real Benchmark Dashboard](assets/benchmark-dashboard.svg)
-![Savings by Scenario Group](assets/benchmark-scenario-map.svg)
-![Top 10 Scenario Savings](assets/benchmark-top10-savings.svg)
-
-```mermaid
-pie showData
-  title Estimated Cost Split (Latest Real Benchmark)
-  "Baseline ($0.194389)" : 0.194389
-  "Joint ($0.041031)" : 0.041031
+```
+/add-plugin cursor-ai-cost-optimizer
 ```
 
-Reproduce it:
+Then, in a project, run `/cco-init` once. It takes a few seconds, writes only inside the project's `.cursor/` folder (see below), and maps tiers from your account's model list (or the bundled catalogue if the Cursor CLI is not installed). Start a new chat afterwards. Projects you did not enable are left completely alone: no files, no messages in the chat, no hooks.
 
-```bash
-node plugins/cursor-ai-cost-optimizer/scripts/cco-joint-chaos-real.mjs --workspace . --repeats 2
-```
+## How it works
 
-Report files:
-- `.ai/cco/joint-chaos-real-report.md`
-- `.ai/cco/joint-chaos-real-report.json`
+| Tier | Typical work | Default model (first available on your account) |
+|---|---|---|
+| FAST | quick answers, small edits, lookups | Composer 2.5 |
+| BALANCED | features, bug fixes | Claude Sonnet 5 thinking |
+| DEEP | risky, complex, multi-file, security, data | Claude Opus 5 thinking |
 
-Quick comparison table:
-
-| Metric | Baseline | Joint | Improvement |
-|---|---:|---:|---:|
-| Estimated cost | $0.194389 | $0.041031 | **-78.89%** |
-| Avg `duration_api_ms` | 14379.7 | 5466.8 | **-61.98%** |
-| Quality pass rate | 75.00% | 75.00% | **Preserved** |
-| Paired quality-not-worse | - | 95.83% | **Strong stability** |
-
-## How to use
-- Default behavior: routing happens automatically via the `cco-routing` rule.
-- Manual overrides: add one token anywhere in your prompt:
-  - `[cco:fast]`, `[cco:balanced]`, `[cco:deep]`, `[cco:auto]`
+- The routing rule scores each request (complexity, risk, breadth, uncertainty, latency), picks a tier, and delegates to the matching `cco-*` subagent, which runs on its own model. One-sentence answers are given directly.
+- Hooks keep it honest without getting in your way: every delegation is validated (risk ≥ 7 never runs FAST, risk ≥ 9 always runs DEEP, `[cco:*]` overrides win, mis-routed delegations are rewritten invisibly, decisions are logged). When the chat model starts doing work that should be routed, or re-verifies work a subagent already did, the hook attaches one line of advice to that tool call and lets it through; nothing is blocked by default. `"enforcement": {"mode": "strict"}` turns the advice into a refusal for teams that want it enforced. A tier that is not cheaper than the chat model stays in the chat; simple questions and tiny edits are done directly.
+- Research is always cheap: a read-only `fast-research` subagent on the FAST model does codebase exploration for any tier, and after a small read budget the hooks send a strong chat model's research there too, so a deep task keeps its judgment on the strong model without paying it to read the codebase. Independent subtasks are delegated in parallel.
+- Every work delegation carries the project's acceptance test command; in the IDE a hook runs it after FAST/BALANCED edits (no model tokens) and reports `CCO-VERIFY: pass|fail`. FAST and BALANCED subagents stop early with `CCO-ESCALATE: <tier>` when a task exceeds their tier; on either signal the chat delegates once to the next tier. Per-tier failure rates learned from outcomes escalate a tier that keeps failing.
+- Tiny one-file edits (a typo, a rename, a comment) and simple questions are done right in the chat; a subagent round trip is not worth it for those.
+- Every task ends with a fixed footer in the style of Copilot's model line: `[cco: FAST → composer-2.5 • 0.1x of chat model • est. ~$0.03]` for routed work, or `[cco: DEEP in chat → claude-opus-5-thinking-high • 1x]` when the work rightly stays on your chat model. The routing notice above it reads `CCO: FAST tier → composer-2.5 · est. ~$0.03 instead of ~$0.31 · about 10× cheaper per token than claude-opus-5-thinking-high`. `/cco-report` totals the estimated savings per project.
+- Optional per-chat budget (`budget.sessionUsd` in `.cursor/cco.json`): a warning at 80%, and with `budget.enforce` routing is forced to FAST beyond 2× the budget unless you override.
 
 ## Components
-- Rule: `rules/cco-routing.mdc`
-- Skills: `skills/cco-init/SKILL.md`, `skills/cco-model-config/SKILL.md`, `skills/cco-report/SKILL.md`
-- Agents: `agents/cco-router.md`, `agents/cco-fast.md`, `agents/cco-balanced.md`, `agents/cco-deep.md`, `agents/cco-verifier.md`
-- Commands: `commands/cco.md`, `commands/cco-models.md`, `commands/cco-benchmark.md`
-- Hooks: `hooks/hooks.json`
 
-## Setup (recommended)
-Run the skill **cco-init** in a workspace to create:
-- `.cursor/cco.json` (tuning)
-- `.cursor/cco-runtime.json` (real Cursor model mapping discovered at runtime)
-- `.cursor/cco-pricing.json` (official pricing cache refreshed on session start)
-- `.ai/cco/` (telemetry)
+| Type | Name | Purpose |
+|---|---|---|
+| Rule | `cco-routing` | routing protocol (always applied) |
+| Agents | `fast-tier`, `balanced-tier`, `deep-tier`, `tier-verifier`, `fast-research` | tier subagents, a read-only verifier, and a read-only explorer; `/cco-init` writes copies with real models into `.cursor/agents/` |
+| Skills | `cco-init`, `cco-model-config`, `cco-report` | setup (user-invoked), model mapping, decision report |
+| Commands | `/cco`, `/cco-init`, `/cco-models`, `/cco-report`, `/cco-doctor`, `/cco-off`, `/cco-on`, `/cco-uninstall`, `/cco-benchmark` | help, model choice, report with estimated savings, health check, off/on per project, real benchmark (asks first; costs usage) |
+| Hooks | `workspaceOpen`, `sessionStart`, `beforeSubmitPrompt`, `preToolUse`, `postToolUse`, `subagentStop`, `beforeShellExecution`, `sessionEnd` | discovery refresh, routing enforcement, learning, logging |
 
-## Friendly model setup
-Use `/cco-models` in Cursor:
-1) Adaptive (recommended for most users)
-2) Fixed models
-3) Manual (advanced)
+## Configuration (`.cursor/cco.json`)
 
-It updates `.cursor/cco.json`, reruns discovery, and shows final mapping.
-
-What these mean:
-- Adaptive: best default for marketplace users; no manual model picking.
-- Fixed models: keep the current working model choices fixed until changed.
-- Manual: pick exact model IDs per mode (`fast`, `balanced`, `deep`).
-
-Advanced users can edit `.cursor/cco.json` directly:
 ```json
 {
-  "modelOverrides": {
-    "fast": "",
-    "balanced": "",
-    "deep": ""
-  },
-  "modelOverridePolicy": "best_effort"
+  "enabled": true,
+  "modelOverrides": { "fast": "", "balanced": "", "deep": "" },
+  "modelOverridePolicy": "best_effort",
+  "pricing": { "plan": "pro" },
+  "thresholds": { "fastMax": 3.4, "balancedMax": 6.4 },
+  "guardrails": { "riskNoFast": 7, "riskForceDeep": 9 },
+  "enforcement": { "mode": "advise", "requireDelegation": "auto", "minSavingsFactor": 1.3, "relayOnly": true, "maxDenialsPerConversation": 2 },
+  "shellGuard": { "enabled": false },
+  "budget": { "sessionUsd": 0, "warnAtFraction": 0.8, "enforce": false }
 }
 ```
 
-## Real behavior test
-Run the real Cursor E2E test (discovery + router checks):
+- `enforcement.mode`: `advise` (default: advice is attached to tool calls, nothing is blocked) or `strict` (the advice becomes a refusal, with an escape hatch after `maxDenialsPerConversation`).
+- `enforcement.requireDelegation`: `auto` (router mode when the chat model costs ≥ `minSavingsFactor`× the FAST tier; otherwise only high-risk work is redirected), `always`, or `never`. `relayOnly: false` lets the chat model keep using tools after a delegation.
+- `discovery.tierPreferences` (see `config/defaults.json`): ordered regex lists per tier; the first available, runnable match wins, price breaks ties.
+- `pricing.plan`: `teams`/`enterprise` adds the $0.25/M Cursor Token Rate for third-party models to estimates.
+- `shellGuard.enabled`: opt-in blocker for a short list of destructive shell commands (its `beforeShellExecution` hook is only registered when this is on; re-run setup after changing it).
+- Overrides per request: `[cco:fast]`, `[cco:balanced]`, `[cco:deep]`, `[cco:auto]`, `[cco:off]`.
+
+## User scope (nothing in any repo)
+
+`cco-init --scope user --state-root <dir>` registers CCO in Cursor's user-level config instead of a project: CCO entries in `~/.cursor/hooks.json`, `~/.cursor/agents/cco-*.md`, and a private state root with the runtime plugin (rule, commands, skills) that the `workspaceOpen` hook hands to Cursor per workspace. This is what the VS Code extension's "Everywhere" setup uses. In the Cursor CLI, project scope is the one to use (the CLI does not load user-level subagents).
+
+## What CCO writes on your machine
+
+Only inside the project where you ran `/cco-init`:
+
+| Path | What |
+|---|---|
+| `.cursor/hooks.json`, `.cursor/cco-hook.mjs` | CCO's hook entries (merged with yours; the IDE reads project hooks) and the small shim they run; commit both together, the shim is a no-op for teammates without the plugin |
+| `.cursor/agents/cco-*.md` | five subagent files with the mapped `model:` (generated marker; your own files are never overwritten) |
+| `.cursor/cco.json` | settings; created only when you change one (`/cco-models`, `/cco-off`) |
+| `.cursor/cco/` | model mapping, price cache, decision and hook logs (scores only, never prompt text); ignores itself in git |
+
+Nothing is written outside the project. Remove everything with `/cco-uninstall`, or turn it off with `/cco-off`. If you remove the plugin from Cursor without uninstalling per project, the leftover shim removes its own hook entries and itself the first time it runs, so nothing lingers.
+
+## Network access and data
+
+CCO sends no telemetry. It makes exactly two kinds of network calls, both through your own account and configuration:
+
+| Call | When | What is sent |
+|---|---|---|
+| `GET https://cursor.com/docs/models-and-pricing.md` | setup, then at most daily | nothing (public page fetch) |
+| `cursor-agent models` | setup, daily refresh of the model list | nothing (lists models) |
+| probe requests ("Reply with exactly this text"), one per candidate model | only with `/cco-init --probe` or `/cco-models` | the probe prompt; billed like any request |
+
+Local data: `.cursor/cco/state/decisions.jsonl` and `hooks.jsonl` hold routing scores, tool names, model ids and cost estimates, never prompt text or file contents; delete the folder at any time. Subagent sessions started by CCO are ordinary Cursor requests under your account and appear in Cursor's own usage dashboard.
+
+Requirements: Node.js 18+ on PATH (hooks run `node`). The Cursor CLI (`cursor-agent`) is optional: with it, tiers are mapped from your account's real model list; without it, from the bundled catalogue. In the interactive CLI, add `node` (and your test runner) to the command allowlist or run with `--force`, otherwise each subagent command asks for approval. The Open VSX extension in this repository ships a self-contained hook binary per platform for machines without Node.
+
+## Pricing data
+
+Per-model rates are parsed from `https://cursor.com/docs/models-and-pricing.md` (input, cache write, cache read, output; fast variants priced 2×). A snapshot ships in `config/pricing.json` and is refreshed daily.
+
+## Verification
+
 ```bash
-node plugins/cursor-ai-cost-optimizer/scripts/cco-e2e-real.mjs --workspace .
-```
-This writes:
-- `.ai/cco/e2e-real-report.md`
-- `.ai/cco/e2e-real-report.json`
-
-## Notes on model selection
-FAST/BALANCED/DEEP are CCO routing labels, not native Cursor model tiers.
-`cco-init` runs `scripts/cco-discover-models.mjs` to detect models available to the current user/session and map each tier to a real model ID in `.cursor/cco-runtime.json`.
-If a preferred model is unavailable, routing falls back to `auto` while preserving effort budgets.
-When account limits reduce runnable options, `.cursor/cco-runtime.json` marks `health.degraded: true` and tiers may share the same runnable model.
-
-## Pricing refresh
-- Hook: `hooks/hooks.json` -> `sessionStart` runs `scripts/cco-session-start.mjs`
-- Source: `https://cursor.com/docs/account/pricing`
-- Cache file: `.cursor/cco-pricing.json`
-- Default policy: refresh at most once every 24 hours (configurable in `.cursor/cco.json` under `pricing.refreshHours`)
-- Routing can use `costHeuristics` from `.cursor/cco.json` for boundary tie-breaks (field weights + tier multipliers).
-
-## Joint scorer (simple)
-CCO can evaluate model + tier together using one loss:
-
-`TotalLoss = wc*C_hat + wq*R_hat + wl*L_hat`
-
-- `C_hat`: cost estimate (pricing prior + runtime field proxy)
-- `R_hat`: risk/quality estimate (fuzzy task signals + historical failures/rework)
-- `L_hat`: latency estimate
-
-For high-risk tasks, CCO applies a strict safety threshold on `R_hat` before cost optimization.
-For critical risk (`risk >= 9`), CCO forces DEEP unless the user explicitly overrides.
-
-### Real benchmark
-Run the isolated chaos benchmark (real Cursor calls, no mocked model execution):
-
-```bash
-node plugins/cursor-ai-cost-optimizer/scripts/cco-joint-chaos-real.mjs --workspace . --repeats 2
+node --test test/                                            # unit tests, no network
+node scripts/cco-e2e-real.mjs --workspace .                  # real Cursor calls in temporary workspaces
+node scripts/cco-benchmark.mjs --workspace . --repeats 1     # real usage-priced benchmark
 ```
 
-Outputs:
-- `.ai/cco/joint-chaos-real-report.json`
-- `.ai/cco/joint-chaos-real-report.md`
+Measured results and platform findings are in the repository README.
 
-Note:
-- Cost is estimated from official Cursor pricing rates plus runtime field proxies, because per-run billed cost is not exposed in CLI output.
+## License
+
+MIT

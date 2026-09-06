@@ -1,0 +1,51 @@
+name: Live Cursor on macOS
+
+# Real Cursor (CLI) on a real macOS runner: the plugin's usage-priced end-to-end suite plus the user-scope
+# hook path. Needs a Cursor API key in the CURSOR_API_KEY repository secret; costs a few cents of usage.
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [labeled]
+
+jobs:
+  live:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.label.name == 'live-macos' }}
+    runs-on: macos-latest
+    timeout-minutes: 40
+    env:
+      CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Require the API key
+        run: test -n "$CURSOR_API_KEY" || { echo "CURSOR_API_KEY secret is not set"; exit 1; }
+      - name: Install the Cursor CLI
+        run: |
+          curl -fsS https://cursor.com/install | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: "CLI answers (auth works)"
+        run: cursor-agent --version && cursor-agent --trust --mode ask -p "reply with the single word ok" --output-format text | tail -2
+      - name: Plugin unit tests on macOS
+        run: node --test plugins/cursor-ai-cost-optimizer/test/*.test.mjs
+      - name: Real end-to-end routing suite (project scope)
+        run: node plugins/cursor-ai-cost-optimizer/scripts/cco-e2e-real.mjs --workspace "$PWD"
+      - name: "User scope on macOS: ~/.cursor hooks and agents, a CLI session fires the hooks, nothing in the repo"
+        run: |
+          set -euo pipefail
+          root="$HOME/Library/Application Support/cco-live/cco"
+          ws="$(mktemp -d)"
+          echo '{"name":"live","version":"1.0.0"}' > "$ws/package.json"
+          node plugins/cursor-ai-cost-optimizer/scripts/cco-init.mjs --workspace "$ws" --scope user --state-root "$root" --json | head -20
+          test ! -e "$ws/.cursor"
+          test -f "$HOME/.cursor/hooks.json" && test -f "$HOME/.cursor/agents/fast-tier.md"
+          cd "$ws"
+          cursor-agent --trust -f -p "Read package.json and tell me the package name and version, then create notes.txt containing the word hello." --output-format text | tail -5
+          test -f notes.txt
+          echo "--- hook events recorded under the private state root:"
+          cat "$root"/workspaces/*/state/hooks.jsonl | grep -o '"event":"[a-zA-Z:]*"' | sort | uniq -c
+          test ! -e "$ws/.cursor"
+      - name: Report
+        if: always()
+        run: cat .ai/cco/e2e-real-report.md 2>/dev/null || true
