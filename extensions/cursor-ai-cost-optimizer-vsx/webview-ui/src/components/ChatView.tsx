@@ -117,7 +117,7 @@ export default function ChatView({ state, notice, focusTick, onDismissNotice }: 
             <p>It reads and searches this project itself, like Cursor's chat. Attach a file or type @ only to point it somewhere specific.</p>
             <p className="examples">
               Try:
-              {["Add input validation to the functions in this file", "Write tests for the add function", "Explain what this project does"].map((ex) => (
+              {[state.context.file ? `Add input validation to the functions in ${state.context.file}` : "Add input validation to the exported functions", "Write tests for the functions that have none", "Explain what this project does"].map((ex) => (
                 <a key={ex} href="#" className="example" onClick={(e) => { e.preventDefault(); setText(ex); inputRef.current?.focus(); }}>
                   {ex}
                 </a>
@@ -125,7 +125,7 @@ export default function ChatView({ state, notice, focusTick, onDismissNotice }: 
             </p>
             <p className="muted small">
               Runs with the Cursor CLI on your account{state.setup.account ? ` (${state.setup.account})` : ""}, in the {state.workspace || "current"} folder. Changes are written to your files
-              {state.checkpointsAvailable ? " and any turn can be undone with its Restore button." : state.checkpointsReason ? `. Undo needs git, which is not available (${state.checkpointsReason}), so use Source Control to revert.` : "."}
+              {state.checkpointsAvailable ? "; every edited file gets Keep and Undo, and a whole turn can be undone." : state.checkpointsReason ? `. Undo needs git, which is not available (${state.checkpointsReason}), so use Source Control to revert.` : "."}
               {" "}Shortcut: Ctrl+Alt+C.
             </p>
             {others.length ? (

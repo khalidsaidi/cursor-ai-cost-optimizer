@@ -430,3 +430,5 @@ pre.output {
 
 .decision-buttons { display: inline-flex; gap: 4px; margin-left: 6px; }
 .decision { margin-left: 6px; font-size: 0.85em; }
+
+.error-detail { margin: 2px 0 4px 16px; color: var(--vscode-errorForeground); }

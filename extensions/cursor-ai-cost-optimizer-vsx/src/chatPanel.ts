@@ -210,6 +210,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   /** Files the user attached for the next request (workspace-relative), besides the active file. */
   private attached: string[] = [];
   private availableModels: Set<string> | null = null;
+  private lastEditor: vscode.TextEditor | null = null;
   private checkpoints: { conversationId: string; service: RepoPerTaskCheckpointService } | null = null;
   private checkpointsBroken: string | null = null;
   private setup: { cli: "checking" | "ok" | "missing" | "not_logged_in"; account: string | null; git: boolean } = { cli: "checking", account: null, git: true };
@@ -437,17 +438,54 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       .filter((p) => !this.attached.includes(p))
       .sort()
       .map((p) => ({ label: path.basename(p), description: path.dirname(p) === "." ? "" : path.dirname(p), rel: p }));
-    const picked = await vscode.window.showQuickPick(items, { placeHolder: vscode.l10n.t("Add a file to the request's context"), matchOnDescription: true, canPickMany: true });
-    if (picked && picked.length) {
-      this.attached = [...this.attached, ...picked.map((p) => p.rel)];
+    // Enter on a highlighted row adds that file even when nothing is ticked (a multi-select otherwise returns
+    // nothing for the most natural keystroke); ticking several and pressing Enter adds them all.
+    const picked = await new Promise<Array<{ rel: string }>>((resolve) => {
+      const qp = vscode.window.createQuickPick<vscode.QuickPickItem & { rel: string }>();
+      qp.items = items;
+      qp.placeholder = vscode.l10n.t("Add a file to the request (type to filter, Enter to add, tick several to add them all)");
+      qp.matchOnDescription = true;
+      qp.canSelectMany = true;
+      // A multi-select highlights nothing until the arrow keys are used, so Enter would add nothing: keep the first
+      // match highlighted as the filter changes (the same feel as Ctrl+P).
+      const highlightFirst = () => {
+        const needle = qp.value.trim().toLowerCase();
+        const first = items.find((i) => !needle || `${i.label} ${i.description ?? ""}`.toLowerCase().includes(needle));
+        qp.activeItems = first ? [first] : [];
+      };
+      qp.onDidChangeValue(highlightFirst);
+      let done = false;
+      qp.onDidAccept(() => {
+        done = true;
+        resolve(qp.selectedItems.length ? [...qp.selectedItems] : [...qp.activeItems]);
+        qp.hide();
+      });
+      qp.onDidHide(() => {
+        if (!done) {
+          resolve([]);
+        }
+        qp.dispose();
+      });
+      qp.show();
+      highlightFirst();
+    });
+    if (picked.length) {
+      this.attached = [...this.attached, ...picked.map((p) => p.rel).filter((p) => !this.attached.includes(p))];
     }
+    this.deps.output.appendLine(`[chat] attached ${picked.length} file(s): ${picked.map((p) => p.rel).join(", ")}`);
     this.pushState();
     this.post({ type: "focus" });
   }
 
   /** The active editor's file and selection, as the request's context (Copilot's implicit context, with a switch). */
   private activeContext(ws: string): { file: string; selection: string | null; snippet: string | null } | null {
-    const editor = vscode.window.activeTextEditor;
+    // When focus is in the panel or a picker, activeTextEditor can be undefined: keep the last text editor that
+    // was active, as Copilot does, as long as its document is still open.
+    const current = vscode.window.activeTextEditor;
+    if (current && current.document.uri.scheme === "file") {
+      this.lastEditor = current;
+    }
+    const editor = current && current.document.uri.scheme === "file" ? current : this.lastEditor && vscode.window.visibleTextEditors.includes(this.lastEditor) ? this.lastEditor : this.lastEditor && !this.lastEditor.document.isClosed ? this.lastEditor : null;
     if (!editor || editor.document.uri.scheme !== "file" || !editor.document.uri.fsPath.startsWith(ws)) {
       return null;
     }

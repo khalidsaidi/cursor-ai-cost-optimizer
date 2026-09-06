@@ -11,6 +11,7 @@ import MarkdownBlock from "./MarkdownBlock";
 const TIER_NAME: Record<string, string> = { fast: "Fast", balanced: "Balanced", deep: "Deep" };
 
 function ToolRow({ tool, turnId, expanded, onToggle, canDecide }: { tool: ToolRowState; turnId: number; expanded: Record<string, boolean>; onToggle: (key: string) => void; canDecide: boolean }) {
+  // canDecide is true only for the last edit of a file in the turn: one Keep/Undo per file, not per edit.
   const key = `${turnId}:${tool.id}`;
   const isEdit = Boolean(tool.diff && tool.path);
   const mark = tool.status === "started" ? <span className="spinner" aria-label="running" /> : tool.ok === false ? <span className="mark-fail">✗</span> : tool.ok === null ? <span className="muted" title="interrupted">–</span> : <span className="mark-ok">✓</span>;
@@ -52,7 +53,9 @@ function ToolRow({ tool, turnId, expanded, onToggle, canDecide }: { tool: ToolRo
           )
         ) : null}
       </div>
-      {hasBody ? (
+      {hasBody && !tool.diff && tool.ok === false ? (
+        <pre className="output error-detail">{tool.detail}</pre>
+      ) : hasBody ? (
         <div className="accordian-wrap">
           <CodeAccordian
             diff={tool.diff ?? undefined}
@@ -74,6 +77,12 @@ export default function ChatRow({ turn, expanded, onToggle, checkpointsAvailable
   const edited = turn.tools.some((t) => t.diff);
   const editedFiles = new Set(turn.tools.filter((t) => t.diff && t.path).map((t) => t.path)).size;
   const [confirmRestore, setConfirmRestore] = useState(false);
+  const lastEditFor = new Map<string, string>();
+  for (const t of turn.tools) {
+    if (t.diff && t.path) {
+      lastEditFor.set(t.path, t.id);
+    }
+  }
   return (
     <div className="turn">
       <div className="user-message">
@@ -102,7 +111,7 @@ export default function ChatRow({ turn, expanded, onToggle, checkpointsAvailable
       {turn.tools.length ? (
         <div className="tools">
           {turn.tools.map((tool) => (
-            <ToolRow key={tool.id} tool={tool} turnId={turn.id} expanded={expanded} onToggle={onToggle} canDecide={!running && Boolean(turn.checkpoint) && checkpointsAvailable && !turn.restored} />
+            <ToolRow key={tool.id} tool={tool} turnId={turn.id} expanded={expanded} onToggle={onToggle} canDecide={!running && Boolean(turn.checkpoint) && checkpointsAvailable && !turn.restored && lastEditFor.get(tool.path ?? "") === tool.id} />
           ))}
         </div>
       ) : null}
