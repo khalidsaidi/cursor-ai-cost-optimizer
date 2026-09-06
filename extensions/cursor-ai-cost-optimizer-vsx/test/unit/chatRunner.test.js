@@ -139,3 +139,11 @@ test("chat runner: the CLI's login status line is read", () => {
   assert.deepEqual(parseCliStatus("✓ Logged in as someone@example.com\n"), { loggedIn: true, account: "someone@example.com" });
   assert.deepEqual(parseCliStatus("Not logged in\n"), { loggedIn: false, account: null });
 });
+
+test("chat runner: Windows paths from the CLI are shown relative to the workspace whatever the drive letter's case", () => {
+  const { relativeTo } = require("../../dist/chatRunner.js");
+  assert.equal(relativeTo("c:\\Users\\khali\\cco-win-scratch\\calc.mjs", "C:\\Users\\khali\\cco-win-scratch"), "calc.mjs");
+  assert.equal(relativeTo("C:/Users/khali/cco-win-scratch/src/a.ts", "C:\\Users\\khali\\cco-win-scratch"), "src/a.ts");
+  assert.equal(relativeTo("/home/k/ws/units.mjs", "/home/k/ws"), "units.mjs");
+  assert.equal(relativeTo("/other/place/deep/file.js", "/home/k/ws"), "deep/file.js");
+});

@@ -44,6 +44,8 @@ interface ToolRow {
   ok?: boolean;
   diff?: string | null;
   detail?: string | null;
+  /** Per-file Keep / Undo inside the reply, as in Cursor's chat and Copilot. */
+  decision?: "kept" | "undone";
 }
 
 interface Turn {
@@ -108,10 +110,37 @@ export function cursorAgentCandidates(configured?: string | null): string[] {
     // no versions directory
   }
   if (process.platform === "win32") {
+    // The Windows installer (irm 'https://cursor.com/install?win32=true' | iex) puts cursor-agent.cmd under
+    // %LOCALAPPDATA%\cursor-agent; the .cmd runs versions\<latest>\node.exe index.js.
     const local = process.env.LOCALAPPDATA || path.join(home, "AppData", "Local");
-    out.push(path.join(local, "cursor-agent", "cursor-agent.exe"), path.join(local, "Programs", "cursor-agent", "cursor-agent.exe"), "cursor-agent.cmd", "agent");
+    out.push(path.join(local, "cursor-agent", "cursor-agent.cmd"), path.join(home, ".local", "bin", "cursor-agent.cmd"), "cursor-agent.cmd", "agent.cmd");
   }
   return out;
+}
+
+/**
+ * How to start the CLI: on Windows the launcher is a .cmd (needs a shell, which mangles a prompt's quotes), so the
+ * node.exe + index.js it wraps are run directly; elsewhere the binary itself.
+ */
+export function cliLaunch(bin: string): { command: string; prefixArgs: string[] } {
+  if (process.platform === "win32" && /\.(cmd|bat|ps1)$/i.test(bin)) {
+    const root = path.dirname(bin);
+    const versions = path.join(root, "versions");
+    try {
+      const latest = fs
+        .readdirSync(versions)
+        .filter((n) => /^\d{4}\.\d{1,2}\.\d{1,2}/.test(n))
+        .sort()
+        .reverse()[0];
+      if (latest && fs.existsSync(path.join(versions, latest, "node.exe")) && fs.existsSync(path.join(versions, latest, "index.js"))) {
+        return { command: path.join(versions, latest, "node.exe"), prefixArgs: [path.join(versions, latest, "index.js")] };
+      }
+    } catch {
+      // fall through: run the launcher through a shell
+    }
+    return { command: process.env.ComSpec || "cmd.exe", prefixArgs: ["/d", "/s", "/c", bin] };
+  }
+  return { command: bin, prefixArgs: [] };
 }
 
 export function findCursorAgent(configured?: string | null): string | null {
@@ -178,6 +207,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private child: ChildProcess | null = null;
   private nextTurnId = 1;
   private includeContext = true;
+  /** Files the user attached for the next request (workspace-relative), besides the active file. */
+  private attached: string[] = [];
   private availableModels: Set<string> | null = null;
   private checkpoints: { conversationId: string; service: RepoPerTaskCheckpointService } | null = null;
   private checkpointsBroken: string | null = null;
@@ -215,14 +246,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           // The official installer, run by the user in a terminal they can see (never silently).
           const term = vscode.window.createTerminal({ name: "Cursor CLI" });
           term.show();
-          term.sendText(process.platform === "win32" ? "irm https://cursor.com/install -useb | iex" : "curl https://cursor.com/install -fsS | bash", false);
+          term.sendText(process.platform === "win32" ? "irm 'https://cursor.com/install?win32=true' | iex" : "curl https://cursor.com/install -fsS | bash", false);
           break;
         }
         case "setupLogin": {
           const term = vscode.window.createTerminal({ name: "Cursor CLI login" });
           term.show();
           const bin = findCursorAgent(vscode.workspace.getConfiguration("costOptimizer").get<string>("chat.cliPath", "")) ?? "cursor-agent";
-          term.sendText(`${bin.includes(" ") ? JSON.stringify(bin) : bin} login`, true);
+          term.sendText(process.platform === "win32" ? `& "${bin}" login` : `${bin.includes(" ") ? JSON.stringify(bin) : bin} login`, true);
           break;
         }
         case "send":
@@ -243,8 +274,21 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           this.includeContext = Boolean(m.include);
           this.pushState();
           break;
+        case "pickFile":
+          void this.pickFile();
+          break;
+        case "detach":
+          this.attached = this.attached.filter((p) => p !== String(m.path ?? ""));
+          this.pushState();
+          break;
         case "restore":
           void this.restore(Number(m.turnId));
+          break;
+        case "undoFile":
+          void this.undoFile(Number(m.turnId), String(m.path ?? ""));
+          break;
+        case "keepFile":
+          this.decideFile(Number(m.turnId), String(m.path ?? ""), "kept");
           break;
         case "history":
           this.openFromHistory(String(m.id ?? ""));
@@ -296,8 +340,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
     this.setup = { cli: "checking", account: null, git };
     this.pushState();
+    const launch = cliLaunch(bin);
     await new Promise<void>((resolve) => {
-      execFile(bin, ["status"], { timeout: 15_000, env: { ...process.env, CCO_DISABLED: "1" } }, (_err, stdout, stderr) => {
+      execFile(launch.command, [...launch.prefixArgs, "status"], { timeout: 15_000, env: { ...process.env, CCO_DISABLED: "1", CURSOR_INVOKED_AS: "cursor-agent" } }, (_err, stdout, stderr) => {
         const status = parseCliStatus(`${stdout ?? ""}\n${stderr ?? ""}`);
         this.setup = { cli: status.loggedIn ? "ok" : "not_logged_in", account: status.account, git };
         this.pushState();
@@ -364,7 +409,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     if (!bin) {
       return;
     }
-    execFile(bin, ["--list-models"], { timeout: 30_000, env: { ...process.env, CCO_DISABLED: "1" } }, (err, stdout) => {
+    const launch = cliLaunch(bin);
+    execFile(launch.command, [...launch.prefixArgs, "--list-models"], { timeout: 30_000, env: { ...process.env, CCO_DISABLED: "1", CURSOR_INVOKED_AS: "cursor-agent" } }, (err, stdout) => {
       if (err || !stdout) {
         return;
       }
@@ -377,6 +423,26 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         void this.context.globalState.update("cco.chat.models", { at: Date.now(), ids });
       }
     });
+  }
+
+  /** "Add file": a quick pick over the workspace's files (the same list Ctrl+P shows), added as a chip. */
+  private async pickFile(): Promise<void> {
+    const ws = this.workspace();
+    if (!ws) {
+      return;
+    }
+    const uris = await vscode.workspace.findFiles("**/*", "{**/node_modules/**,**/.git/**,**/dist/**,**/out/**,**/build/**}", 3000);
+    const items = uris
+      .map((u) => relativeTo(u.fsPath, ws))
+      .filter((p) => !this.attached.includes(p))
+      .sort()
+      .map((p) => ({ label: path.basename(p), description: path.dirname(p) === "." ? "" : path.dirname(p), rel: p }));
+    const picked = await vscode.window.showQuickPick(items, { placeHolder: vscode.l10n.t("Add a file to the request's context"), matchOnDescription: true, canPickMany: true });
+    if (picked && picked.length) {
+      this.attached = [...this.attached, ...picked.map((p) => p.rel)];
+    }
+    this.pushState();
+    this.post({ type: "focus" });
   }
 
   /** The active editor's file and selection, as the request's context (Copilot's implicit context, with a switch). */
@@ -440,10 +506,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       notes.push(vscode.l10n.t("Moved up from {0}: this request needs the {1} tier.", modelDisplayName(previous.model, pricing), tierName(route.tier)));
     }
     const ctx = this.includeContext ? this.activeContext(ws) : null;
-    const contextNote = ctx ? (ctx.selection ? vscode.l10n.t("with {0} lines {1}", ctx.file, ctx.selection) : vscode.l10n.t("with {0}", ctx.file)) : null;
-    const promptForModel = ctx
-      ? `${stripOverrideTag(text)}\n\nContext: the user has ${ctx.file} open${ctx.selection ? ` with lines ${ctx.selection} selected` : ""}.${ctx.snippet ? `\nSelected text:\n\`\`\`\n${ctx.snippet}\n\`\`\`` : ""}`
-      : stripOverrideTag(text);
+    const attached = this.attached.filter((p) => p !== ctx?.file);
+    const parts = [ctx ? (ctx.selection ? vscode.l10n.t("{0} lines {1}", ctx.file, ctx.selection) : ctx.file) : null, ...attached].filter(Boolean) as string[];
+    const contextNote = parts.length ? vscode.l10n.t("with {0}", parts.join(", ")) : null;
+    const contextLines: string[] = [];
+    if (ctx) {
+      contextLines.push(`The user has ${ctx.file} open${ctx.selection ? ` with lines ${ctx.selection} selected` : ""}.${ctx.snippet ? `\nSelected text:\n\`\`\`\n${ctx.snippet}\n\`\`\`` : ""}`);
+    }
+    if (attached.length) {
+      contextLines.push(`Files the user attached for this request (read them as needed): ${attached.join(", ")}`);
+    }
+    const promptForModel = contextLines.length ? `${stripOverrideTag(text)}\n\nContext:\n${contextLines.join("\n")}` : stripOverrideTag(text);
+    this.attached = []; // attachments are per request, as in Copilot
 
     const turn: Turn = { id: this.nextTurnId++, prompt: text, contextNote, tier: route.tier, model: route.model, modelLabel: modelDisplayName(route.model, pricing), notes, tools: [], text: "", thinking: false, status: "running" };
     this.conversation.turns.push(turn);
@@ -459,7 +533,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     const args = buildCliArgs({ model: turn.model, prompt: promptForModel, resume: conversation.sessionId, commands });
     args.splice(3, 0, "--stream-partial-output");
     this.deps.output.appendLine(`[chat] ${bin} ${args.slice(0, -1).join(" ")} <prompt ${promptForModel.length} chars> (cwd ${ws})`);
-    const child = spawn(bin, args, { cwd: ws, env: { ...process.env, CCO_DISABLED: "1", CCO_PANEL: "1" }, stdio: ["ignore", "pipe", "pipe"] });
+    const launch = cliLaunch(bin);
+    const child = spawn(launch.command, [...launch.prefixArgs, ...args], { cwd: ws, env: { ...process.env, CCO_DISABLED: "1", CCO_PANEL: "1", CURSOR_INVOKED_AS: "cursor-agent" }, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
     this.child = child;
     let stderr = "";
     let cliError: ReturnType<typeof parseCliErrorLine> = null;
@@ -566,8 +641,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           existing.diff = ev.diff ?? null;
           existing.detail = ev.detail ?? null;
           existing.path = ev.path ?? existing.path;
-          if (ev.label.trim()) {
-            existing.label = ev.label;
+          if (ev.label.trim() && ev.label.length >= existing.label.length) {
+            existing.label = ev.label; // the completion event can carry fewer arguments than the start
           }
         } else {
           turn.tools.push({ id: ev.id, tool: ev.tool, path: ev.path ?? null, label: ev.label, status: ev.status, ok: ev.ok, diff: ev.diff ?? null, detail: ev.detail ?? null });
@@ -676,6 +751,63 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     } catch (err) {
       this.deps.output.appendLine(`[checkpoints] save failed: ${String((err as Error).message || err)}`);
       return null;
+    }
+  }
+
+  private decideFile(turnId: number, rel: string, decision: "kept" | "undone"): void {
+    const turn = this.conversation?.turns.find((t) => t.id === turnId);
+    if (!turn) {
+      return;
+    }
+    for (const t of turn.tools) {
+      if (t.diff && t.path === rel) {
+        t.decision = decision;
+      }
+    }
+    this.persist();
+    this.pushState();
+  }
+
+  /**
+   * Undo one file of a turn: check that path out of the turn's checkpoint in the shadow repository, or delete it
+   * when the checkpoint did not have it. The other files of the turn stay as they are.
+   */
+  private async undoFile(turnId: number, rel: string): Promise<void> {
+    const conversation = this.conversation;
+    const turn = conversation?.turns.find((t) => t.id === turnId);
+    const ws = this.workspace();
+    if (!conversation || !turn || !turn.checkpoint || !rel || !ws) {
+      return;
+    }
+    const service = await this.checkpointService(conversation);
+    if (!service) {
+      this.post({ type: "notice", text: vscode.l10n.t("Checkpoints are not available here ({0}). Use Source Control to revert {1}.", this.checkpointsBroken ?? "off", rel) });
+      return;
+    }
+    const gitDir = path.join(service.checkpointsDir, ".git");
+    const env: Record<string, string> = {};
+    for (const [k, v] of Object.entries(process.env)) {
+      if (v !== undefined && !/^GIT_/.test(k)) {
+        env[k] = v;
+      }
+    }
+    const git = (args: string[]) =>
+      new Promise<{ ok: boolean; out: string }>((resolve) => {
+        execFile("git", ["--git-dir", gitDir, "--work-tree", ws, ...args], { env, cwd: ws, timeout: 30_000 }, (err, stdout, stderr) => resolve({ ok: !err, out: `${stdout}${stderr}` }));
+      });
+    try {
+      const existed = await git(["cat-file", "-e", `${turn.checkpoint}:${rel}`]);
+      if (existed.ok) {
+        const co = await git(["checkout", turn.checkpoint, "--", rel]);
+        if (!co.ok) {
+          throw new Error(co.out.trim());
+        }
+      } else {
+        fs.rmSync(path.join(ws, rel), { force: true });
+      }
+      this.decideFile(turnId, rel, "undone");
+    } catch (err) {
+      this.post({ type: "notice", text: vscode.l10n.t("Could not undo {0}: {1}", rel, String((err as Error).message || err)) });
     }
   }
 
@@ -792,7 +924,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       folders: (vscode.workspace.workspaceFolders ?? []).length,
       checkpointsAvailable: !this.checkpointsBroken && this.setup.git && vscode.workspace.getConfiguration("costOptimizer").get<boolean>("chat.checkpoints", true),
       checkpointsReason: !vscode.workspace.getConfiguration("costOptimizer").get<boolean>("chat.checkpoints", true) ? "off in Settings" : !this.setup.git ? "git is not installed" : this.checkpointsBroken,
-      context: { include: this.includeContext, file: ctx?.file ?? null, selection: ctx?.selection ?? null },
+      context: { include: this.includeContext, file: ctx?.file ?? null, selection: ctx?.selection ?? null, attached: this.attached },
       history: this.history()
         .filter((h) => h.workspace === ws)
         .map((h) => ({ id: h.id, title: h.title, updatedAt: h.updatedAt, turns: h.turns.length, usd: h.totalUsd })),
@@ -809,7 +941,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         thinking: t.thinking,
         error: t.error ?? null,
         text: t.text,
-        tools: t.tools.map((tool) => ({ id: tool.id, tool: tool.tool, label: tool.label, path: tool.path, status: tool.status, ok: tool.ok ?? null, diff: tool.diff ?? null, detail: tool.detail ?? null })),
+        tools: t.tools.map((tool) => ({ id: tool.id, tool: tool.tool, label: tool.label, path: tool.path, status: tool.status, ok: tool.ok ?? null, diff: tool.diff ?? null, detail: tool.detail ?? null, decision: tool.decision ?? null })),
         checkpoint: t.checkpoint ?? null,
         restored: Boolean(t.restored),
         usage: t.usage ?? null,

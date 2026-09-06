@@ -419,3 +419,14 @@ pre.output {
 
 .setup-card { margin: 10px 12px 0; padding: 8px 10px; border: 1px solid var(--vscode-notificationsWarningIcon-foreground, orange); border-radius: 6px; background: var(--vscode-textBlockQuote-background); line-height: 1.5; }
 .setup-card p { margin: 4px 0; }
+
+.examples { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.example { padding: 2px 8px; border-radius: 10px; border: 1px solid var(--vscode-button-secondaryBackground); color: var(--vscode-textLink-foreground); text-decoration: none; font-size: 0.92em; }
+.example:hover { background: var(--vscode-button-secondaryHoverBackground); }
+.small { font-size: 0.85em; }
+
+.context-label { font-size: 0.85em; }
+.context-chip .link { padding: 0 2px; }
+
+.decision-buttons { display: inline-flex; gap: 4px; margin-left: 6px; }
+.decision { margin-left: 6px; font-size: 0.85em; }

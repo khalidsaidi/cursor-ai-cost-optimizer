@@ -385,7 +385,7 @@
         {
           "type": "webview",
           "id": "cco.chatView",
-          "name": "Cost-routed chat",
+          "name": "AI Cost Chat",
           "contextualTitle": "AI Cost Chat",
           "icon": "media/chat-icon.svg"
         }

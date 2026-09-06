@@ -111,15 +111,23 @@ export default function ChatView({ state, notice, focusTick, onDismissNotice }: 
         {state.turns.length === 0 ? (
           <div className="empty">
             <p>
-              <strong>Every reply here names the model that produced it.</strong>
+              <strong>Ask for a change. The cheapest model that can do it well does the work.</strong>
             </p>
-            <p>Routine work goes to the Fast tier's model, medium work to Balanced, risky or complex work to Deep. Pick a tier below to force one.</p>
-            <p>
-              Runs through the Cursor CLI on your own Cursor account{state.setup.account ? ` (${state.setup.account})` : ""}, in {state.workspace || "this workspace"}
-              {state.folders > 1 ? ", the first folder of this workspace" : ""}. Edits land in your files
-              {state.checkpointsAvailable ? "; each turn can be put back from its checkpoint." : state.checkpointsReason ? `; checkpoints are off (${state.checkpointsReason}), so use Source Control to undo.` : "."}
+            <p>Small changes go to a fast, cheap model. Harder or riskier work goes to a stronger one. Every reply shows which model did it and what it cost.</p>
+            <p>It reads and searches this project itself, like Cursor's chat. Attach a file or type @ only to point it somewhere specific.</p>
+            <p className="examples">
+              Try:
+              {["Add input validation to the functions in this file", "Write tests for the add function", "Explain what this project does"].map((ex) => (
+                <a key={ex} href="#" className="example" onClick={(e) => { e.preventDefault(); setText(ex); inputRef.current?.focus(); }}>
+                  {ex}
+                </a>
+              ))}
             </p>
-            <p className="muted">Drag this view's icon to the right side bar to sit beside Cursor's chat. Shortcut: Ctrl+Alt+C.</p>
+            <p className="muted small">
+              Runs with the Cursor CLI on your account{state.setup.account ? ` (${state.setup.account})` : ""}, in the {state.workspace || "current"} folder. Changes are written to your files
+              {state.checkpointsAvailable ? " and any turn can be undone with its Restore button." : state.checkpointsReason ? `. Undo needs git, which is not available (${state.checkpointsReason}), so use Source Control to revert.` : "."}
+              {" "}Shortcut: Ctrl+Alt+C.
+            </p>
             {others.length ? (
               <p>
                 <a href="#" onClick={(e) => { e.preventDefault(); setShowHistory(true); }}>
@@ -182,15 +190,25 @@ export default function ChatView({ state, notice, focusTick, onDismissNotice }: 
           </div>
         ) : null}
         <div className="row context-row">
+          <span className="muted context-label" title="The model searches and reads this project itself, like Cursor's chat. Attach files only to point it at specific ones.">Attach:</span>
           {state.context.file ? (
-            <label className={`context-chip${state.context.include ? "" : " off"}`} title={state.context.include ? "The active file (and selection) is sent with your request. Click to leave it out." : "The active file is not sent. Click to include it."}>
+            <label className={`context-chip${state.context.include ? "" : " off"}`} title={state.context.include ? "The file you have open (and its selection) goes with your request. Untick to leave it out." : "The open file is left out. Tick to include it."}>
               <input type="checkbox" checked={state.context.include} onChange={(e) => vscode.postMessage({ type: "context", include: e.target.checked })} />
               <span className="context-file">{state.context.file}</span>
               {state.context.selection ? <span className="muted"> lines {state.context.selection}</span> : null}
             </label>
-          ) : (
-            <span className="muted context-none">No file open: the request goes without file context.</span>
-          )}
+          ) : null}
+          {state.context.attached.map((p) => (
+            <span key={p} className="context-chip" title={p}>
+              <span className="context-file">{p}</span>
+              <button className="link" aria-label={`Remove ${p}`} title="Remove" onClick={() => vscode.postMessage({ type: "detach", path: p })}>
+                ✕
+              </button>
+            </span>
+          ))}
+          <button className="button secondary small" title="Point the request at specific files (or type @ in the box). It reads the rest of the project itself." onClick={() => vscode.postMessage({ type: "pickFile" })}>
+            + Add file
+          </button>
         </div>
         <TextareaAutosize
           ref={inputRef}
@@ -198,13 +216,21 @@ export default function ChatView({ state, notice, focusTick, onDismissNotice }: 
           minRows={2}
           maxRows={10}
           autoFocus
-          placeholder="Ask for a change in this workspace… (Enter to send, Shift+Enter for a new line, Esc to stop)"
+          placeholder="Ask for a change… (@ to attach a file, Enter to send, Shift+Enter for a new line, Esc to stop)"
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault();
               send();
+            } else if (e.key === "@") {
+              // "@" at the start or after a space opens the file picker, as in Cursor's and Copilot's chat.
+              const el = e.currentTarget;
+              const before = el.value.slice(0, el.selectionStart ?? 0);
+              if (before === "" || /\s$/.test(before)) {
+                e.preventDefault();
+                vscode.postMessage({ type: "pickFile" });
+              }
             }
           }}
         />

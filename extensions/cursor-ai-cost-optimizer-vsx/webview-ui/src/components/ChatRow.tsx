@@ -10,8 +10,9 @@ import MarkdownBlock from "./MarkdownBlock";
 
 const TIER_NAME: Record<string, string> = { fast: "Fast", balanced: "Balanced", deep: "Deep" };
 
-function ToolRow({ tool, turnId, expanded, onToggle }: { tool: ToolRowState; turnId: number; expanded: Record<string, boolean>; onToggle: (key: string) => void }) {
+function ToolRow({ tool, turnId, expanded, onToggle, canDecide }: { tool: ToolRowState; turnId: number; expanded: Record<string, boolean>; onToggle: (key: string) => void; canDecide: boolean }) {
   const key = `${turnId}:${tool.id}`;
+  const isEdit = Boolean(tool.diff && tool.path);
   const mark = tool.status === "started" ? <span className="spinner" aria-label="running" /> : tool.ok === false ? <span className="mark-fail">✗</span> : tool.ok === null ? <span className="muted" title="interrupted">–</span> : <span className="mark-ok">✓</span>;
   const hasBody = Boolean(tool.diff || tool.detail);
   return (
@@ -33,6 +34,22 @@ function ToolRow({ tool, turnId, expanded, onToggle }: { tool: ToolRowState; tur
           >
             open
           </a>
+        ) : null}
+        {isEdit && canDecide ? (
+          tool.decision === "undone" ? (
+            <span className="muted decision">undone</span>
+          ) : tool.decision === "kept" ? (
+            <span className="muted decision">kept</span>
+          ) : (
+            <span className="decision-buttons">
+              <button className="button small" title="Keep this file's changes" onClick={() => vscode.postMessage({ type: "keepFile", turnId, path: tool.path as string })}>
+                Keep
+              </button>
+              <button className="button secondary small" title="Put this file back as it was before this turn" onClick={() => vscode.postMessage({ type: "undoFile", turnId, path: tool.path as string })}>
+                Undo
+              </button>
+            </span>
+          )
         ) : null}
       </div>
       {hasBody ? (
@@ -85,7 +102,7 @@ export default function ChatRow({ turn, expanded, onToggle, checkpointsAvailable
       {turn.tools.length ? (
         <div className="tools">
           {turn.tools.map((tool) => (
-            <ToolRow key={tool.id} tool={tool} turnId={turn.id} expanded={expanded} onToggle={onToggle} />
+            <ToolRow key={tool.id} tool={tool} turnId={turn.id} expanded={expanded} onToggle={onToggle} canDecide={!running && Boolean(turn.checkpoint) && checkpointsAvailable && !turn.restored} />
           ))}
         </div>
       ) : null}
@@ -110,9 +127,11 @@ export default function ChatRow({ turn, expanded, onToggle, checkpointsAvailable
               </button>
             </span>
           ) : (
-            <button className="button secondary small" onClick={() => setConfirmRestore(true)} title="Put every file back as it was before this turn ran (a checkpoint of the workspace)">
-              Restore files to before this turn
-            </button>
+            <span className="decision-buttons">
+              <button className="button secondary small" onClick={() => setConfirmRestore(true)} title="Put every file back as it was before this turn ran (a checkpoint of the workspace)">
+                Undo all
+              </button>
+            </span>
           )}
         </div>
       ) : null}

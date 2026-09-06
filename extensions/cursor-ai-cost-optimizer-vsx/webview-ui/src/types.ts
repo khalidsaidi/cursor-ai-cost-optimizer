@@ -14,6 +14,8 @@ export interface ToolRowState {
   diff: string | null;
   /** Command output or an error, shown in the accordion body. */
   detail: string | null;
+  /** Per-file Keep / Undo: null while undecided. */
+  decision: "kept" | "undone" | null;
 }
 
 export interface TurnState {
@@ -57,7 +59,7 @@ export interface ChatState {
   setup: { cli: "checking" | "ok" | "missing" | "not_logged_in"; account: string | null; git: boolean };
   folders: number;
   checkpointsReason: string | null;
-  context: { include: boolean; file: string | null; selection: string | null };
+  context: { include: boolean; file: string | null; selection: string | null; attached: string[] };
   history: HistoryEntry[];
   checkpointsAvailable: boolean;
   turns: TurnState[];
@@ -81,7 +83,11 @@ export type WebviewMessage =
   | { type: "stop" }
   | { type: "new" }
   | { type: "context"; include: boolean }
+  | { type: "pickFile" }
+  | { type: "detach"; path: string }
   | { type: "restore"; turnId: number }
+  | { type: "undoFile"; turnId: number; path: string }
+  | { type: "keepFile"; turnId: number; path: string }
   | { type: "history"; id: string }
   | { type: "historyDelete"; id: string }
   | { type: "settings" }

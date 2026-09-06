@@ -102,7 +102,7 @@ const TOOL_LABELS: Record<string, string> = {
 };
 
 function shortPath(p: unknown): string {
-  const s = String(p || "");
+  const s = String(p || "").replace(/\\/g, "/");
   const parts = s.split("/");
   return parts.length > 2 ? parts.slice(-2).join("/") : s;
 }
@@ -110,9 +110,16 @@ function shortPath(p: unknown): string {
 /** A path shown to the user: relative to the workspace when inside it, otherwise its last two segments. */
 export function relativeTo(p: string, workspace?: string): string {
   if (typeof workspace === "string" && workspace) {
-    const root = workspace.endsWith("/") ? workspace : `${workspace}/`;
-    if (p.startsWith(root)) {
-      return p.slice(root.length);
+    // Windows: the CLI reports c:\Users\… while the workspace is C:\Users\…; compare case-insensitively and on
+    // either separator, and show the remainder with forward slashes as the rest of the panel does.
+    const norm = (s: string) => s.replace(/\\/g, "/");
+    const win = /^[a-zA-Z]:[\\/]/.test(p) || /^[a-zA-Z]:[\\/]/.test(workspace);
+    const np = norm(p);
+    let root = norm(workspace);
+    root = root.endsWith("/") ? root : `${root}/`;
+    const matches = win ? np.toLowerCase().startsWith(root.toLowerCase()) : np.startsWith(root);
+    if (matches) {
+      return np.slice(root.length);
     }
   }
   return shortPath(p);
