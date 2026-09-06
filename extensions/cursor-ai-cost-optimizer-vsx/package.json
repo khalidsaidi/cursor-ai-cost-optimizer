@@ -259,6 +259,13 @@
           "scope": "application",
           "order": 20,
           "markdownDescription": "Which shell commands the cost-routed chat may run. It runs through the Cursor CLI (`cursor-agent`) on your Cursor account."
+        },
+        "costOptimizer.chat.cliPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "order": 21,
+          "markdownDescription": "Full path to the Cursor CLI (`cursor-agent`) when it is not on the PATH the extension host sees. Empty: PATH, then `~/.local/bin/cursor-agent` and the installer's versions directory are tried."
         }
       }
     },
@@ -362,7 +369,7 @@
   },
   "scripts": {
     "sync:assets": "node ./scripts/sync-assets.mjs",
-    "compile": "tsc -p . && npx tsc -p webview-ui",
+    "compile": "tsc -p .",
     "compile:binaries": "node ./scripts/compile-binaries.mjs --current-only",
     "compile:binaries:all": "node ./scripts/compile-binaries.mjs",
     "package": "npm run build:webview && node ./scripts/package-extension.mjs",
@@ -380,7 +387,7 @@
     "vscode:uninstall": "node ./scripts/uninstall.js",
     "lint": "eslint src",
     "vscode:prepublish": "npm run lint && npm run compile",
-    "build:webview": "cd webview-ui && npm ci --no-audit --no-fund && cd .. && node ./scripts/build-webview.mjs"
+    "build:webview": "cd webview-ui && npm ci --no-audit --no-fund && cd .. && npx tsc -p webview-ui && node ./scripts/build-webview.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

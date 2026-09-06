@@ -59,8 +59,31 @@ export interface ChatDeps {
 
 const DEFAULT_TIER_MODELS: Record<Tier, string> = { fast: "composer-2.5", balanced: "claude-sonnet-5-medium", deep: "claude-opus-5-thinking-high" };
 
-export function findCursorAgent(): string | null {
-  const candidates = [path.join(os.homedir(), ".local", "bin", "cursor-agent"), "cursor-agent"];
+/** Where the Cursor CLI is looked for, in order: the setting, PATH, the installer's default locations. */
+export function cursorAgentCandidates(configured?: string | null): string[] {
+  const home = os.homedir();
+  const out: string[] = [];
+  if (configured && configured.trim()) {
+    out.push(configured.trim());
+  }
+  out.push("cursor-agent", path.join(home, ".local", "bin", "cursor-agent"));
+  try {
+    const versions = path.join(home, ".local", "share", "cursor-agent", "versions");
+    for (const v of fs.readdirSync(versions).sort().reverse()) {
+      out.push(path.join(versions, v, "cursor-agent"));
+    }
+  } catch {
+    // no versions directory
+  }
+  if (process.platform === "win32") {
+    const local = process.env.LOCALAPPDATA || path.join(home, "AppData", "Local");
+    out.push(path.join(local, "cursor-agent", "cursor-agent.exe"), path.join(local, "Programs", "cursor-agent", "cursor-agent.exe"), "cursor-agent.cmd", "agent");
+  }
+  return out;
+}
+
+export function findCursorAgent(configured?: string | null): string | null {
+  const candidates = cursorAgentCandidates(configured);
   for (const c of candidates) {
     try {
       if (c.includes(path.sep)) {
@@ -93,10 +116,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     this.view = view;
     view.webview.options = { enableScripts: true, localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, "media", "chat")] };
     view.webview.html = this.html(view.webview);
+    // Opening the view puts the caret in its input, as Copilot's and Cline's do.
+    view.onDidChangeVisibility(() => {
+      if (view.visible) {
+        this.post({ type: "focus" });
+      }
+    });
     view.webview.onDidReceiveMessage((m: { type: string; text?: string; forced?: string; path?: string }) => {
       switch (m.type) {
         case "ready":
           this.pushState();
+          this.post({ type: "focus" });
           break;
         case "send":
           void this.send(String(m.text ?? ""), (m.forced as Tier | "auto" | undefined) ?? "auto");
@@ -127,6 +157,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   }
 
   reveal(): void {
+    if (this.view) {
+      this.view.show(true);
+      this.post({ type: "focus" });
+      return;
+    }
     void vscode.commands.executeCommand("cco.chatView.focus");
   }
 
@@ -165,9 +200,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       this.post({ type: "notice", text: vscode.l10n.t("Open a folder first: the chat works on a workspace.") });
       return;
     }
-    const bin = findCursorAgent();
+    const configured = vscode.workspace.getConfiguration("costOptimizer").get<string>("chat.cliPath", "");
+    const bin = findCursorAgent(configured);
     if (!bin) {
-      this.post({ type: "notice", text: vscode.l10n.t("The Cursor CLI (cursor-agent) is not installed. Install it with `curl https://cursor.com/install -fsS | bash`, run `cursor-agent login`, then try again.") });
+      const looked = cursorAgentCandidates(configured).filter((c) => c.includes(path.sep)).join(", ");
+      this.deps.output.appendLine(`[chat] cursor-agent not found; PATH=${process.env.PATH ?? ""}; looked in ${looked}`);
+      this.post({ type: "notice", text: vscode.l10n.t("The Cursor CLI (cursor-agent) was not found on this machine's PATH or in {0}. If it is installed elsewhere, set its path in Settings (costOptimizer.chat.cliPath). To install: `curl https://cursor.com/install -fsS | bash`, then `cursor-agent login`.", looked) });
       return;
     }
     if (!this.conversation || this.conversation.workspace !== ws) {

@@ -69,6 +69,8 @@ Everything a user is expected to touch is in Cursor's Settings UI under **AI Cos
 | `costOptimizer.modelCooldownHours` | 6 | How long a model that refused to start (usage limit) is skipped; tasks step down a tier meanwhile. |
 | `costOptimizer.showSavingsInStatusBar` | on | `⚡ Saved ~$4.12` in the status bar, or just `AI Cost`. |
 | `costOptimizer.showRoutingNotifications` | on | A short notification naming the model doing a delegated task (`Composer 2.5 (Fast tier) is doing this task`); the chat's picker keeps showing the chat model. |
+| `costOptimizer.chat.runCommands` | auto-review | Which commands the cost-routed chat may run: safe ones (tests, builds) under the CLI's auto-review, everything (`force`), or none. |
+| `costOptimizer.chat.cliPath` | empty | Full path to `cursor-agent` when it is not on the PATH the extension host sees; otherwise PATH, `~/.local/bin` and the installer's versions directory are tried. |
 | `costOptimizer.hookRuntime` | auto | Node.js when available, else the bundled binary. |
 | `costOptimizer.nodePath` | empty | Node.js executable for the setup scripts. |
 

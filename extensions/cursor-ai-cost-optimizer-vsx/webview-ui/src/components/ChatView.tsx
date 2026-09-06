@@ -12,10 +12,11 @@ import TaskHeader from "./TaskHeader";
 interface Props {
   state: ChatState;
   notice: string | null;
+  focusTick: number;
   onDismissNotice: () => void;
 }
 
-export default function ChatView({ state, notice, onDismissNotice }: Props) {
+export default function ChatView({ state, notice, focusTick, onDismissNotice }: Props) {
   const [text, setText] = useState("");
   const [forced, setForced] = useState<Tier | "auto">("auto");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -36,6 +37,10 @@ export default function ChatView({ state, notice, onDismissNotice }: Props) {
       listRef.current?.scrollToIndex({ index: state.turns.length - 1, align: "end", behavior: "auto" });
     }
   }, [state.turns.length, state.turns[state.turns.length - 1]?.tools.length, state.turns[state.turns.length - 1]?.text]);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, [focusTick]);
 
   const toggle = useCallback((key: string) => setExpanded((prev) => ({ ...prev, [key]: !prev[key] })), []);
 
@@ -75,6 +80,7 @@ export default function ChatView({ state, notice, onDismissNotice }: Props) {
           className="input"
           minRows={2}
           maxRows={10}
+          autoFocus
           placeholder="Ask for a change in this workspace… (Enter to send, Shift+Enter for a new line)"
           value={text}
           onChange={(e) => setText(e.target.value)}

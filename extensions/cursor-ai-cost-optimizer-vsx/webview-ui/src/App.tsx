@@ -7,6 +7,7 @@ const EMPTY: ChatState = { type: "state", running: false, workspace: "", turns: 
 export default function App() {
   const [state, setState] = useState<ChatState>(EMPTY);
   const [notice, setNotice] = useState<string | null>(null);
+  const [focusTick, setFocusTick] = useState(0);
 
   useEffect(() => {
     const onMessage = (e: MessageEvent<ExtensionMessage>) => {
@@ -15,6 +16,8 @@ export default function App() {
         setState(m);
       } else if (m.type === "notice") {
         setNotice(m.text);
+      } else if (m.type === "focus") {
+        setFocusTick((n) => n + 1);
       }
     };
     window.addEventListener("message", onMessage);
@@ -30,5 +33,5 @@ export default function App() {
     return () => clearTimeout(t);
   }, [notice]);
 
-  return <ChatView state={state} notice={notice} onDismissNotice={() => setNotice(null)} />;
+  return <ChatView state={state} notice={notice} focusTick={focusTick} onDismissNotice={() => setNotice(null)} />;
 }

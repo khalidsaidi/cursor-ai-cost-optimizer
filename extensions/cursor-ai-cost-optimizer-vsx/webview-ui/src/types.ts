@@ -48,7 +48,11 @@ export interface NoticeMessage {
   text: string;
 }
 
-export type ExtensionMessage = ChatState | NoticeMessage;
+export interface FocusMessage {
+  type: "focus";
+}
+
+export type ExtensionMessage = ChatState | NoticeMessage | FocusMessage;
 
 export type WebviewMessage =
   | { type: "ready" }
