@@ -390,3 +390,29 @@ pre.output {
   color: var(--vscode-textLink-foreground);
   text-decoration: none;
 }
+
+/* context chip, history, restore, and the vendored Cline accordion's button */
+.context-row { min-height: 20px; }
+.context-chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 10px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); font-size: 0.85em; cursor: pointer; max-width: 100%; }
+.context-chip.off { opacity: 0.55; text-decoration: line-through; }
+.context-chip input { margin: 0; }
+.context-file { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.context-none { font-size: 0.85em; }
+.context-note { margin-top: 4px; font-size: 0.85em; opacity: 0.7; }
+.history { border: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.3)); border-radius: 4px; padding: 6px 8px; display: flex; flex-direction: column; gap: 4px; background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background)); }
+.history-row { display: flex; align-items: center; gap: 8px; font-size: 0.9em; }
+.history-title { flex: 1; color: var(--vscode-textLink-foreground); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.turn-actions { margin: 6px 0 2px; }
+.button.small { font-size: 0.85em; padding: 2px 8px; }
+.mark-ok { color: var(--vscode-gitDecoration-addedResourceForeground, #3fb950); }
+.mark-fail { color: var(--vscode-errorForeground); }
+.accordian-wrap { margin: 3px 0 4px 16px; }
+.cline-button-text { border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.cline-button-text:focus-visible { outline: 1px solid var(--vscode-focusBorder); }
+/* Roo's DiffView colours (it names these classes) */
+.diff-content-inserted { background: var(--vscode-diffEditor-insertedLineBackground, rgba(63,185,80,0.15)); }
+.diff-content-removed { background: var(--vscode-diffEditor-removedLineBackground, rgba(248,81,73,0.15)); }
+.diff-view { font-family: var(--vscode-editor-font-family); font-size: 0.9em; }
+.diff-view td { padding-top: 0; padding-bottom: 0; line-height: 1.45; }
+
+.confirm-row { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 0.9em; }

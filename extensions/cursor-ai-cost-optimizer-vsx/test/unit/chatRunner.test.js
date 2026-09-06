@@ -64,3 +64,72 @@ test("chat runner: CLI arguments", () => {
   assert.ok(buildCliArgs({ model: "m", prompt: "p", commands: "force" }).includes("--force"));
   assert.ok(!buildCliArgs({ model: "m", prompt: "p", commands: "none" }).includes("--auto-review"));
 });
+
+test("chat runner: streamed word deltas are consolidated once the CLI repeats the whole segment", () => {
+  const { consolidateText } = require("../../dist/chatRunner.js");
+  let segment = "";
+  let shown = "";
+  for (const piece of ["the", " quick", " brown"]) {
+    const c = consolidateText(segment, piece);
+    segment = c.segment;
+    shown += c.append;
+  }
+  assert.equal(shown, "the quick brown");
+  const repeat = consolidateText(segment, "the quick brown");
+  assert.equal(repeat.append, "", "the consolidated repeat adds nothing");
+  assert.equal(repeat.segment, "");
+  const next = consolidateText("", "Done.");
+  assert.equal(next.append, "Done.");
+});
+
+test("chat runner: a conversation keeps its model unless a request needs a stronger tier", () => {
+  const { stickyRoute, routePrompt } = require("../../dist/chatRunner.js");
+  const models = { fast: "composer-2.5", balanced: "claude-sonnet-5-medium", deep: "claude-opus-5-thinking-high" };
+  const first = routePrompt({ prompt: "Refactor src/cart.js so coupon rules live in a table and add tests for it", tierModels: models });
+  assert.equal(first.tier, "balanced");
+  const small = routePrompt({ prompt: "rename a variable in cart.js", tierModels: models });
+  const kept = stickyRoute({ tier: first.tier, model: first.model }, small);
+  assert.equal(kept.model, "claude-sonnet-5-medium", "a smaller follow-up stays on the conversation's model");
+  assert.equal(kept.kept, true);
+  const risky = routePrompt({ prompt: "Rotate the production OAuth secret and payment webhook signing key", tierModels: models });
+  const up = stickyRoute({ tier: first.tier, model: first.model }, risky);
+  assert.equal(up.tier, "deep", "an escalation moves the conversation up");
+  assert.equal(up.kept, false);
+  assert.equal(stickyRoute(null, small).kept, false);
+});
+
+test("chat runner: the CLI's plain-text failures are recognised", () => {
+  const { parseCliErrorLine } = require("../../dist/chatRunner.js");
+  const limit = parseCliErrorLine("ActionRequiredError: You've hit your usage limit for Opus You've saved $104 on API model usage this month with Pro. Switch to a different model or set a Spend Limit to continue with Opus.");
+  assert.equal(limit.kind, "usage_limit");
+  assert.match(limit.message, /^You've hit your usage limit for Opus/);
+  assert.equal(parseCliErrorLine('{"type":"result"}'), null, "JSON lines are events, not errors");
+  assert.equal(parseCliErrorLine("Not logged in. Run cursor-agent login").kind, "not_logged_in");
+  assert.equal(parseCliErrorLine(""), null);
+});
+
+test("chat runner: a recorded streamed run with a tool call in the middle renders as two paragraphs, nothing duplicated", () => {
+  const { consolidateText, endParagraph } = require("../../dist/chatRunner.js");
+  const lines = fs.readFileSync(path.join(__dirname, "..", "fixtures", "cli-stream-partial-sample.jsonl"), "utf8").trim().split("\n");
+  let text = "";
+  let segment = "";
+  for (const line of lines) {
+    const ev = parseStreamLine(line);
+    if (!ev) continue;
+    if (ev.kind === "text") {
+      const c = consolidateText(segment, ev.text);
+      segment = c.segment;
+      if (c.append) text += c.append;
+      else text = endParagraph(text);
+    } else if (ev.kind === "tool") {
+      segment = "";
+      text = endParagraph(text);
+    }
+  }
+  const paragraphs = text.trim().split(/\n\n+/);
+  assert.equal(paragraphs.length, 2, text);
+  assert.match(paragraphs[0], /^I'll add `tiny\.mjs`/);
+  assert.match(paragraphs[1], /^Created `tiny\.mjs`/);
+  assert.equal((text.match(/I'll add/g) || []).length, 1, "the consolidated repeat is not shown twice");
+  assert.equal((text.match(/Created/g) || []).length, 1);
+});

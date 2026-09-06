@@ -1,43 +1,68 @@
 /**
  * One turn: the user's request, then a header row naming the model that answered (the counterpart of Cline's
- * "api request" row, with the cost on it), the tool calls as accordions (edits with their diff, commands with
- * their output), and the reply as Markdown.
+ * "api request" row, with the cost on it), the tool calls as Cline's CodeAccordian (edits with Roo Code's diff
+ * view, commands with their output), and the reply as Markdown.
  */
-import { formatTokens, formatUsd, type ToolRowState, type TurnState } from "../types";
-import CodeAccordian from "./CodeAccordian";
+import { useState } from "react";
+import CodeAccordian from "@/components/common/CodeAccordian";
+import { formatTokens, formatUsd, vscode, type ToolRowState, type TurnState } from "../types";
 import MarkdownBlock from "./MarkdownBlock";
 
 const TIER_NAME: Record<string, string> = { fast: "Fast", balanced: "Balanced", deep: "Deep" };
 
 function ToolRow({ tool, turnId, expanded, onToggle }: { tool: ToolRowState; turnId: number; expanded: Record<string, boolean>; onToggle: (key: string) => void }) {
   const key = `${turnId}:${tool.id}`;
-  const mark = tool.status === "started" ? <span className="spinner" aria-label="running" /> : tool.ok === false ? <span className="codicon-x">✗</span> : <span className="codicon-check">✓</span>;
+  const mark = tool.status === "started" ? <span className="spinner" aria-label="running" /> : tool.ok === false ? <span className="mark-fail">✗</span> : <span className="mark-ok">✓</span>;
   const hasBody = Boolean(tool.diff || tool.detail);
   return (
     <div className={`tool-row${tool.ok === false ? " failed" : ""}`}>
       <div className="tool-line">
         {mark}
-        <span className="tool-label">{tool.label}</span>
+        <span className="tool-label" title={tool.label}>
+          {tool.label}
+        </span>
+        {tool.path ? (
+          <a
+            href="#"
+            className="open-file"
+            title="Open file"
+            onClick={(e) => {
+              e.preventDefault();
+              vscode.postMessage({ type: "open", path: tool.path as string });
+            }}
+          >
+            open
+          </a>
+        ) : null}
       </div>
       {hasBody ? (
-        <CodeAccordian
-          path={tool.path}
-          diff={tool.diff}
-          output={tool.detail}
-          isExpanded={Boolean(expanded[key])}
-          onToggleExpand={() => onToggle(key)}
-        />
+        <div className="accordian-wrap">
+          <CodeAccordian
+            diff={tool.diff ?? undefined}
+            code={tool.diff ? undefined : (tool.detail ?? "")}
+            path={tool.diff ? (tool.path ?? undefined) : undefined}
+            isConsoleLogs={!tool.diff}
+            isExpanded={Boolean(expanded[key])}
+            onToggleExpand={() => onToggle(key)}
+          />
+        </div>
       ) : null}
     </div>
   );
 }
 
-export default function ChatRow({ turn, expanded, onToggle }: { turn: TurnState; expanded: Record<string, boolean>; onToggle: (key: string) => void }) {
+export default function ChatRow({ turn, expanded, onToggle, checkpointsAvailable }: { turn: TurnState; expanded: Record<string, boolean>; onToggle: (key: string) => void; checkpointsAvailable: boolean }) {
   const running = turn.status === "running";
   const u = turn.usage;
+  const edited = turn.tools.some((t) => t.diff);
+  const editedFiles = new Set(turn.tools.filter((t) => t.diff && t.path).map((t) => t.path)).size;
+  const [confirmRestore, setConfirmRestore] = useState(false);
   return (
     <div className="turn">
-      <div className="user-message">{turn.prompt}</div>
+      <div className="user-message">
+        {turn.prompt}
+        {turn.contextNote ? <div className="context-note">{turn.contextNote}</div> : null}
+      </div>
       <div className="model-row">
         {running ? <span className="spinner" aria-label="running" /> : null}
         <span className="model-name">{turn.modelLabel}</span>
@@ -50,9 +75,13 @@ export default function ChatRow({ turn, expanded, onToggle }: { turn: TurnState;
           </span>
         ) : null}
         {turn.status === "stopped" ? <span className="muted">stopped</span> : null}
+        {running && turn.thinking && !turn.tools.some((t) => t.status === "started") ? <span className="muted">thinking…</span> : null}
       </div>
-      {turn.fallbackFrom ? <div className="note">No model is set for the {TIER_NAME[turn.fallbackFrom]} tier, so this ran on the {TIER_NAME[turn.tier]} tier's model.</div> : null}
-      {turn.guardrail && /risk/.test(turn.guardrail) ? <div className="note">Risky work: sent to a stronger tier.</div> : null}
+      {turn.notes.map((n, i) => (
+        <div key={i} className="note">
+          {n}
+        </div>
+      ))}
       {turn.tools.length ? (
         <div className="tools">
           {turn.tools.map((tool) => (
@@ -66,6 +95,27 @@ export default function ChatRow({ turn, expanded, onToggle }: { turn: TurnState;
         </div>
       ) : null}
       {turn.error ? <div className="error">{turn.error}</div> : null}
+      {!running && edited && turn.checkpoint && checkpointsAvailable ? (
+        <div className="turn-actions">
+          {turn.restored ? (
+            <span className="muted">Files restored to how they were before this turn.</span>
+          ) : confirmRestore ? (
+            <span className="confirm-row">
+              <span>Put {editedFiles} {editedFiles === 1 ? "file" : "files"} back as before this turn? Everything changed in the workspace since then is undone, your own edits included.</span>
+              <button className="button small" onClick={() => { setConfirmRestore(false); vscode.postMessage({ type: "restore", turnId: turn.id }); }}>
+                Restore
+              </button>
+              <button className="button secondary small" onClick={() => setConfirmRestore(false)}>
+                Cancel
+              </button>
+            </span>
+          ) : (
+            <button className="button secondary small" onClick={() => setConfirmRestore(true)} title="Put every file back as it was before this turn ran (a checkpoint of the workspace)">
+              Restore files to before this turn
+            </button>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }

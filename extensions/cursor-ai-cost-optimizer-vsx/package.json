@@ -266,6 +266,20 @@
           "scope": "machine",
           "order": 21,
           "markdownDescription": "Full path to the Cursor CLI (`cursor-agent`) when it is not on the PATH the extension host sees. Empty: PATH, then `~/.local/bin/cursor-agent` and the installer's versions directory are tried."
+        },
+        "costOptimizer.chat.includeActiveFile": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "order": 22,
+          "markdownDescription": "Send the active file (and selection) along with each request in the cost-routed chat, as Copilot does. The chip above the input shows what goes and can switch it off per request."
+        },
+        "costOptimizer.chat.checkpoints": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "order": 23,
+          "markdownDescription": "Take a checkpoint of the workspace before each turn of the cost-routed chat (a shadow git repository under the extension's storage, Roo Code's approach), so a turn's edits can be restored with one click. Needs `git` on the PATH."
         }
       }
     },
@@ -369,7 +383,7 @@
   },
   "scripts": {
     "sync:assets": "node ./scripts/sync-assets.mjs",
-    "compile": "tsc -p .",
+    "compile": "tsc -p . && node ./scripts/build-extension.mjs",
     "compile:binaries": "node ./scripts/compile-binaries.mjs --current-only",
     "compile:binaries:all": "node ./scripts/compile-binaries.mjs",
     "package": "npm run build:webview && node ./scripts/package-extension.mjs",
@@ -402,5 +416,9 @@
     "typescript": "^5.4.0",
     "typescript-eslint": "^8.69.0"
   },
-  "l10n": "./l10n"
+  "l10n": "./l10n",
+  "dependencies": {
+    "p-wait-for": "^6.0.0",
+    "simple-git": "^3.27.0"
+  }
 }

@@ -93,7 +93,12 @@ const TOOL_LABELS: Record<string, string> = {
   taskToolCall: "Subagent",
   webSearchToolCall: "Web search",
   fetchToolCall: "Fetch",
-  semanticSearchToolCall: "Search code"
+  semanticSearchToolCall: "Search code",
+  readLintsToolCall: "Check lints",
+  listDirToolCall: "List",
+  todoWriteToolCall: "Plan",
+  updateTodosToolCall: "Plan",
+  mcpToolCall: "Tool"
 };
 
 function shortPath(p: unknown): string {
@@ -161,7 +166,8 @@ export function parseStreamLine(line: string, workspace?: string): ChatEvent | n
     const body = (call[tool] ?? {}) as { args?: Record<string, unknown>; result?: Record<string, unknown> };
     const args = body.args ?? {};
     const id = String(d.call_id ?? call.toolCallId ?? "").split("\n")[0];
-    const label = `${TOOL_LABELS[tool] ?? tool.replace(/ToolCall$/, "")} ${describeArgs(tool, args, workspace)}`.trim();
+    const fallbackName = tool.replace(/ToolCall$/, "").replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, (c) => c.toUpperCase());
+    const label = `${TOOL_LABELS[tool] ?? fallbackName} ${describeArgs(tool, args, workspace)}`.trim();
     const rawPath = /^(read|edit|write|delete)ToolCall$/.test(tool) ? String(args.path ?? args.file_path ?? args.target_file ?? "") : "";
     const filePath = rawPath ? relativeTo(rawPath, workspace) : null;
     if (subtype === "started") {
@@ -212,4 +218,73 @@ export interface TurnCost {
 export function priceTurn(usage: Usage, model: string, pricing: PricingTable | null): TurnCost {
   const price = resolveModelPrice(model, pricing);
   return { usd: usageCostUsd(usage, price), atAutoRateUsd: usageCostUsd(usage, AUTO_RATE) ?? 0, price };
+}
+
+/**
+ * With `--stream-partial-output` the CLI sends the reply as word deltas and then repeats the whole segment as
+ * one message. `segment` is what has been appended since the last consolidation; an incoming text equal to it is
+ * that repeat and adds nothing. Returns the text to append and the new segment.
+ */
+export function consolidateText(segment: string, incoming: string): { append: string; segment: string } {
+  if (incoming === segment && segment.length > 0) {
+    return { append: "", segment: "" };
+  }
+  // The repeat can differ from the deltas in whitespace: a long message whose tail equals the streamed tail is
+  // the repeat, not new text (a fresh delta is never that long).
+  if (segment.length > 40 && incoming.length > 40 && segment.trimEnd().slice(-40) === incoming.trimEnd().slice(-40)) {
+    return { append: "", segment: "" };
+  }
+  if (segment.length > 0 && incoming.length > segment.length && incoming.startsWith(segment)) {
+    // A repeat that carries more than what streamed (rare): append only the remainder.
+    return { append: incoming.slice(segment.length), segment: "" };
+  }
+  return { append: incoming, segment: segment + incoming };
+}
+
+const TIER_ORDER: Tier[] = ["fast", "balanced", "deep"];
+
+/**
+ * A conversation keeps its model unless a later request needs a stronger tier: switching models mid-conversation
+ * costs a fresh cache write on the new model (measured: 19.8k uncached tokens against 98 on the same model) and
+ * confuses the reader. Only an escalation moves it up.
+ */
+export function stickyRoute(previous: { tier: Tier; model: string } | null, routed: Route): Route & { kept: boolean } {
+  if (!previous || previous.model === routed.model) {
+    return { ...routed, kept: false };
+  }
+  if (TIER_ORDER.indexOf(routed.tier) > TIER_ORDER.indexOf(previous.tier)) {
+    return { ...routed, kept: false };
+  }
+  return { ...routed, tier: previous.tier, model: previous.model, kept: true };
+}
+
+/** After a streamed segment is complete (its repeat arrived, or a tool call started), the reply continues as a new paragraph. */
+export function endParagraph(text: string): string {
+  if (!text || text.endsWith("\n\n")) {
+    return text;
+  }
+  return text.endsWith("\n") ? `${text}\n` : `${text}\n\n`;
+}
+
+/** A non-JSON line the CLI prints when it cannot run the model (usage limit, unknown model, not logged in). */
+export function parseCliErrorLine(line: string): { kind: "usage_limit" | "not_logged_in" | "unknown_model" | "error"; message: string } | null {
+  const text = line.trim();
+  if (!text || text.startsWith("{")) {
+    return null;
+  }
+  if (/usage limit|ActionRequiredError|spend limit/i.test(text)) {
+    // "You've hit your usage limit for Opus You've saved $104 on API model usage… Switch to…": keep the first clause.
+    const message = text.replace(/^ActionRequiredError:\s*/, "").split(/\s+You've saved|\s+Switch to|\s{2,}|\. /)[0].trim();
+    return { kind: "usage_limit", message };
+  }
+  if (/not logged in|login|unauthorized|401/i.test(text)) {
+    return { kind: "not_logged_in", message: text };
+  }
+  if (/unknown model|model .* not (found|available)|invalid model/i.test(text)) {
+    return { kind: "unknown_model", message: text };
+  }
+  if (/error/i.test(text)) {
+    return { kind: "error", message: text };
+  }
+  return null;
 }

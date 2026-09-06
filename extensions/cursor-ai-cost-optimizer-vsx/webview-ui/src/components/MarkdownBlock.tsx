@@ -6,7 +6,7 @@ import { memo } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
-import DiffView from "./DiffView";
+import DiffView from "@src/components/common/DiffView";
 
 function extractText(children: unknown): string {
   if (typeof children === "string") {
