@@ -1,0 +1,10 @@
+{
+  "name": "cco-fixture-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Small fixture repo used by the Cursor AI Cost Optimizer extension tests and IDE proofs.",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node --test"
+  }
+}

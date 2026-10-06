@@ -1,0 +1,142 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Every target the marketplace listing advertises is built, unit-tested, hook-smoked and packaged on a
+# native GitHub-hosted runner of that platform (Linux x64/ARM64, Windows x64/ARM64, macOS Intel/Apple Silicon).
+jobs:
+  plugin:
+    name: plugin (${{ matrix.os }}, node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-15-intel, macos-latest]
+        node: [20]
+        include:
+          - { os: ubuntu-latest, node: 18 }
+          - { os: ubuntu-latest, node: 22 }
+          - { os: windows-latest, node: 22 }
+          - { os: macos-latest, node: 22 }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Validate marketplace layout
+        run: node scripts/validate-template.mjs
+      - name: Unit tests (no network, no Cursor account)
+        shell: bash
+        run: node --test plugins/cursor-ai-cost-optimizer/test/*.test.mjs
+      - name: Project-local install + hook smoke through the committed shim (the exact files a user gets)
+        shell: bash
+        run: |
+          set -euo pipefail
+          ws="$(mktemp -d)"
+          node plugins/cursor-ai-cost-optimizer/scripts/cco-init.mjs --workspace "$ws" --json > "$ws/init.json" || { echo "cco-init failed"; cat "$ws/init.json"; exit 1; }
+          echo "--- init.json"; cat "$ws/init.json"; echo; echo "--- .cursor"; ls -la "$ws/.cursor" "$ws/.cursor/cco"
+          test -f "$ws/.cursor/hooks.json" || { echo "missing hooks.json"; exit 1; }
+          test -f "$ws/.cursor/cco-hook.mjs" || { echo "missing shim"; exit 1; }
+          ls "$ws/.cursor/agents"/*-fast.md >/dev/null 2>&1 || { echo "missing agents (model-named *-fast.md)"; exit 1; }
+          test ! -e "$ws/.cursor/cco.json" || { echo "cco.json must not be created by init"; exit 1; }
+          cd "$ws"
+          # Git Bash on Windows reports POSIX-style paths; Cursor passes native ones. Use the native form.
+          if [ "$RUNNER_OS" = "Windows" ]; then wsdir="$(pwd -W)"; else wsdir="$PWD"; fi
+          out="$(printf '{"hook_event_name":"preToolUse","tool_name":"Read","conversation_id":"x","workspace_roots":["%s"]}' "$wsdir" | node .cursor/cco-hook.mjs preToolUse)"
+          echo "--- Read: $out"; echo "$out" | grep -q '"permission":"allow"' || { echo "expected allow"; exit 1; }
+          out="$(printf '{"hook_event_name":"preToolUse","tool_name":"Task","conversation_id":"x","tool_input":{"description":"d","prompt":"CCO-SCORES: complexity=2 risk=9 breadth=1 uncertainty=0 latency=0\\nrefund flow","subagent_type":"fast-tier"},"workspace_roots":["%s"]}' "$wsdir" | node .cursor/cco-hook.mjs preToolUse)"
+          echo "--- Task: $out"; echo "$out" | grep -q -- '-deep"' || { echo "expected reroute to the deep subagent"; exit 1; }
+          node "$GITHUB_WORKSPACE/plugins/cursor-ai-cost-optimizer/scripts/cco-init.mjs" --workspace "$wsdir" --uninstall > /dev/null
+          test ! -e .cursor/hooks.json && test ! -e .cursor/cco-hook.mjs && test ! -e .cursor/cco || { echo "uninstall left files"; ls -la .cursor; exit 1; }
+          echo "OK"
+
+  extension:
+    name: extension (${{ matrix.target }} on ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest,    target: linux-x64 }
+          - { os: ubuntu-24.04-arm, target: linux-arm64 }
+          - { os: windows-latest,   target: win32-x64 }
+          - { os: windows-11-arm,   target: win32-arm64 }
+          - { os: macos-15-intel,   target: darwin-x64 }
+          - { os: macos-latest,     target: darwin-arm64 }
+    defaults:
+      run:
+        working-directory: extensions/cursor-ai-cost-optimizer-vsx
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: npm ci
+      - run: npm run sync:assets
+      - run: npm run lint
+      - run: npm run compile
+      - name: Compile the hook binary for ${{ matrix.target }} (native)
+        run: node scripts/compile-binaries.mjs --target ${{ matrix.target }}
+      - name: Unit tests (includes the compiled-binary suite, run natively)
+        run: npm run test:unit
+      - name: Hook smoke (POSIX) through the compiled binary
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ws="$(mktemp -d)"
+          mkdir -p "$ws/.cursor/agents" "$ws/.cursor/cco"
+          cp resources/plugin/agents/fast-tier.md "$ws/.cursor/agents/fast-tier.md"
+          printf '{"shellGuard":{"enabled":true}}' > "$ws/.cursor/cco.json"
+          printf '%s\n' "$PWD/resources/plugin" > "$ws/.cursor/cco/plugin-path.txt"
+          mkdir -p "$ws/.cursor/cco/bin" && cp "dist-bin/${{ matrix.target }}/cco-hook" "$ws/.cursor/cco/bin/cco-hook"
+          out="$(printf '{"hook_event_name":"beforeShellExecution","command":"rm -rf /","conversation_id":"x","workspace_roots":["%s"]}' "$ws" | "$ws/.cursor/cco/bin/cco-hook" beforeShellExecution)"
+          echo "$out"; echo "$out" | grep -q '"permission":"deny"'
+          out="$(printf '{"hook_event_name":"preToolUse","tool_name":"Read","conversation_id":"x","workspace_roots":["%s"]}' "$ws" | "$ws/.cursor/cco/bin/cco-hook" preToolUse)"
+          echo "$out"; echo "$out" | grep -q '"permission":"allow"'
+      - name: Hook smoke (Windows, PowerShell) through the compiled exe
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = "dist-bin\${{ matrix.target }}\cco-hook.exe"
+          if (-not (Test-Path $exe)) { throw "no $exe built" }
+          $ws = Join-Path ([System.IO.Path]::GetTempPath()) ("cco-smoke-" + [guid]::NewGuid().ToString('N'))
+          New-Item -ItemType Directory -Path "$ws\.cursor\agents", "$ws\.cursor\cco\bin" -Force | Out-Null
+          Copy-Item 'resources\plugin\agents\fast-tier.md' "$ws\.cursor\agents\fast-tier.md"
+          Set-Content -Path "$ws\.cursor\cco.json" -Value '{"shellGuard":{"enabled":true}}'
+          Set-Content -Path "$ws\.cursor\cco\plugin-path.txt" -Value (Resolve-Path 'resources\plugin').Path
+          Copy-Item $exe "$ws\.cursor\cco\bin\cco-hook.exe"
+          $wsJson = $ws -replace '\\', '\\'
+          $deny = ('{"hook_event_name":"beforeShellExecution","command":"rm -rf /","conversation_id":"x","workspace_roots":["' + $wsJson + '"]}') | & "$ws\.cursor\cco\bin\cco-hook.exe" beforeShellExecution
+          Write-Host $deny
+          if ($deny -notmatch '"permission":"deny"') { throw 'expected deny' }
+          $allow = ('{"hook_event_name":"preToolUse","tool_name":"Read","conversation_id":"x","workspace_roots":["' + $wsJson + '"]}') | & "$ws\.cursor\cco\bin\cco-hook.exe" preToolUse
+          Write-Host $allow
+          if ($allow -notmatch '"permission":"allow"') { throw 'expected allow' }
+      - name: Integration tests (VS Code, Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a node ./test/runTest.js
+      - name: Integration tests (VS Code, Windows and macOS)
+        if: runner.os != 'Linux'
+        run: node ./test/runTest.js
+      - name: Package VSIX for ${{ matrix.target }}
+        run: node scripts/package-extension.mjs --target ${{ matrix.target }}
+      - name: Manifest unchanged by packaging (the lean manifest must never leak into the repo)
+        shell: bash
+        run: git diff --exit-code -- package.json
+      - name: Install the packaged VSIX into VS Code and list it (proves the package is installable on this platform)
+        shell: bash
+        run: node scripts/verify-vsix.mjs --target ${{ matrix.target }}
+      - name: vscode:uninstall hook runs
+        run: node scripts/uninstall.js
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vsix-${{ matrix.target }}
+          path: extensions/cursor-ai-cost-optimizer-vsx/*.vsix

@@ -1,0 +1,87 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: node scripts/validate-template.mjs
+      - run: node --test plugins/cursor-ai-cost-optimizer/test/*.test.mjs
+        shell: bash
+      - name: Version consistency
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          for f in .cursor-plugin/marketplace.json plugins/cursor-ai-cost-optimizer/.cursor-plugin/plugin.json extensions/cursor-ai-cost-optimizer-vsx/package.json; do
+            v=$(node -p "JSON.parse(require('fs').readFileSync('$f','utf8')).version ?? JSON.parse(require('fs').readFileSync('$f','utf8')).metadata.version")
+            [ "$v" = "$tag" ] || { echo "$f has version $v, tag is $tag"; exit 1; }
+          done
+
+  extension:
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, target: linux-x64 }
+          - { os: ubuntu-24.04-arm, target: linux-arm64 }
+          - { os: macos-15-intel, target: darwin-x64 }
+          - { os: macos-latest, target: darwin-arm64 }
+          - { os: windows-latest, target: win32-x64 }
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: extensions/cursor-ai-cost-optimizer-vsx
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: oven-sh/setup-bun@v2
+      - run: npm ci
+      - run: npm run sync:assets
+      - run: npm run compile
+      - name: Compile the hook binary for ${{ matrix.target }} (native)
+        run: node scripts/compile-binaries.mjs --target ${{ matrix.target }}
+      - run: npm run test:unit
+      - name: Integration tests (VS Code)
+        shell: bash
+        run: if [ "$RUNNER_OS" = "Linux" ]; then xvfb-run -a node ./test/runTest.js; else node ./test/runTest.js; fi
+      - name: Package for ${{ matrix.target }}
+        run: node scripts/package-extension.mjs --target ${{ matrix.target }}
+      - name: Install the packaged VSIX into VS Code on this platform
+        run: node scripts/verify-vsix.mjs --target ${{ matrix.target }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vsix-${{ matrix.target }}
+          path: extensions/cursor-ai-cost-optimizer-vsx/*.vsix
+
+  publish:
+    needs: extension
+    runs-on: ubuntu-latest
+    if: ${{ vars.PUBLISH_OPENVSX == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - uses: actions/download-artifact@v4
+        with: { path: dist }
+      - name: Publish to Open VSX
+        env:
+          OVSX_TOKEN: ${{ secrets.OVSX_TOKEN }}
+        run: |
+          set -euo pipefail
+          for f in dist/*/*.vsix; do
+            target=$(basename "$f" .vsix | sed -E 's/.*-([a-z0-9]+-[a-z0-9]+)$/\1/')
+            npx --yes ovsx publish "$f" --target "$target" -p "$OVSX_TOKEN"
+          done
+      - name: GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*/*.vsix
+          generate_release_notes: true

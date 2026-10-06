@@ -1,0 +1,442 @@
+{
+  "name": "cursor-ai-cost-optimizer",
+  "displayName": "AI Cost Optimizer",
+  "publisher": "khalidsaidi",
+  "version": "0.3.0",
+  "description": "Cuts your Cursor AI bill: routes each request to the cheapest model tier that can do it well, with quality guardrails. Sets up in Cursor's user-level config (nothing written into projects) or per project.",
+  "license": "SEE LICENSE IN LICENSE",
+  "pricing": "Free",
+  "icon": "resources/icon.png",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "AI",
+    "Other"
+  ],
+  "keywords": [
+    "cursor",
+    "routing",
+    "subagents",
+    "cost-optimizer",
+    "model-routing",
+    "hooks"
+  ],
+  "homepage": "https://github.com/khalidsaidi/cursor-ai-cost-optimizer#readme",
+  "bugs": {
+    "url": "https://github.com/khalidsaidi/cursor-ai-cost-optimizer/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/khalidsaidi/cursor-ai-cost-optimizer.git",
+    "directory": "extensions/cursor-ai-cost-optimizer-vsx"
+  },
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "Writes .cursor/ files and installs hooks that execute a binary.",
+      "restrictedConfigurations": [
+        "costOptimizer.nodePath"
+      ]
+    },
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "Needs a local .cursor/ folder and a local hook runtime."
+    }
+  },
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "cco.installCursorAssets",
+        "category": "AI Cost Optimizer",
+        "title": "Turn On / Update Models"
+      },
+      {
+        "command": "cco.chooseTierModels",
+        "category": "AI Cost Optimizer",
+        "title": "Choose Tier Models",
+        "enablement": "cco.mode != 'none'"
+      },
+      {
+        "command": "cco.uninstallCursorAssets",
+        "category": "AI Cost Optimizer",
+        "title": "Remove",
+        "enablement": "cco.mode != 'none'"
+      },
+      {
+        "command": "cco.recommendTier",
+        "category": "AI Cost Optimizer",
+        "title": "Savings and Tier Rates"
+      },
+      {
+        "command": "cco.insertOverrideFast",
+        "category": "AI Cost Optimizer",
+        "title": "Insert [cco:fast]"
+      },
+      {
+        "command": "cco.insertOverrideBalanced",
+        "category": "AI Cost Optimizer",
+        "title": "Insert [cco:balanced]"
+      },
+      {
+        "command": "cco.insertOverrideDeep",
+        "category": "AI Cost Optimizer",
+        "title": "Insert [cco:deep]"
+      },
+      {
+        "command": "cco.showOutputChannel",
+        "category": "AI Cost Optimizer",
+        "title": "Show Log"
+      },
+      {
+        "command": "cco.collectDiagnostics",
+        "category": "AI Cost Optimizer",
+        "title": "Copy Diagnostics"
+      },
+      {
+        "command": "cco.showMenu",
+        "title": "Open Status Menu",
+        "category": "AI Cost Optimizer"
+      },
+      {
+        "command": "cco.togglePause",
+        "title": "Pause / Resume Here",
+        "category": "AI Cost Optimizer",
+        "enablement": "cco.mode != 'none'"
+      },
+      {
+        "command": "cco.hooksOff",
+        "title": "Emergency Stop",
+        "category": "AI Cost Optimizer",
+        "enablement": "cco.mode != 'none'"
+      },
+      {
+        "command": "cco.openChat",
+        "title": "Open cost-routed chat",
+        "category": "AI Cost Optimizer",
+        "icon": "$(comment-discussion)"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "cco.insertOverrideFast",
+          "when": "editorTextFocus"
+        },
+        {
+          "command": "cco.insertOverrideBalanced",
+          "when": "editorTextFocus"
+        },
+        {
+          "command": "cco.insertOverrideDeep",
+          "when": "editorTextFocus"
+        },
+        {
+          "command": "cco.collectDiagnostics"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "AI Cost Optimizer",
+      "properties": {
+        "costOptimizer.hookRuntime": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "binary",
+            "node"
+          ],
+          "enumDescriptions": [
+            "Use the bundled cco-hook binary when this build ships one for your platform, otherwise Node.js.",
+            "Always use the bundled binary (fails if this build has none for your platform).",
+            "Always run hooks with `node .cursor/cco-hook.mjs` (Node.js >= 18 must be on the PATH Cursor sees). Keeps .cursor/hooks.json portable for teammates."
+          ],
+          "default": "auto",
+          "scope": "machine",
+          "markdownDescription": "How the hook entries are executed. `auto` uses Node.js >= 18 when available and falls back to the bundled `cco-hook` binary. Changing this takes effect on the next **Turn On / Update Models** or activation-time repair pass.",
+          "order": 20
+        },
+        "costOptimizer.nodePath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "markdownDescription": "Absolute path of the Node.js executable used to run the plugin's setup scripts (`cco-init`, discovery). Default: `node` on PATH, then Cursor's own Node runtime. Ignored when `#costOptimizer.hookRuntime#` is `binary`.",
+          "order": 21
+        },
+        "costOptimizer.autoEnable": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "order": 1,
+          "markdownDescription": "Turn the Cost Optimizer on automatically after it is installed (once per machine; **Remove from Cursor** in the status menu turns it off). Off: nothing happens until you run **AI Cost Optimizer: Turn On / Update Models**."
+        },
+        "costOptimizer.tierModels.fast": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "order": 2,
+          "markdownDescription": "Model id that runs the **Fast** tier (quick answers, small edits), e.g. `composer-2.5`. Empty = the cheapest sufficient model on your account. The status menu's **Choose tier models** lists what your account can use."
+        },
+        "costOptimizer.tierModels.balanced": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "order": 3,
+          "markdownDescription": "Model id that runs the **Balanced** tier (typical implementation work), e.g. `claude-sonnet-5-thinking-high`. Empty = automatic."
+        },
+        "costOptimizer.tierModels.deep": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "order": 4,
+          "markdownDescription": "Model id that runs the **Deep** tier (risky or complex work), e.g. `claude-opus-5-thinking-high`. Empty = automatic."
+        },
+        "costOptimizer.enforceRouting": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "order": 5,
+          "markdownDescription": "Enforce cost routing instead of advising it. Off (default): the chat model is advised to delegate routine work and only your `[cco:…]` overrides and risk escalations are enforced. On: a chat model that is materially pricier than the tier's model may not edit or run commands itself; it must delegate."
+        },
+        "costOptimizer.alwaysDelegate": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "order": 6,
+          "markdownDescription": "Route every request that needs tools through a tier subagent, even when the tier's model is not cheaper than your chat model (useful to keep costs logged per tier)."
+        },
+        "costOptimizer.chatBudgetUsd": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "scope": "resource",
+          "order": 7,
+          "markdownDescription": "Estimated spend per chat, in USD, after which you are warned (at 80%) and routing is forced to the Fast tier beyond twice the budget. `0` = no budget."
+        },
+        "costOptimizer.modelCooldownHours": {
+          "type": "number",
+          "default": 6,
+          "minimum": 1,
+          "maximum": 168,
+          "scope": "application",
+          "order": 8,
+          "markdownDescription": "How long a model that refused to start a subagent (usage limit) is skipped before it is tried again. Tasks step down a tier meanwhile."
+        },
+        "costOptimizer.showSavingsInStatusBar": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "order": 9,
+          "markdownDescription": "Show the estimated savings for the current project in the status bar (`⚡ Saved ~$4.12`). Off: the item reads `AI Cost`."
+        },
+        "costOptimizer.showRoutingNotifications": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "order": 10,
+          "markdownDescription": "When a task goes to a tier subagent, show a short notification naming the model that is doing it (`Composer 2.5 (Fast tier) is doing this task`). The chat's own model picker keeps showing the chat model, so this is where you see what actually ran; the status bar names it too."
+        },
+        "costOptimizer.chat.runCommands": {
+          "type": "string",
+          "enum": [
+            "auto-review",
+            "force",
+            "none"
+          ],
+          "enumDescriptions": [
+            "Safe commands (tests, builds, reads) run; the rest are declined and shown as not run.",
+            "Every command the model issues runs (the Cursor CLI's --force).",
+            "No commands run."
+          ],
+          "default": "auto-review",
+          "scope": "application",
+          "order": 20,
+          "markdownDescription": "Which shell commands the cost-routed chat may run. It runs through the Cursor CLI (`cursor-agent`) on your Cursor account."
+        },
+        "costOptimizer.chat.cliPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "order": 21,
+          "markdownDescription": "Full path to the Cursor CLI (`cursor-agent`) when it is not on the PATH the extension host sees. Empty: PATH, then `~/.local/bin/cursor-agent` and the installer's versions directory are tried."
+        },
+        "costOptimizer.chat.includeActiveFile": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "order": 22,
+          "markdownDescription": "Send the active file (and selection) along with each request in the cost-routed chat, as Copilot does. The chip above the input shows what goes and can switch it off per request."
+        },
+        "costOptimizer.chat.checkpoints": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "order": 23,
+          "markdownDescription": "Take a checkpoint of the workspace before each turn of the cost-routed chat (a shadow git repository under the extension's storage, Roo Code's approach), so a turn's edits can be restored with one click. Needs `git` on the PATH."
+        }
+      }
+    },
+    "walkthroughs": [
+      {
+        "id": "cco.gettingStarted",
+        "title": "Get started with AI Cost Optimizer",
+        "description": "Two ways to spend less: a chat where every reply names the model that did the work, and guardrails inside Cursor's own chat.",
+        "steps": [
+          {
+            "id": "cco.step.panel",
+            "title": "Chat with the model that fits the task",
+            "description": "Open the **AI Cost Chat** view (activity bar, or Ctrl+Alt+C). Each request is routed to the Fast, Balanced or Deep tier and runs on that tier's model through the Cursor CLI on your own account; the reply names the model, lists what it read, ran and changed, shows the diff, and prices the turn against Auto's rate. A checkpoint before every turn means **Restore** puts your files back.\n[Open the chat](command:cco.openChat)",
+            "media": {
+              "markdown": "media/walkthrough/step-chat.md"
+            },
+            "completionEvents": [
+              "onCommand:cco.openChat"
+            ]
+          },
+          {
+            "id": "cco.step.on",
+            "title": "It is on. These are your tiers",
+            "description": "Fast, Balanced and Deep each run on a model from your account; the table shows the mapping as of opening this page (hover **AI Cost** in the status bar for the current one). To change it: [Choose tier models](command:cco.chooseTierModels), or [Settings](command:workbench.action.openSettings?%5B%22cost%20optimizer%22%5D).",
+            "when": "!cco.tiersPage",
+            "media": {
+              "markdown": "media/walkthrough/step-install.md"
+            },
+            "completionEvents": [
+              "onCommand:cco.chooseTierModels"
+            ]
+          },
+          {
+            "id": "cco.step.on1",
+            "title": "It is on. These are your tiers",
+            "description": "Fast, Balanced and Deep each run on a model from your account; the table shows the mapping as of opening this page (hover **AI Cost** in the status bar for the current one). To change it: [Choose tier models](command:cco.chooseTierModels), or [Settings](command:workbench.action.openSettings?%5B%22cost%20optimizer%22%5D).",
+            "when": "cco.tiersPage == 1",
+            "media": {
+              "markdown": "media/walkthrough/step-tiers-1.md"
+            },
+            "completionEvents": [
+              "onCommand:cco.chooseTierModels"
+            ]
+          },
+          {
+            "id": "cco.step.on2",
+            "title": "It is on. These are your tiers",
+            "description": "Fast, Balanced and Deep each run on a model from your account; the table shows the mapping as of opening this page (hover **AI Cost** in the status bar for the current one). To change it: [Choose tier models](command:cco.chooseTierModels), or [Settings](command:workbench.action.openSettings?%5B%22cost%20optimizer%22%5D).",
+            "when": "cco.tiersPage == 2",
+            "media": {
+              "markdown": "media/walkthrough/step-tiers-2.md"
+            },
+            "completionEvents": [
+              "onCommand:cco.chooseTierModels"
+            ]
+          },
+          {
+            "id": "cco.step.on3",
+            "title": "It is on. These are your tiers",
+            "description": "Fast, Balanced and Deep each run on a model from your account; the table shows the mapping as of opening this page (hover **AI Cost** in the status bar for the current one). To change it: [Choose tier models](command:cco.chooseTierModels), or [Settings](command:workbench.action.openSettings?%5B%22cost%20optimizer%22%5D).",
+            "when": "cco.tiersPage == 3",
+            "media": {
+              "markdown": "media/walkthrough/step-tiers-3.md"
+            },
+            "completionEvents": [
+              "onCommand:cco.chooseTierModels"
+            ]
+          },
+          {
+            "id": "cco.step.chat",
+            "title": "Work as usual",
+            "description": "Keep your chat model. On an Opus-class chat model, routine work runs on a cheaper model through a subagent named after that model and its tier (a **Composer 2.5 Fast** card, for example; click it to see its steps and diffs); on Auto, Composer, Grok, Sonnet and GPT it stays in the chat, because on Cursor's bill a delegation costs about what the work does. The status bar names where each task ran. Risky work goes to the Deep tier. Nothing is blocked for long, nothing is written into your project.",
+            "media": {
+              "markdown": "media/walkthrough/step-init.md"
+            }
+          },
+          {
+            "id": "cco.step.steer",
+            "title": "Steer when you want to",
+            "description": "Say it in the prompt (\"use the best model\", \"don't route this\") or use `[cco:deep]` / `[cco:fast]`. Pause a project, set a per-chat budget, or enforce routing from the status menu or [Settings](command:workbench.action.openSettings?%5B%22cost%20optimizer%22%5D).",
+            "media": {
+              "markdown": "media/walkthrough/step-override.md"
+            },
+            "completionEvents": [
+              "onSettingChanged:costOptimizer.enforceRouting",
+              "onSettingChanged:costOptimizer.chatBudgetUsd"
+            ]
+          }
+        ]
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "cco",
+          "title": "AI Cost Chat",
+          "icon": "media/chat-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "cco": [
+        {
+          "type": "webview",
+          "id": "cco.chatView",
+          "name": "AI Cost Chat",
+          "contextualTitle": "AI Cost Chat",
+          "icon": "media/chat-icon.svg"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "cco.openChat",
+        "key": "ctrl+alt+c",
+        "mac": "cmd+alt+c"
+      }
+    ]
+  },
+  "scripts": {
+    "sync:assets": "node ./scripts/sync-assets.mjs",
+    "compile": "tsc -p . && node ./scripts/build-extension.mjs",
+    "compile:binaries": "node ./scripts/compile-binaries.mjs --current-only",
+    "compile:binaries:all": "node ./scripts/compile-binaries.mjs",
+    "package": "npm run build:webview && node ./scripts/package-extension.mjs",
+    "package:all": "node ./scripts/package-extension.mjs --all",
+    "verify:vsix": "node ./scripts/verify-vsix.mjs",
+    "package:universal": "node ./scripts/package-extension.mjs --no-binaries",
+    "publish:openvsx": "node ./scripts/publish-openvsx.mjs",
+    "test": "npm run test:unit && npm run test:integration",
+    "test:unit": "npm run compile && node --test test/unit/hooksLog.test.js test/unit/settings.test.js test/unit/binary.test.js test/unit/install.test.js test/unit/pricing.test.js test/unit/scorer.test.js test/unit/userScope.test.js test/unit/selfcheck.test.js test/unit/chatRunner.test.js",
+    "test:integration": "npm run compile && xvfb-run -a node ./test/runTest.js",
+    "test:cursor": "npm run compile && bash ./scripts/test-cursor.sh",
+    "proof:ide-auth": "npm run compile && bash ./scripts/proof-ide-auth.sh",
+    "uat:video": "npm run compile && bash ./scripts/uat-video-runbook.sh",
+    "proof:no-stone": "bash ./scripts/proof-no-stone-unturned.sh",
+    "vscode:uninstall": "node ./scripts/uninstall.js",
+    "lint": "eslint src",
+    "vscode:prepublish": "npm run lint && npm run compile",
+    "build:webview": "cd webview-ui && npm ci --no-audit --no-fund && cd .. && npx tsc -p webview-ui && node ./scripts/build-webview.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/l10n-dev": "^0.0.35",
+    "@vscode/test-electron": "^3.1.0",
+    "esbuild": "^0.25.9",
+    "eslint": "^9.39.5",
+    "mocha": "^10.7.3",
+    "postject": "^1.0.0-alpha.6",
+    "typescript": "^5.4.0",
+    "typescript-eslint": "^8.69.0"
+  },
+  "l10n": "./l10n",
+  "dependencies": {
+    "p-wait-for": "^6.0.0",
+    "simple-git": "^3.27.0"
+  }
+}

@@ -1,0 +1,23 @@
+name: Bug report
+description: Something in AI Cost Optimizer did not behave as documented
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes: { label: Version, description: Plugin/extension version and Cursor version (Help → About) }
+    validations: { required: true }
+  - type: dropdown
+    id: surface
+    attributes: { label: Where, options: [Cursor IDE, Cursor CLI (cursor-agent), Both] }
+    validations: { required: true }
+  - type: dropdown
+    id: os
+    attributes: { label: Operating system, options: [Windows, macOS, Linux, WSL] }
+    validations: { required: true }
+  - type: textarea
+    id: what
+    attributes: { label: What happened, description: What you did, what you saw in the chat, what you expected }
+    validations: { required: true }
+  - type: textarea
+    id: logs
+    attributes: { label: Logs, description: "Relevant lines from .cursor/cco/state/hooks.jsonl and decisions.jsonl (they contain scores and tool names only, never your prompts). For the extension: the 'AI Cost Optimizer' output channel." }

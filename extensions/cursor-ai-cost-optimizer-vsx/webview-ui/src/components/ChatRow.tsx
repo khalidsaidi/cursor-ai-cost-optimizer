@@ -1,0 +1,171 @@
+/**
+ * One turn: the user's request, then a header row naming the model that answered (the counterpart of Cline's
+ * "api request" row, with the cost on it), the tool calls as Cline's CodeAccordian (edits with Roo Code's diff
+ * view, commands with their output), and the reply as Markdown.
+ */
+import { useEffect, useRef, useState } from "react";
+import CodeAccordian from "@/components/common/CodeAccordian";
+import { formatTokens, formatUsd, vscode, type ToolRowState, type TurnState } from "../types";
+import MarkdownBlock from "./MarkdownBlock";
+
+const TIER_NAME: Record<string, string> = { fast: "Fast", balanced: "Balanced", deep: "Deep" };
+
+function ToolRow({ tool, turnId, expanded, onToggle, canDecide }: { tool: ToolRowState; turnId: number; expanded: Record<string, boolean>; onToggle: (key: string) => void; canDecide: boolean }) {
+  // canDecide is true only for the last edit of a file in the turn: one Keep/Undo per file, not per edit.
+  const key = `${turnId}:${tool.id}`;
+  const isEdit = Boolean(tool.diff && tool.path);
+  // Deep paths crowd out what matters: show "Edit chatRunner.test.js" and the directory dimmed after it.
+  const verb = tool.path && tool.label.endsWith(tool.path) ? tool.label.slice(0, tool.label.length - tool.path.length).trim() : null;
+  const base = tool.path ? tool.path.split("/").pop() : null;
+  const dir = tool.path && tool.path.includes("/") ? tool.path.slice(0, tool.path.lastIndexOf("/")) : null;
+  const mark = tool.status === "started" ? <span className="spinner" aria-label="running" /> : tool.ok === false ? <span className="mark-fail">✗</span> : tool.ok === null ? <span className="muted" title="interrupted">–</span> : <span className="mark-ok">✓</span>;
+  const hasBody = Boolean(tool.diff || tool.detail);
+  return (
+    <div className={`tool-row${tool.ok === false ? " failed" : ""}`}>
+      <div className="tool-line">
+        {mark}
+        <span className="tool-label" title={tool.label}>
+          {verb && base ? (
+            <>
+              {verb} {base}
+              {dir ? <span className="muted tool-dir"> {dir}</span> : null}
+            </>
+          ) : (
+            tool.label
+          )}
+        </span>
+        {tool.path ? (
+          <a
+            href="#"
+            className="open-file"
+            title="Open file"
+            onClick={(e) => {
+              e.preventDefault();
+              vscode.postMessage({ type: "open", path: tool.path as string });
+            }}
+          >
+            open
+          </a>
+        ) : null}
+        {isEdit && canDecide ? (
+          tool.decision === "undone" ? (
+            <span className="muted decision">undone</span>
+          ) : tool.decision === "kept" ? (
+            <span className="muted decision">kept</span>
+          ) : (
+            <span className="decision-buttons">
+              <button className="button small" title="Keep this file's changes" onClick={() => vscode.postMessage({ type: "keepFile", turnId, path: tool.path as string })}>
+                Keep
+              </button>
+              <button className="button secondary small" title="Put this file back as it was before this turn" onClick={() => vscode.postMessage({ type: "undoFile", turnId, path: tool.path as string })}>
+                Undo
+              </button>
+            </span>
+          )
+        ) : null}
+      </div>
+      {hasBody && !tool.diff && tool.ok === false ? (
+        <pre className="output error-detail">{tool.detail}</pre>
+      ) : hasBody ? (
+        <div className="accordian-wrap">
+          <CodeAccordian
+            diff={tool.diff ?? undefined}
+            code={tool.diff ? undefined : (tool.detail ?? "")}
+            path={tool.diff ? (tool.path ?? undefined) : undefined}
+            isConsoleLogs={!tool.diff}
+            isExpanded={Boolean(expanded[key])}
+            onToggleExpand={() => onToggle(key)}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export default function ChatRow({ turn, expanded, onToggle, checkpointsAvailable }: { turn: TurnState; expanded: Record<string, boolean>; onToggle: (key: string) => void; checkpointsAvailable: boolean }) {
+  const running = turn.status === "running";
+  const u = turn.usage;
+  const edited = turn.tools.some((t) => t.diff);
+  const editedFiles = new Set(turn.tools.filter((t) => t.diff && t.path).map((t) => t.path)).size;
+  const [confirmRestore, setConfirmRestore] = useState(false);
+  const confirmRef = useRef<HTMLSpanElement>(null);
+  // The confirm row grows the last turn past the bottom of the list: bring its buttons into view.
+  useEffect(() => {
+    if (confirmRestore) {
+      confirmRef.current?.scrollIntoView({ block: "nearest" });
+    }
+  }, [confirmRestore]);
+  const lastEditFor = new Map<string, string>();
+  for (const t of turn.tools) {
+    if (t.diff && t.path) {
+      lastEditFor.set(t.path, t.id);
+    }
+  }
+  return (
+    <div className="turn">
+      <div className="user-message">
+        {turn.prompt}
+        {turn.contextNote ? <div className="context-note">{turn.contextNote}</div> : null}
+      </div>
+      <div className="model-row">
+        {running ? <span className="spinner" aria-label="running" /> : null}
+        <span className="model-name" title="The model that did this work">{turn.modelLabel}</span>
+        <span className="tier-badge" title="The tier it was routed to">{TIER_NAME[turn.tier] ?? turn.tier} tier</span>
+        {turn.usd !== null ? (
+          <span className="turn-cost" title={`This turn cost ${formatUsd(turn.usd)} on ${turn.modelLabel}${turn.atAutoRateUsd !== null ? `. Auto bills ${formatUsd(turn.atAutoRateUsd)} for the same amount of work` : ""}.${u ? ` Tokens: ${formatTokens(u.inputTokens)} in, ${formatTokens(u.outputTokens)} out, ${formatTokens(u.cacheReadTokens)} read from cache.` : ""}`}>
+            cost {formatUsd(turn.usd)}
+            {turn.atAutoRateUsd !== null && turn.atAutoRateUsd > (turn.usd ?? 0) + 0.0005 ? <span className="saved"> · saved {formatUsd(turn.atAutoRateUsd - (turn.usd ?? 0))} vs Auto</span> : null}
+            {turn.seconds ? <span className="muted"> · {turn.seconds} s</span> : null}
+          </span>
+        ) : null}
+        {turn.status === "stopped" ? <span className="muted">stopped</span> : null}
+        {running && turn.thinking && !turn.tools.some((t) => t.status === "started") ? <span className="muted">thinking…</span> : null}
+      </div>
+      {turn.notes.map((n, i) => (
+        <div key={i} className="note">
+          {n}
+        </div>
+      ))}
+      {turn.tools.length ? (
+        <div className="tools">
+          {turn.tools.map((tool) => (
+            <ToolRow key={tool.id} tool={tool} turnId={turn.id} expanded={expanded} onToggle={onToggle} canDecide={!running && !turn.restored && lastEditFor.get(tool.path ?? "") === tool.id} />
+          ))}
+        </div>
+      ) : null}
+      {turn.text ? (
+        <div className="reply">
+          <MarkdownBlock markdown={turn.text} />
+        </div>
+      ) : null}
+      {turn.error ? <div className="error">{turn.error}</div> : null}
+      {!running && edited ? (
+        <div className="turn-actions">
+          {turn.restored ? (
+            <span className="muted">Files restored to how they were before this turn.</span>
+          ) : confirmRestore ? (
+            <span className="confirm-row" ref={confirmRef}>
+              <span>
+                {turn.checkpoint && checkpointsAvailable
+                  ? `Put ${editedFiles} ${editedFiles === 1 ? "file" : "files"} back as before this turn? Everything changed in the workspace since then is undone, your own edits included.`
+                  : `Undo this turn's edits to ${editedFiles} ${editedFiles === 1 ? "file" : "files"}? Each edit is reversed; a file you changed since may not undo cleanly.`}
+              </span>
+              <button className="button small" onClick={() => { setConfirmRestore(false); vscode.postMessage({ type: "restore", turnId: turn.id }); }}>
+                {turn.checkpoint && checkpointsAvailable ? "Restore" : "Undo"}
+              </button>
+              <button className="button secondary small" onClick={() => setConfirmRestore(false)}>
+                Cancel
+              </button>
+            </span>
+          ) : (
+            <span className="decision-buttons">
+              <button className="button secondary small" onClick={() => setConfirmRestore(true)} title="Put every file back as it was before this turn ran (a checkpoint of the workspace)">
+                Undo all
+              </button>
+            </span>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
