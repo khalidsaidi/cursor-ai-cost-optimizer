@@ -434,7 +434,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       }
       const ids = stdout
         .split("\n")
-        .map((l) => l.match(/^([a-z0-9][a-z0-9.\-]*) - /i)?.[1] ?? "")
+        .map((l) => l.match(/^([a-z0-9][a-z0-9.-]*) - /i)?.[1] ?? "")
         .filter(Boolean);
       if (ids.length) {
         this.availableModels = new Set(ids);

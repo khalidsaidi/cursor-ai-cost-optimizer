@@ -150,7 +150,7 @@ export abstract class ShadowCheckpointService extends EventEmitter {
 		await fs.mkdir(this.checkpointsDir, { recursive: true })
 		const git = createSanitizedGit(this.checkpointsDir)
 		const gitVersion = await git.version()
-		this.log(`[${this.constructor.name}#create] git = ${gitVersion}`)
+		this.log(`[${this.constructor.name}#create] git = ${gitVersion.major}.${gitVersion.minor}.${gitVersion.patch}`)
 
 		let created = false
 		const startTime = Date.now()

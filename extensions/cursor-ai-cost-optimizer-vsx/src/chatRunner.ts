@@ -101,8 +101,15 @@ const TOOL_LABELS: Record<string, string> = {
   mcpToolCall: "Tool"
 };
 
+/** Text form of a JSON value from the agent stream: strings as-is, numbers and booleans printed, anything else empty. */
+function text(v: unknown): string {
+  if (typeof v === "string") return v;
+  if (typeof v === "number" || typeof v === "boolean" || typeof v === "bigint") return String(v);
+  return "";
+}
+
 function shortPath(p: unknown): string {
-  const s = String(p || "").replace(/\\/g, "/");
+  const s = text(p).replace(/\\/g, "/");
   const parts = s.split("/");
   return parts.length > 2 ? parts.slice(-2).join("/") : s;
 }
@@ -131,16 +138,16 @@ function describeArgs(tool: string, args: Record<string, unknown>, workspace?: s
     case "editToolCall":
     case "writeToolCall":
     case "deleteToolCall":
-      return relativeTo(String(args.path ?? args.file_path ?? args.target_file ?? ""), workspace);
+      return relativeTo(text(args.path ?? args.file_path ?? args.target_file), workspace);
     case "globToolCall":
-      return String(args.globPattern ?? "");
+      return text(args.globPattern);
     case "grepToolCall":
     case "semanticSearchToolCall":
-      return String(args.pattern ?? args.query ?? "");
+      return text(args.pattern ?? args.query);
     case "shellToolCall":
-      return String(args.command ?? "").replace(typeof workspace === "string" && workspace ? new RegExp(`${workspace.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/?`, "g") : /$^/, "");
+      return text(args.command).replace(typeof workspace === "string" && workspace ? new RegExp(`${workspace.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/?`, "g") : /$^/, "");
     case "taskToolCall":
-      return String(args.description ?? "");
+      return text(args.description);
     default:
       return "";
   }
@@ -154,10 +161,10 @@ export function parseStreamLine(line: string, workspace?: string): ChatEvent | n
   } catch {
     return null;
   }
-  const type = String(d.type ?? "");
-  const subtype = String(d.subtype ?? "");
+  const type = text(d.type);
+  const subtype = text(d.subtype);
   if (type === "system" && subtype === "init") {
-    return { kind: "init", sessionId: String(d.session_id ?? ""), model: String(d.model ?? "") };
+    return { kind: "init", sessionId: text(d.session_id), model: text(d.model) };
   }
   if (type === "assistant") {
     const msg = d.message as { content?: Array<{ type?: string; text?: string }> } | undefined;
@@ -172,10 +179,10 @@ export function parseStreamLine(line: string, workspace?: string): ChatEvent | n
     const tool = Object.keys(call).find((k) => k.endsWith("ToolCall")) ?? "tool";
     const body = (call[tool] ?? {}) as { args?: Record<string, unknown>; result?: Record<string, unknown> };
     const args = body.args ?? {};
-    const id = String(d.call_id ?? call.toolCallId ?? "").split("\n")[0];
+    const id = text(d.call_id ?? call.toolCallId).split("\n")[0];
     const fallbackName = tool.replace(/ToolCall$/, "").replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, (c) => c.toUpperCase());
     const label = `${TOOL_LABELS[tool] ?? fallbackName} ${describeArgs(tool, args, workspace)}`.trim();
-    const rawPath = /^(read|edit|write|delete)ToolCall$/.test(tool) ? String(args.path ?? args.file_path ?? args.target_file ?? "") : "";
+    const rawPath = /^(read|edit|write|delete)ToolCall$/.test(tool) ? text(args.path ?? args.file_path ?? args.target_file) : "";
     const filePath = rawPath ? relativeTo(rawPath, workspace) : null;
     if (subtype === "started") {
       return { kind: "tool", id, tool, label, path: filePath, status: "started" };
@@ -188,9 +195,9 @@ export function parseStreamLine(line: string, workspace?: string): ChatEvent | n
     if ("rejected" in result) {
       detail = "not run (needs approval; enable Run commands in Settings)";
     } else if ("error" in result) {
-      detail = String((result.error as { error?: unknown })?.error ?? "error").slice(0, 200);
+      detail = (text((result.error as { error?: unknown })?.error) || "error").slice(0, 200);
     } else if (tool === "shellToolCall") {
-      const out = String(success.stdout ?? success.output ?? "");
+      const out = text(success.stdout ?? success.output);
       detail = out.trim().split("\n").slice(-6).join("\n").slice(0, 600) || null;
     }
     return { kind: "tool", id, tool, label, path: filePath, status: "completed", ok, diff, detail };
@@ -200,7 +207,7 @@ export function parseStreamLine(line: string, workspace?: string): ChatEvent | n
     const usage: Usage | null = u
       ? { inputTokens: Number(u.inputTokens ?? 0), outputTokens: Number(u.outputTokens ?? 0), cacheReadTokens: Number(u.cacheReadTokens ?? 0), cacheWriteTokens: Number(u.cacheWriteTokens ?? 0) }
       : null;
-    return { kind: "result", ok: !d.is_error, text: String(d.result ?? ""), usage, durationMs: Number(d.duration_ms ?? 0), sessionId: typeof d.session_id === "string" ? d.session_id : null };
+    return { kind: "result", ok: !d.is_error, text: text(d.result), usage, durationMs: Number(d.duration_ms ?? 0), sessionId: typeof d.session_id === "string" ? d.session_id : null };
   }
   return null;
 }
